@@ -10,8 +10,11 @@ corresponding lower bounds (LB). Additionally, an implementation of k-Shape clus
 }
 \details{
 This package tries to consolidate the different procedures available to perform clustering of time series
-under DTW. Right now only univariate time series are supported. Similarly, time series should have equal
-lengths for partitional methods.
+under DTW. Most of the optimizations require time series to have equal lengths. DTW itself doesn't, but
+it's much slower to compute. The shape-based distance (SBD) can also be used for series of different
+lengths, and it could be faster. If series have different lengths, it is debatable whether it makes sense
+to cluster them directly. If possible, reinterpolating them could be one way of speeding up calculations
+(see Ratanamahatana and Keogh, 2004; also \code{\link{reinterpolate}}).
 
 Please see the documentation for \code{\link{dtwclust}}, which serves as the main entry point.
 
@@ -28,8 +31,8 @@ matrix is squared and the result is fed into \code{\link[dtw]{dtw}}, which finds
 The square root of the resulting distance is \emph{then} computed.
 
 Please note that the \code{\link[proxy]{dist}} function in the \code{proxy} package accepts one or two
-arguments for data objects. Users should usually use the two-input version, even if there is just one
-dataset (i.e. \code{proxy::dist(x=data, y=data, ...)}), because the one-input version sometimes fails to
+arguments for data objects. Users should usually use the two-input \strong{list} version, even if there is
+just one dataset (i.e. \code{proxy::dist(x=data, y=data, ...)}), because otherwise it sometimes fails to
 detect a whole time series as a single object and, instead, calculates distances between each observation
 of each time series.
 }
@@ -39,7 +42,7 @@ Alexis Sarda-Espinosa
 \references{
 Begum N, Ulanova L, Wang J and Keogh E (2015). ``Accelerating Dynamic Time Warping Clustering with a Novel Admissible Pruning
 Strategy.'' In \emph{Conference on Knowledge Discovery and Data Mining}, series KDD '15. ISBN 978-1-4503-3664-2/15/08, \url{
-http://www.cs.ucr.edu/~eamonn/Speeded\%20Clustering\%20Paper\%20Camera\%20Ready.pdf}.
+http://dx.doi.org/10.1145/2783258.2783286}.
 
 Giorgino T (2009). ``Computing and Visualizing Dynamic Time Warping Alignments in \code{R}: The 'dtw' Package.'' \emph{Journal
 of Statistical Software}, \strong{31}(7), pp. 1-24. \url{http://www.jstatsoft.org/v31/i07/}.

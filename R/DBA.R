@@ -2,11 +2,11 @@
 #'
 #' A global averaging method for time series under DTW (Petitjean, Ketterlin and Gancarski, 2011).
 #'
-#' This function tries to find the optimum average series between a group time series in DTW space. Refer to
+#' This function tries to find the optimum average series between a group of time series in DTW space. Refer to
 #' the cited article for specific details on the algorithm.
 #'
 #' If a given series reference is provided in \code{center}, the algorithm should always converge to the same
-#' result provided the rows \code{X} keep the same values, although their order may change.
+#' result provided the rows of \code{X} keep the same values, although their order may change.
 #'
 #' @references
 #'
@@ -29,7 +29,7 @@
 #' all(dtw.avg == dtw.avg2)
 #'
 #' @param X A data matrix where each row is a time series. Optionally, a list where each element is a time series.
-#' @param center Optionally, a time series to use as reference. It must be a numeric vector.Defaults to a
+#' @param center Optionally, a time series to use as reference. It must be a numeric vector. Defaults to a
 #' random series of \code{X} if \code{NULL}.
 #' @param max.iter Maximum number of iterations allowed.
 #' @param error.check Should inconsistencies in the data be checked?
@@ -39,16 +39,11 @@
 #'
 #' @export
 #' @importFrom stats aggregate
+#' @importFrom dtw dtw
 
-DBA <- function(X, center = NULL, max.iter = 25, error.check = TRUE, trace = FALSE) {
+DBA <- function(X, center = NULL, max.iter = 50, error.check = TRUE, trace = FALSE) {
 
-     ## For looping convenience
-     if (is.matrix(X))
-          X <- lapply(seq_len(nrow(X)), function(i) X[i,])
-     else if (is.numeric(X))
-          X <- list(X)
-     else if (!is.list(X))
-          stop("Unsupported format for X")
+     X <- consistency_check(X, "tsmat")
 
      n <- length(X)
 
@@ -56,11 +51,11 @@ DBA <- function(X, center = NULL, max.iter = 25, error.check = TRUE, trace = FAL
           center <- X[[sample(n, 1)]] # Random choice
 
      if (error.check) {
-          consistency_check(X, "tslist")
+          consistency_check(X, "vltslist")
           consistency_check(center, "ts")
      }
 
-     iter <- 0
+     iter <- 1
      C.old <- center-1
 
      while(iter<=max.iter) {
@@ -68,20 +63,20 @@ DBA <- function(X, center = NULL, max.iter = 25, error.check = TRUE, trace = FAL
           ## Return the coordinates of each series in X grouped by the coordinate they match to in the center time series
           ## Also return the number of coordinates used in each case (for averaging below)
           xg <- lapply(X, function(x) {
-               d <- dtw(x, center)
+               d <- dtw::dtw(x, center)
 
-               x.sub <- aggregate(x[d$index1], by=list(ind = d$index2), sum)
+               x.sub <- stats::aggregate(x[d$index1], by=list(ind = d$index2), sum)
 
-               n.sub <- aggregate(x[d$index1], by=list(ind = d$index2), length)
+               n.sub <- stats::aggregate(x[d$index1], by=list(ind = d$index2), length)
 
                cbind(sum = x.sub$x, n = n.sub$x)
           })
 
           ## Put everything in one big data frame
-          xg <- melt(xg) # from reshape2
+          xg <- reshape2::melt(xg)
 
           ## Aggregate according to index of center time series (Var1) and also the variable type (Var2)
-          xg <- aggregate(xg$value, by = list(xg$Var1, xg$Var2), sum)
+          xg <- stats::aggregate(xg$value, by = list(xg$Var1, xg$Var2), sum)
 
           ## Average
           center <- xg$x[xg$Group.2 == "sum"] / xg$x[xg$Group.2 == "n"]
@@ -90,7 +85,7 @@ DBA <- function(X, center = NULL, max.iter = 25, error.check = TRUE, trace = FAL
                iter <- iter+1
 
                if (trace)
-                    cat("Iteration", iter ,"- Converged!\n\n")
+                    cat("DBA: Iteration", iter ,"- Converged!\n\n")
 
                break
 
@@ -99,7 +94,7 @@ DBA <- function(X, center = NULL, max.iter = 25, error.check = TRUE, trace = FAL
                C.old <- center
 
                if (trace)
-                    cat("Iteration", iter, "\n")
+                    cat("DBA: Iteration", iter, "\n")
           }
      }
 

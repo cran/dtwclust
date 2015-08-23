@@ -5,13 +5,13 @@
 \title{Time series clustering under DTW}
 \usage{
 dtwclust(data = NULL, type = "partitional", k = 2, method = "average",
-  distance = "dtw", centroid = "pam", window.size = NULL, norm = "L1",
-  dc = NULL, control = NULL, save.data = FALSE, seed = NULL,
-  trace = FALSE, ...)
+  distance = "dtw", centroid = "pam", preproc = NULL,
+  window.size = NULL, norm = "L1", dc = NULL, dba.iter = 50,
+  control = NULL, save.data = FALSE, seed = NULL, trace = FALSE, ...)
 }
 \arguments{
 \item{data}{A list where each element is a time series, or a numerical matrix where each row is a time
-series. Only the latter is supported in case of \code{type = "partitional"}.}
+series. All series must have equal lengths in case of \code{type = "tadpole"}.}
 
 \item{type}{What type of clustering method to use, \code{partitional}, \code{hierarchical} or \code{tadpole}.}
 
@@ -25,6 +25,9 @@ series. Only the latter is supported in case of \code{type = "partitional"}.}
 \item{centroid}{Either a supported string or an appropriate function to calculate centroids
 when using partitional methods (see Centroid section).}
 
+\item{preproc}{Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
+\code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.}
+
 \item{window.size}{Window constraint for DTW and LB calculations. See Sakoe-Chiba section.}
 
 \item{norm}{Pointwise distance for DTW and LB. Either \code{L1} for Manhattan distance or \code{L2}
@@ -32,6 +35,8 @@ for Euclidean. Ignored for \code{distance = "DTW"} (which always uses \code{L1})
 \code{distance = "DTW2"} (which always uses \code{L2}).}
 
 \item{dc}{Cutoff distance for TADPole algorithm.}
+
+\item{dba.iter}{Maximum number of iterations for \code{\link{DBA}} centroids.}
 
 \item{control}{Parameters for partitional clustering algorithms. See
 \code{\link[flexclust]{flexclustControl}}.}
@@ -42,43 +47,35 @@ for Euclidean. Ignored for \code{distance = "DTW"} (which always uses \code{L1})
 
 \item{trace}{Boolean flag. If true, more output regarding the progress is printed to screen.}
 
-\item{...}{Additional arguments to pass to \code{\link[proxy]{dist}} or a custom distance function.}
+\item{...}{Additional arguments to pass to \code{\link[proxy]{dist}} or a custom function.}
 }
 \value{
-An object with formal class \code{\link{dtwclust-class}} if \code{type = "partitional" | "tadpole"}. Otherwise
-an object with class \code{hclust} as returned by \code{\link[stats]{hclust}}.
+An object with formal class \code{\link{dtwclust-class}} if \code{type = "partitional" | "tadpole"}.
+Otherwise an object with class \code{hclust} as returned by \code{\link[stats]{hclust}}.
 }
 \description{
 This function uses the DTW distance and related lower bounds to cluster time series. For now, all series
-must be univariate and, in the case of partitional methods, have equal lengths.
+must be univariate.
 }
 \details{
 Partitional algorithms are implemented via \code{\link[flexclust]{kcca}}. Hierarchical algorithms use the
 \code{\link[stats]{hclust}} function. The \code{tadpole} algorithm uses the \code{\link{TADPole}} function.
 
-In case of partitional algorithms, \code{data} should be in the form of a matrix. In the other cases,
-it may be a matrix or a list, but the matrix will be coerced to a list. A matrix input requires that all
+The \code{data} may be a matrix or a list, but the matrix will be coerced to a list. A matrix input requires
+that all
 time series have equal lengths. If the lengths vary slightly between time series, reinterpolating them to
 a common length is most likely an acceptable approach (Ratanamahatana and Keogh, 2004). If this is not the
 case, then clustering them directly is probably ill-advised. See the examples.
-}
-\note{
-Notice that the lower bounds are defined only for time series of equal lengths. \code{DTW} and \code{DTW2}
-don't require this, but they are much slower to compute.
-
-The lower bounds are \strong{not} symmetrical, and \code{DTW} is only symmetrical if series are of equal
-lengths.
-
-Specifying \code{distance = "sbd"} and \code{centroid = "shape"} is equivalent to the k-Shape algorithm
-(Papparizos and Gravano, 2015). See \code{\link{SBD}} and \code{\link{shape_extraction}} for more info.
 }
 \section{Distance}{
 
 
 If a custom distance function is provided, it will receive the data as the first argument. For partitional
-algorithms, the second argument will be the cluster centers (i.e. other time series) in the form of a matrix
-where each row is a center series. If hierarchical algorithms are used, the function will also receive the
-elements of \code{...}.
+algorithms, the second argument will be the cluster centers (i.e. other time series). If \code{data} is a
+matrix, the cluster centers will also be given in the form of a matrix where each row is a center series;
+if \code{data} is a list of series, so will the centers.
+
+If hierarchical algorithms are used, the function will also receive the elements of \code{...}.
 
 For partitional algorithms, the function \emph{could} make use of the \code{window.size} and \code{norm}
 parameters, which \emph{should} be detected thanks to \code{R}'s lexical scoping, however this cannot
@@ -88,12 +85,11 @@ The function should return a distance matrix, ideally of class \code{crossdist}.
 algorithms, the time series in the data should be along the rows, and the cluster centers along the
 columns of the distance matrix.
 
-The other option is to provide a string. For partitional algorithms, it can be a supported distance of
-\code{\link[flexclust]{kccaFamily}}. For hierarchical, it can be any distance function registered in
-\code{\link[proxy]{dist}}. In the latter case, all extra parameters should be provided in \code{...}.
+The other option is to provide a string. The string can represent a compatible registered distance of
+\code{\link[proxy]{dist}}. In the case of hierarchical algorithms, extra parameters can be provided in
+\code{...}.
 
-Additionally, with either type of algorithm, it can be one of the following
-custom implementations:
+Additionally, with either type of algorithm, it can be one of the following custom implementations:
 
 \itemize{
   \item \code{"dtw"}: DTW with L1 norm and optionally a Sakoe-Chiba constraint.
@@ -107,6 +103,8 @@ custom implementations:
   the cluster centers (for partitional methods) are also z-normalized. See \code{\link{SBD}} for more
   details.
 }
+
+Note that only \code{dtw}, \code{dtw2} and \code{sbd} support series of different lengths.
 }
 
 \section{Centroid}{
@@ -115,8 +113,15 @@ custom implementations:
 In the case of partitional algorithms, a suitable function should calculate the cluster centers. In this
 case, the centers are themselves time series.
 
-If a custom function is provided, it will receive a matrix as only argument. Each row will be a time series
-that belongs to a given cluster. The function should return a numeric vector with the center time series.
+If a custom function is provided, it will receive different inputs depending on the format of \code{data}:
+
+\itemize{
+  \item For matrix input, it will receive a matrix as single input. Each row will be a series that belongs
+  to a given cluster. The function should return a numeric vector representing the centroid series.
+  \item For a list input, the function will receive three inputs in the following order: the \emph{whole}
+  data list; a numeric vector with length equal to the number of series in \code{data}, indicating which
+  cluster a series belongs to; the current number of total clusters.
+}
 
 The other option is to provide a character string. The following options are available:
 
@@ -130,6 +135,8 @@ The other option is to provide a character string. The following options are ava
   one of the time series in the data. In this case, the distance matrix is pre-computed once using all
   time series in the data and then re-used at each iteration.
 }
+
+Note that only \code{dba} and \code{pam} support series of different lengths
 }
 
 \section{Sakoe-Chiba Constraint}{
@@ -144,6 +151,39 @@ if, for example, \code{window.size = 10}, the warping for an observation \eqn{x_
 between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10*2 + 1 = 21} observations falling within
 the window.
 }
+
+\section{Preprocessing}{
+
+
+It is strongly advised to use z-normalization in case of \code{centroid = "shape"}, because the resulting
+series have this normalization (see \code{\link{shape_extraction}}). The user can, however, specify a
+custom function that performs any transformation on the data, but the user must make sure that the format
+stays consistent, i.e. a matrix where each row is a series or a list of time series. For example,
+the z-normalization could be implemented as \code{t(apply(data, 1, zscore))} or \code{lapply(data, zscore)}
+respectively.
+
+The function will receive the data as first argument and, in case hierarchical methods are used, the
+contents of \code{...} as the second argument.
+}
+
+\section{Notes}{
+
+
+In order to ensure that the parameter values are detected correctly by the included functions
+when partitional clustering is used, the
+environment of the \code{dtwclust} function is assigned as an attribute of \code{data} via
+\code{attr(data, "env")} \code{<-} \code{environment()}. If the user alters the dataset with a
+preprocessing function, it should make sure that this attribute is maintained.
+
+Notice that the lower bounds are defined only for time series of equal lengths. \code{DTW} and \code{DTW2}
+don't require this, but they are much slower to compute.
+
+The lower bounds are \strong{not} symmetrical, and \code{DTW} is only symmetrical if series are of equal
+lengths.
+
+Specifying \code{distance = "sbd"} and \code{centroid = "shape"} is equivalent to the k-Shape algorithm
+(Papparizos and Gravano, 2015). See \code{\link{SBD}} and \code{\link{shape_extraction}} for more info.
+}
 \examples{
 # Load data
 data(uciCT)
@@ -152,13 +192,19 @@ data(uciCT)
 data <- t(sapply(CharTraj, reinterpolate, newLength = 205))
 
 # Simple partitional clustering with L2 distance and PAM
-kc.l2 <- dtwclust(data, k = 20, distance = "kmeans", centroid = "pam", seed = 3247, trace = TRUE)
+kc.l2 <- dtwclust(data, k = 20, distance = "L2", centroid = "pam",
+                  seed = 3247, trace = TRUE)
 cat("Rand index for L2+PAM:", randIndex(kc.l2, CharTrajLabels), "\\n\\n")
 
 # TADPole clustering (takes around 5 seconds)
-kc.tadp <- dtwclust(data, type = "tadpole", k = 20, window.size = 20, dc = 1.5, save.data = TRUE)
+kc.tadp <- dtwclust(data, type = "tadpole", k = 20,
+                    window.size = 20, dc = 1.5, save.data = TRUE)
 cat("Rand index for TADPole:", randIndex(kc.tadp, CharTrajLabels), "\\n\\n")
 plot(kc.tadp)
+
+# Modify plot
+plot(kc.tadp, cl = 1:4, labs.arg = list(title = "TADPole, clusters 1 through 4",
+                                        x = "time", y = "series"))
 
 \dontrun{
 # Hierarchical clustering based on shabe-based distance
@@ -171,6 +217,13 @@ kc.dtw <- dtwclust(data, k = 20, seed = 3251, trace = TRUE)
 
 # Use full DTW with DBA centroids (takes around five minutes)
 kc.dba <- dtwclust(data, k = 20, centroid = "dba", seed = 3251, trace = TRUE)
+
+# Use constrained DTW with original series of different lengths (around one minute)
+kc.cdtw <- dtwclust(CharTraj, k = 20, window.size = 20,
+                    seed = 3251, trace = TRUE, save.data = TRUE)
+
+# Plot one of the clusters
+plot(kc.cdtw, cl=18)
 }
 }
 \author{

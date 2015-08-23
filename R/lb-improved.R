@@ -26,7 +26,8 @@
 #' d.lbi <- lb_improved(CharTraj[[1]], CharTraj[[2]], window.size = 20)
 #'
 #' # Corresponding true DTW distance
-#' d.dtw <- dtw(CharTraj[[1]], CharTraj[[2]], window.type = "slantedband", window.size = 20)$distance
+#' d.dtw <- dtw(CharTraj[[1]], CharTraj[[2]],
+#'              window.type = "slantedband", window.size = 20)$distance
 #'
 #' d.lbi <= d.dtw
 #'
@@ -73,7 +74,7 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1") {
 }
 
 # ========================================================================================================
-# Loop without using native 'proxy' (to avoid multiple calculations of the envelope)
+# Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
 # ========================================================================================================
 
 lb_improved_loop <- function(x, y=NULL, ...) {
@@ -97,15 +98,7 @@ lb_improved_loop <- function(x, y=NULL, ...) {
      if (error.check)
           window.size <- consistency_check(window.size, "window")
 
-     ## For looping convenience
-     if (is.matrix(x))
-          x <- lapply(seq_len(nrow(x)), function(i) x[i,])
-     else if (is.numeric(x))
-          x <- list(x)
-     else if (is.list(x))
-          x <- x
-     else
-          stop("Unsupported type for x")
+     x <- consistency_check(x, "tsmat")
 
      if (error.check)
           consistency_check(x, "tslist")
@@ -114,117 +107,65 @@ lb_improved_loop <- function(x, y=NULL, ...) {
           stop("Window size should not exceed length of the time series")
 
      if (is.null(y)) {
-          # from 'caTools' package
-          ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runmax/min'
-          upper.env <- lapply(x, runmax, k=window.size*2+1, endrule="constant")
-          lower.env <- lapply(x, runmin, k=window.size*2+1, endrule="constant")
-
-          DD <- sapply(X=x, U=upper.env, L=lower.env, Y=x,
-                       FUN = function(x, ...) {
-                            U <- list(...)$U
-                            L <- list(...)$L
-                            Y <- list(...)$Y
-
-                            ## This will return one column of the distance matrix
-                            D <- mapply(U, L, Y, MoreArgs=list(x=x),
-                                        FUN = function(u, l, y, x) {
-
-                                             ind1 <- which(x > u)
-                                             ind2 <- which(x < l)
-                                             H <- x
-                                             H[ind1] <- u[ind1]
-                                             H[ind2] <- l[ind2]
-
-                                             d <- switch(EXPR = norm,
-                                                         L1 = sum(abs(x-H)) + lb_keogh(y, H, window.size, norm)$d,
-                                                         L2 = sqrt(sum((x-H)^2)) + lb_keogh(y, H, window.size, norm)$d)
-
-                                             d
-
-                                        })
-
-                            D
-                       })
-
-          if (force.symmetry) {
-               ind.tri <- lower.tri(DD)
-
-               new.low.tri.vals <- t(DD)[ind.tri]
-               indCorrect <- DD[ind.tri] > new.low.tri.vals
-               new.low.tri.vals[indCorrect] <- DD[ind.tri][indCorrect]
-
-               DD[ind.tri] <- new.low.tri.vals
-               DD <- t(DD)
-               DD[ind.tri] <- new.low.tri.vals
-          }
-
-          attr(DD, "class") <- "crossdist"
-          attr(DD, "method") <- "LB_Improved1"
+          y <- x
 
      } else {
 
-          if (is.matrix(y))
-               y <- lapply(seq_len(nrow(y)), function(i) y[i,])
-          else if (is.numeric(y))
-               y <- list(y)
-          else if (is.list(y))
-               y <- y
-          else
-               stop("Unsupported type for y")
+          y <- consistency_check(y, "tsmat")
 
           if (error.check)
                consistency_check(y, "tslist")
 
           if (window.size > length(y[[1]]))
                stop("Window size should not exceed length of the time series")
-
-          # from 'caTools' package
-          ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runmax/min'
-          upper.env <- lapply(y, runmax, k=window.size*2+1, endrule="constant")
-          lower.env <- lapply(y, runmin, k=window.size*2+1, endrule="constant")
-
-          DD <- sapply(X=x, U=upper.env, L=lower.env, Y=y,
-                       FUN = function(x, ...) {
-                            U <- list(...)$U
-                            L <- list(...)$L
-                            Y <- list(...)$Y
-
-                            ## This will return one column of the distance matrix
-                            D <- mapply(U, L, Y, MoreArgs=list(x=x),
-                                        FUN = function(u, l, y, x) {
-
-                                             ind1 <- which(x > u)
-                                             ind2 <- which(x < l)
-                                             H <- x
-                                             H[ind1] <- u[ind1]
-                                             H[ind2] <- l[ind2]
-
-                                             d <- switch(EXPR = norm,
-                                                         L1 = sum(abs(x-H)) + lb_keogh(y, H, window.size, norm)$d,
-                                                         L2 = sqrt(sum((x-H)^2)) + lb_keogh(y, H, window.size, norm)$d)
-
-                                             d
-
-                                        })
-
-                            D
-                       })
-
-          if (force.symmetry) {
-               ind.tri <- lower.tri(DD)
-
-               new.low.tri.vals <- t(DD)[ind.tri]
-               indCorrect <- DD[ind.tri] > new.low.tri.vals
-               new.low.tri.vals[indCorrect] <- DD[ind.tri][indCorrect]
-
-               DD[ind.tri] <- new.low.tri.vals
-               DD <- t(DD)
-               DD[ind.tri] <- new.low.tri.vals
-          }
-
-          attr(DD, "class") <- "crossdist"
-          attr(DD, "method") <- "LB_Improved1"
      }
+
+     ## from 'caTools' package
+     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runmax/min'
+     upper.env <- lapply(y, runmax, k=window.size*2+1, endrule="constant")
+     lower.env <- lapply(y, runmin, k=window.size*2+1, endrule="constant")
+
+     DD <- sapply(X=x, U=upper.env, L=lower.env, Y=y,
+                  FUN = function(x, ...) {
+                       U <- list(...)$U
+                       L <- list(...)$L
+                       Y <- list(...)$Y
+
+                       ## This will return one column of the distance matrix
+                       D <- mapply(U, L, Y, MoreArgs=list(x=x),
+                                   FUN = function(u, l, y, x) {
+
+                                        ind1 <- which(x > u)
+                                        ind2 <- which(x < l)
+                                        H <- x
+                                        H[ind1] <- u[ind1]
+                                        H[ind2] <- l[ind2]
+
+                                        d <- switch(EXPR = norm,
+                                                    L1 = sum(abs(x-H)) + lb_keogh(y, H, window.size, norm)$d,
+                                                    L2 = sqrt(sum((x-H)^2)) + lb_keogh(y, H, window.size, norm)$d)
+
+                                        d
+
+                                   })
+
+                       D
+                  })
+
+     if (force.symmetry) {
+          ind.tri <- lower.tri(DD)
+
+          new.low.tri.vals <- t(DD)[ind.tri]
+          indCorrect <- DD[ind.tri] > new.low.tri.vals
+          new.low.tri.vals[indCorrect] <- DD[ind.tri][indCorrect]
+
+          DD[ind.tri] <- new.low.tri.vals
+          DD <- t(DD)
+          DD[ind.tri] <- new.low.tri.vals
+     }
+
+     attr(DD, "class") <- "crossdist"
+     attr(DD, "method") <- "LB_Improved"
 
      t(DD)
 }

@@ -1,13 +1,13 @@
 #' Time series clustering under DTW
 #'
 #' This function uses the DTW distance and related lower bounds to cluster time series. For now, all series
-#' must be univariate and, in the case of partitional methods, have equal lengths.
+#' must be univariate.
 #'
 #' Partitional algorithms are implemented via \code{\link[flexclust]{kcca}}. Hierarchical algorithms use the
 #' \code{\link[stats]{hclust}} function. The \code{tadpole} algorithm uses the \code{\link{TADPole}} function.
 #'
-#' In case of partitional algorithms, \code{data} should be in the form of a matrix. In the other cases,
-#' it may be a matrix or a list, but the matrix will be coerced to a list. A matrix input requires that all
+#' The \code{data} may be a matrix or a list, but the matrix will be coerced to a list. A matrix input requires
+#' that all
 #' time series have equal lengths. If the lengths vary slightly between time series, reinterpolating them to
 #' a common length is most likely an acceptable approach (Ratanamahatana and Keogh, 2004). If this is not the
 #' case, then clustering them directly is probably ill-advised. See the examples.
@@ -15,9 +15,11 @@
 #' @section Distance:
 #'
 #' If a custom distance function is provided, it will receive the data as the first argument. For partitional
-#' algorithms, the second argument will be the cluster centers (i.e. other time series) in the form of a matrix
-#' where each row is a center series. If hierarchical algorithms are used, the function will also receive the
-#' elements of \code{...}.
+#' algorithms, the second argument will be the cluster centers (i.e. other time series). If \code{data} is a
+#' matrix, the cluster centers will also be given in the form of a matrix where each row is a center series;
+#' if \code{data} is a list of series, so will the centers.
+#'
+#' If hierarchical algorithms are used, the function will also receive the elements of \code{...}.
 #'
 #' For partitional algorithms, the function \emph{could} make use of the \code{window.size} and \code{norm}
 #' parameters, which \emph{should} be detected thanks to \code{R}'s lexical scoping, however this cannot
@@ -27,12 +29,11 @@
 #' algorithms, the time series in the data should be along the rows, and the cluster centers along the
 #' columns of the distance matrix.
 #'
-#' The other option is to provide a string. For partitional algorithms, it can be a supported distance of
-#' \code{\link[flexclust]{kccaFamily}}. For hierarchical, it can be any distance function registered in
-#' \code{\link[proxy]{dist}}. In the latter case, all extra parameters should be provided in \code{...}.
+#' The other option is to provide a string. The string can represent a compatible registered distance of
+#' \code{\link[proxy]{dist}}. In the case of hierarchical algorithms, extra parameters can be provided in
+#' \code{...}.
 #'
-#' Additionally, with either type of algorithm, it can be one of the following
-#' custom implementations:
+#' Additionally, with either type of algorithm, it can be one of the following custom implementations:
 #'
 #' \itemize{
 #'   \item \code{"dtw"}: DTW with L1 norm and optionally a Sakoe-Chiba constraint.
@@ -47,13 +48,22 @@
 #'   details.
 #' }
 #'
+#' Note that only \code{dtw}, \code{dtw2} and \code{sbd} support series of different lengths.
+#'
 #' @section Centroid:
 #'
 #' In the case of partitional algorithms, a suitable function should calculate the cluster centers. In this
 #' case, the centers are themselves time series.
 #'
-#' If a custom function is provided, it will receive a matrix as only argument. Each row will be a time series
-#' that belongs to a given cluster. The function should return a numeric vector with the center time series.
+#' If a custom function is provided, it will receive different inputs depending on the format of \code{data}:
+#'
+#' \itemize{
+#'   \item For matrix input, it will receive a matrix as single input. Each row will be a series that belongs
+#'   to a given cluster. The function should return a numeric vector representing the centroid series.
+#'   \item For a list input, the function will receive three inputs in the following order: the \emph{whole}
+#'   data list; a numeric vector with length equal to the number of series in \code{data}, indicating which
+#'   cluster a series belongs to; the current number of total clusters.
+#' }
 #'
 #' The other option is to provide a character string. The following options are available:
 #'
@@ -68,6 +78,8 @@
 #'   time series in the data and then re-used at each iteration.
 #' }
 #'
+#' Note that only \code{dba} and \code{pam} support series of different lengths
+#'
 #' @section Sakoe-Chiba Constraint:
 #'
 #' A global constraint to speed up the DTW calculation is the Sakoe-Chiba band (Sakoe and Chiba, 1978). To
@@ -79,7 +91,25 @@
 #' between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10*2 + 1 = 21} observations falling within
 #' the window.
 #'
-#' @note
+#' @section Preprocessing:
+#'
+#' It is strongly advised to use z-normalization in case of \code{centroid = "shape"}, because the resulting
+#' series have this normalization (see \code{\link{shape_extraction}}). The user can, however, specify a
+#' custom function that performs any transformation on the data, but the user must make sure that the format
+#' stays consistent, i.e. a matrix where each row is a series or a list of time series. For example,
+#' the z-normalization could be implemented as \code{t(apply(data, 1, zscore))} or \code{lapply(data, zscore)}
+#' respectively.
+#'
+#' The function will receive the data as first argument and, in case hierarchical methods are used, the
+#' contents of \code{...} as the second argument.
+#'
+#' @section Notes:
+#'
+#' In order to ensure that the parameter values are detected correctly by the included functions
+#' when partitional clustering is used, the
+#' environment of the \code{dtwclust} function is assigned as an attribute of \code{data} via
+#' \code{attr(data, "env")} \code{<-} \code{environment()}. If the user alters the dataset with a
+#' preprocessing function, it should make sure that this attribute is maintained.
 #'
 #' Notice that the lower bounds are defined only for time series of equal lengths. \code{DTW} and \code{DTW2}
 #' don't require this, but they are much slower to compute.
@@ -113,13 +143,19 @@
 #' data <- t(sapply(CharTraj, reinterpolate, newLength = 205))
 #'
 #' # Simple partitional clustering with L2 distance and PAM
-#' kc.l2 <- dtwclust(data, k = 20, distance = "kmeans", centroid = "pam", seed = 3247, trace = TRUE)
+#' kc.l2 <- dtwclust(data, k = 20, distance = "L2", centroid = "pam",
+#'                   seed = 3247, trace = TRUE)
 #' cat("Rand index for L2+PAM:", randIndex(kc.l2, CharTrajLabels), "\n\n")
 #'
 #' # TADPole clustering (takes around 5 seconds)
-#' kc.tadp <- dtwclust(data, type = "tadpole", k = 20, window.size = 20, dc = 1.5, save.data = TRUE)
+#' kc.tadp <- dtwclust(data, type = "tadpole", k = 20,
+#'                     window.size = 20, dc = 1.5, save.data = TRUE)
 #' cat("Rand index for TADPole:", randIndex(kc.tadp, CharTrajLabels), "\n\n")
 #' plot(kc.tadp)
+#'
+#' # Modify plot
+#' plot(kc.tadp, cl = 1:4, labs.arg = list(title = "TADPole, clusters 1 through 4",
+#'                                         x = "time", y = "series"))
 #'
 #' \dontrun{
 #' # Hierarchical clustering based on shabe-based distance
@@ -132,12 +168,19 @@
 #'
 #' # Use full DTW with DBA centroids (takes around five minutes)
 #' kc.dba <- dtwclust(data, k = 20, centroid = "dba", seed = 3251, trace = TRUE)
+#'
+#' # Use constrained DTW with original series of different lengths (around one minute)
+#' kc.cdtw <- dtwclust(CharTraj, k = 20, window.size = 20,
+#'                     seed = 3251, trace = TRUE, save.data = TRUE)
+#'
+#' # Plot one of the clusters
+#' plot(kc.cdtw, cl=18)
 #' }
 #'
 #' @author Alexis Sarda-Espinosa
 #'
 #' @param data A list where each element is a time series, or a numerical matrix where each row is a time
-#' series. Only the latter is supported in case of \code{type = "partitional"}.
+#' series. All series must have equal lengths in case of \code{type = "tadpole"}.
 #' @param type What type of clustering method to use, \code{partitional}, \code{hierarchical} or \code{tadpole}.
 #' @param k Numer of desired clusters in partitional methods.
 #' @param method Which linkage method to use in hierarchical methods. See \code{\link[stats]{hclust}}.
@@ -145,20 +188,23 @@
 #' \code{type = "tadpole"}.
 #' @param centroid Either a supported string or an appropriate function to calculate centroids
 #' when using partitional methods (see Centroid section).
+#' @param preproc Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
+#' \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.
 #' @param window.size Window constraint for DTW and LB calculations. See Sakoe-Chiba section.
 #' @param norm Pointwise distance for DTW and LB. Either \code{L1} for Manhattan distance or \code{L2}
 #' for Euclidean. Ignored for \code{distance = "DTW"} (which always uses \code{L1}) and
 #' \code{distance = "DTW2"} (which always uses \code{L2}).
 #' @param dc Cutoff distance for TADPole algorithm.
-#' @param seed Random seed for reproducibility of partitional algorithms.
+#' @param dba.iter Maximum number of iterations for \code{\link{DBA}} centroids.
 #' @param control Parameters for partitional clustering algorithms. See
 #' \code{\link[flexclust]{flexclustControl}}.
 #' @param save.data Return a copy of the data in the returned object? Ignored for hierarchical clustering.
+#' @param seed Random seed for reproducibility of partitional algorithms.
 #' @param trace Boolean flag. If true, more output regarding the progress is printed to screen.
-#' @param ... Additional arguments to pass to \code{\link[proxy]{dist}} or a custom distance function.
+#' @param ... Additional arguments to pass to \code{\link[proxy]{dist}} or a custom function.
 #'
-#' @return An object with formal class \code{\link{dtwclust-class}} if \code{type = "partitional" | "tadpole"}. Otherwise
-#' an object with class \code{hclust} as returned by \code{\link[stats]{hclust}}.
+#' @return An object with formal class \code{\link{dtwclust-class}} if \code{type = "partitional" | "tadpole"}.
+#' Otherwise an object with class \code{hclust} as returned by \code{\link[stats]{hclust}}.
 #'
 #' @export
 #' @import flexclust
@@ -168,9 +214,9 @@
 #' @importFrom modeltools ModelEnvMatrix
 
 dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average",
-                     distance = "dtw", centroid = "pam",
+                     distance = "dtw", centroid = "pam", preproc = NULL,
                      window.size = NULL, norm = "L1", dc = NULL,
-                     control = NULL, save.data = FALSE,
+                     dba.iter = 50, control = NULL, save.data = FALSE,
                      seed = NULL, trace = FALSE,
                      ...)
 {
@@ -192,7 +238,10 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           ## Partitional
           ## =================================================================================================================
 
-          ## Used by some of the custom functions so that they know where to look for 'window.size' and 'norm'
+          if (k < 2)
+               stop("At least two clusters must be defined")
+
+          ## Used by some of the custom functions so that they know where to look for parameters
           ## This is done automatically due to lexical scoping, but I rather do it explicitly
           attr(data, "env") <- environment()
 
@@ -205,7 +254,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
 
                               mean = function(x) { apply(x, 2, mean) },
 
-                              median = function(x) { apply(x, 2, median) },
+                              median = function(x) { apply(x, 2, stats::median) },
 
                               shape = shape_extraction, # placeholder, will be ignored (see utils.R)
 
@@ -218,12 +267,12 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           }
 
           if (is.function(distance)) {
-               family <- kccaFamily(name = as.character(substitute(distance)),
+               family <- kccaFamily(name = as.character(substitute(distance))[1],
                                     dist = distance,
                                     cent = cent)
 
           } else if (is.character(distance)) {
-               family <- kccaFamilies(distance, cent, window.size, norm)
+               family <- kccaFamilies(distance, cent, window.size, norm) # utils.R
 
           } else {
                stop("Unspported distance definition")
@@ -233,18 +282,34 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           ## Replace specific functions if necessary
           ## ----------------------------------------------------------------------------------------------------------
 
-          if (centroid == "shape") {
+          distmat <- NULL
+
+          if (is.character(centroid) && centroid == "shape") {
                family@allcent <- allcent_se
 
                family@preproc <- preproc_se
 
-          } else if (centroid == "dba") {
+          } else if (is.character(centroid) && centroid == "dba") {
                family@allcent <- allcent_dba
 
-          } else if (centroid == "pam") {
+          } else if (is.character(centroid) && centroid == "pam") {
                family@allcent <- allcent_pam
 
-               family@preproc <- preproc_pam
+               distmat <- distmat_pam(data, family)
+
+          }
+
+          if (!is.null(preproc)) {
+               if (is.function(preproc))
+                    family@preproc <- preproc
+               else
+                    stop("Invalid preprocessing")
+
+          } else if (is.character(centroid) && centroid == "shape") {
+               preproc <- "zscore"
+
+          } else {
+               preproc <- "none"
           }
 
           ## ----------------------------------------------------------------------------------------------------------
@@ -266,12 +331,35 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           ## Cluster
           ## ----------------------------------------------------------------------------------------------------------
 
-          kc <- kcca(x = data,
-                     k = k,
-                     family = family,
-                     simple = TRUE,
-                     control = ctrl,
-                     save.data = save.data)
+          if (is.list(data)) {
+               lengths <- sapply(data, length)
+
+               if (length(unique(lengths)) > 1) {
+                    if (is.character(distance) && !(distance %in% c("dtw", "dtw2", "sbd")))
+                         stop("Only the following distances are supported for series of different lengths:\n
+                              \tdtw \tdtw2 \tsbd")
+
+                    if (is.character(centroid) && !(centroid %in% c("dba", "pam")))
+                         stop("Only the following centroids are supported for series of different lengths:\n
+                              \tdba \tpam")
+               }
+
+               if (is.function(centroid))
+                    family@allcent <- centroid
+
+               kc <- kcca.list(x = data,
+                               k = k,
+                               family = family,
+                               control = ctrl)
+
+          } else {
+               kc <- flexclust::kcca(x = data,
+                                     k = k,
+                                     family = family,
+                                     simple = TRUE,
+                                     control = ctrl,
+                                     save.data = save.data)
+          }
 
           ## ----------------------------------------------------------------------------------------------------------
           ## Prepare results
@@ -279,13 +367,20 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
 
           toc <- proc.time() - tic
 
-          if (trace)
-               cat("\n\tElapsed time is", toc["elapsed"], "seconds.\n\n")
+          if (save.data)
+               datalist <- consistency_check(data, "tsmat")
+          else
+               datalist <- list()
 
           dtwc <- new("dtwclust", kc,
                       type = type,
-                      distance = ifelse(is.function(distance), as.character(substitute(distance)), distance),
-                      centroid = ifelse(is.function(centroid), as.character(substitute(centroid)), centroid))
+                      distance = ifelse(is.function(distance), as.character(substitute(distance))[1], distance),
+                      centroid = ifelse(is.function(centroid), as.character(substitute(centroid))[1], centroid),
+                      preproc = ifelse(is.function(preproc), as.character(substitute(preproc))[1], preproc),
+                      datalist = datalist)
+
+          if (trace)
+               cat("\n\tElapsed time is", toc["elapsed"], "seconds.\n\n")
 
           dtwc
 
@@ -298,16 +393,22 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           if (trace)
                cat("\n\tCalculating distance matrix...\n")
 
-          if (is.matrix(data))
-               x <- lapply(seq_len(nrow(data)), function(i) data[i,])
-          else if (is.list(data))
-               x <- data
-          else
-               stop("Unsupported type for data")
+          x <- consistency_check(data, "tsmat")
+
+          lengths <- sapply(x, length)
+
+          if (length(unique(lengths)) > 1) {
+               if (!is.function(distance) && !(distance %in% c("dtw", "dtw2", "sbd")))
+                    stop("Only the following distances are supported for series of different lengths:\n
+                         \tdtw \tdtw2 \tsbd")
+          }
+
+          if (!is.null(preproc) && is.function(preproc)) {
+               x <- preproc(x, ...)
+          }
 
           if (is.function(distance)) {
-               D <- call(as.character(substitute(distance)),
-                         data, ...)
+               D <- distance(x, ...)
 
           } else if (is.character(distance)) {
                D <- switch(EXPR = distance,
@@ -399,7 +500,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           ## Needed attribute for 'hclust' (case sensitive)
           attr(D, "Size") <- length(x)
 
-          hc <- hclust(D, method = method)
+          hc <- stats::hclust(D, method = method)
 
           toc <- proc.time() - tic
 
@@ -414,6 +515,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           ## TADPole
           ## =================================================================================================================
 
+          MYCALL <- match.call()
           window.size <- consistency_check(window.size, "window")
 
           if (is.null(dc))
@@ -425,12 +527,17 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           ## Adjust inputs
           ## ----------------------------------------------------------------------------------------------------------
 
-          if (is.matrix(data))
-               x <- lapply(seq_len(nrow(data)), function(i) data[i,])
-          else if (is.list(data))
-               x <- data
-          else
-               stop("Unsupported type for data")
+          if (!is.null(preproc)) {
+               if (is.function(preproc))
+                    data <- preproc(data, ...)
+               else
+                    stop("Invalid preprocessing")
+
+          } else {
+               preproc <- "none"
+          }
+
+          x <- consistency_check(data, "tsmat")
 
           consistency_check(x, "tslist")
 
@@ -443,6 +550,13 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
 
           R <- TADPole(x, window.size = window.size, k = k, dc = dc, error.check = FALSE)
 
+          if (trace) {
+               cat("\nTADPole completed, pruning percentage = ",
+                   formatC(100-R$distCalcPercentage, format = "fg", digits = 3),
+                   "%\n",
+                   sep = "")
+          }
+
           ## ----------------------------------------------------------------------------------------------------------
           ## Prepare results
           ## ----------------------------------------------------------------------------------------------------------
@@ -450,19 +564,24 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
           if (save.data) {
                tadpc <- new("dtwclust",
                             type = type,
-                            distance = "dtw",
+                            distance = "DTW2",
                             centroid = "TADPole (PAM)",
+                            preproc = ifelse(is.function(preproc), as.character(substitute(preproc))[1], preproc),
 
+                            call = MYCALL,
                             centers = data[R$centers, ],
                             k = as.integer(k),
                             cluster = as.integer(R$cl),
-                            data = ModelEnvMatrix(designMatrix = data))
+                            data = modeltools::ModelEnvMatrix(designMatrix = data),
+                            datalist = x)
           } else {
                tadpc <- new("dtwclust",
                             type = type,
-                            distance = "dtw",
+                            distance = "DTW2",
                             centroid = "TADPole (PAM)",
+                            preproc = ifelse(is.function(preproc), as.character(substitute(preproc))[1], preproc),
 
+                            call = MYCALL,
                             centers = data[R$centers, ],
                             k = as.integer(k),
                             cluster = as.integer(R$cl))
