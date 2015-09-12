@@ -144,8 +144,18 @@
 #'
 #' # Simple partitional clustering with L2 distance and PAM
 #' kc.l2 <- dtwclust(data, k = 20, distance = "L2", centroid = "pam",
-#'                   seed = 3247, trace = TRUE)
+#'                   seed = 3247, trace = TRUE, save.data = TRUE)
 #' cat("Rand index for L2+PAM:", randIndex(kc.l2, CharTrajLabels), "\n\n")
+#'
+#' \dontrun{
+#' # Saving and modifying the ggplot object with custom time
+#' t <- seq(Sys.Date(), len = 205, by = "day")
+#' gkc <- plot(kc.l2, time = t, plot = FALSE)
+#'
+#' require(scales)
+#' gkc + scale_x_date(labels = date_format("%b-%Y"),
+#'                    breaks = date_breaks("2 months"))
+#' }
 #'
 #' # TADPole clustering (takes around 5 seconds)
 #' kc.tadp <- dtwclust(data, type = "tadpole", k = 20,
@@ -177,6 +187,12 @@
 #' plot(kc.cdtw, cl=18)
 #' }
 #'
+#' @seealso
+#'
+#' Please check the brief description in \code{\link{dtwclust-package}}.
+#'
+#' Additionally: \code{\link{plot-dtwclust}}, \code{\link{dtwclust-class}}.
+#'
 #' @author Alexis Sarda-Espinosa
 #'
 #' @param data A list where each element is a time series, or a numerical matrix where each row is a time
@@ -191,7 +207,7 @@
 #' @param preproc Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
 #' \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.
 #' @param window.size Window constraint for DTW and LB calculations. See Sakoe-Chiba section.
-#' @param norm Pointwise distance for DTW and LB. Either \code{L1} for Manhattan distance or \code{L2}
+#' @param norm Pointwise distance for DTW, DBA and the LB. Either \code{L1} for Manhattan distance or \code{L2}
 #' for Euclidean. Ignored for \code{distance = "DTW"} (which always uses \code{L1}) and
 #' \code{distance = "DTW2"} (which always uses \code{L2}).
 #' @param dc Cutoff distance for TADPole algorithm.
@@ -247,6 +263,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2, method = "average
 
           if (is.function(centroid)) {
                cent <- centroid
+
           } else {
                centroid <- match.arg(centroid, c("mean", "median", "shape", "dba", "pam"))
 

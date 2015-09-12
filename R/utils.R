@@ -345,7 +345,7 @@ dsub_pam <- function(x, centers) {
      d
 }
 
-# Preprocessing when using PAM. The whole distance matrix is calculated once and reused
+# Pre-computing when using PAM. The whole distance matrix is calculated once and reused
 
 distmat_pam <- function(x, fam) {
      x <- consistency_check(x, "tsmat")
@@ -370,7 +370,7 @@ allcent_se <- function(x, cluster, k) {
      X <- split.data.frame(x, cluster)
 
      cl <- sort(unique(cluster))
-     ncl <- length(cl)
+     #ncl <- length(cl)
 
      ## notice that the centers have to be in ascending order
      new.C <- mapply(X, C[cl],
@@ -396,7 +396,9 @@ preproc_se <- function (x) {
 # ========================================================================================================
 
 allcent_dba <- function(x, cluster, k) {
-     max.iter <- get("dba.iter", envir = attr(x, "env"))
+     window.size <- get("window.size", envir = attr(x, "env"))
+     norm <- get("norm", envir = attr(x, "env"))
+     dba.iter <- get("dba.iter", envir = attr(x, "env"))
 
      # This will be read from parent environment
      cen <- get("centers", envir=parent.frame())
@@ -404,18 +406,21 @@ allcent_dba <- function(x, cluster, k) {
 
      cl <- sort(unique(cluster))
 
-     if (is.matrix(x))
+     if (is.matrix(x)) {
           X <- split.data.frame(x, cluster)
-     else if (is.list(x)) {
+
+     } else if (is.list(x)) {
           indXC <- lapply(cl, function(i.cl) which(cluster == i.cl))
           X <- lapply(indXC, function(ii) x[ii])
+
      } else
           stop("Invalid format for data")
 
-     ## notice that the centers have to be in ascending order
-     new.C <- mapply(X, C[cl],
+     new.C <- mapply(X, C,
                      FUN = function(x, c) {
-                          new.c <- DBA(x, c, max.iter = max.iter, error.check = FALSE)
+                          new.c <- DBA(x, c,
+                                       norm = norm, window.size = window.size,
+                                       max.iter = dba.iter, error.check = FALSE)
 
                           new.c
                      })

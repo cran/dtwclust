@@ -4,7 +4,8 @@
 \alias{lb_keogh}
 \title{Keogh's DTW lower bound}
 \usage{
-lb_keogh(x, y, window.size = NULL, norm = "L1")
+lb_keogh(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
+  upper.env = NULL)
 }
 \arguments{
 \item{x}{A time series.}
@@ -14,12 +15,16 @@ lb_keogh(x, y, window.size = NULL, norm = "L1")
 \item{window.size}{Window size for envelope calculation. See details.}
 
 \item{norm}{Pointwise distance. Either \code{L1} for Manhattan distance or \code{L2} for Euclidean.}
+
+\item{lower.env}{Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided.}
+
+\item{upper.env}{Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided.}
 }
 \value{
 A list with: \itemize{
   \item \code{d}: The lower bound of the DTW distance.
-  \item \code{upper.env}: The time series of the upper envelope.
-  \item \code{lower.env}: The time series of the lower envelope.
+  \item \code{upper.env}: The time series of \code{y}'s upper envelope.
+  \item \code{lower.env}: The time series of \code{y}'s lower envelope.
 }
 }
 \description{
@@ -35,6 +40,10 @@ if, for example, \code{window.size = 10}, the warping for an observation \eqn{x_
 between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10*2 + 1 = 21} observations falling within
 the window.
 }
+\note{
+If you wish to calculate the lower bound between several time series, it would be better to use the version
+registered with the 'proxy' package, since it includes some small optimizations. See the examples.
+}
 \examples{
 # Sample data
 data(uciCT)
@@ -47,6 +56,18 @@ d.dtw <- dtw(CharTraj[[1]], CharTraj[[2]],
              window.type = "slantedband", window.size = 20)$distance
 
 d.lbk <= d.dtw
+
+# Calculating the LB between several time series using the 'proxy' package
+# (notice how both argments must be lists)
+D.lbk <- proxy::dist(CharTraj[1], CharTraj[2:5], method = "LB_Keogh",
+                     window.size = 20, norm = "L2")
+
+# Corresponding true DTW distance
+# (see dtwclust-package description for an explanation of DTW2)
+D.dtw <- proxy::dist(CharTraj[1], CharTraj[2:5], method = "DTW2",
+                     window.type = "slantedband", window.size = 20)
+
+D.lbk <= D.dtw
 }
 \references{
 Keogh E and Ratanamahatana CA (2005). ``Exact indexing of dynamic time warping.'' \emph{Knowledge and information systems}, \strong{7}(3),
