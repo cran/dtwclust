@@ -43,16 +43,17 @@ NULL
 #' @aliases plot,dtwclust,missing-method
 #'
 setMethod("plot", signature(x="dtwclust", y="missing"),
-          function(x, y, clus=seq_len(x@k),
-                   labs.arg = NULL, data=NULL, time = NULL, plot = TRUE, ...) {
+          function(x, y, clus = seq_len(x@k),
+                   labs.arg = NULL, data = NULL, time = NULL, plot = TRUE, ...) {
 
                ## Obtain data, the priority is: provided data > included data matrix > included data list
 
                if (!is.null(data)) {
-                    if (is.matrix(data))
+                    if (is.matrix(data)) {
                          df <- t(data)
+                         L <- nrow(df)
 
-                    else if (is.list(data)) {
+                    } else if (is.list(data)) {
                          lengths <- sapply(data, length)
                          L <- max(lengths)
                          trail <- L - lengths
@@ -80,8 +81,6 @@ setMethod("plot", signature(x="dtwclust", y="missing"),
                     stop("Provided object has no data. Please re-run the algorithm with save.data = TRUE
                          or provide the data manually.")
                }
-
-               df <- as.data.frame(df)
 
                ## Obtain centers (which can be matrix or lists of series)
 
@@ -111,9 +110,11 @@ setMethod("plot", signature(x="dtwclust", y="missing"),
 
                ## transform data
 
-               #n <- nrow(df)
+               df <- as.data.frame(df)
+
                if (is.null(time)) {
                     t <- seq_len(L)
+
                } else {
                     if (length(time) != L)
                          stop("Length mismatch between values and time stamps")

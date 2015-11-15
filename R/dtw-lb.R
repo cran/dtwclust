@@ -53,6 +53,8 @@
 #' # Same results?
 #' all(NN1 == NN2)
 #'
+#' @author Alexis Sarda-Espinosa
+#'
 #' @param x A matrix where rows are time series, or a list of time series.
 #' @param y An object similar to \code{x}.
 #' @param window.size Window size to use with the LB and DTW calculation. See details.
