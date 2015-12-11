@@ -4,7 +4,8 @@
 \alias{dtw_lb}
 \title{DTW calculation guided by Lemire's lower bound (LB_Improved)}
 \usage{
-dtw_lb(x, y = NULL, window.size = NULL, norm = "L1", error.check = TRUE)
+dtw_lb(x, y = NULL, window.size = NULL, norm = "L1", error.check = TRUE,
+  ...)
 }
 \arguments{
 \item{x}{A matrix where rows are time series, or a list of time series.}
@@ -16,6 +17,8 @@ dtw_lb(x, y = NULL, window.size = NULL, norm = "L1", error.check = TRUE)
 \item{norm}{Pointwise distance. Either \code{L1} for Manhattan distance or \code{L2} for Euclidean.}
 
 \item{error.check}{Should inconsistencies in the data be checked?}
+
+\item{...}{Further arguments to pass to \code{\link[proxy]{dist}} for the initial estimate.}
 }
 \value{
 The distance matrix with class \code{crossdist}.
@@ -39,6 +42,18 @@ the window.
 }
 \note{
 This function uses a lower bound that is only defined for time series of equal lengths.
+
+The \code{...} argument is better left alone, however the function definition needs it so that the internal
+functions can call it appropriately if parallel computing is enabled.
+}
+\section{Parallel Computing}{
+
+
+Please note that running tasks in parallel does \strong{not} guarantee faster computations.
+The overhead introduced is sometimes too large, and it's better to run tasks sequentially.
+
+The user can register a parallel backend with the \code{doParallel} package in order to attempt to
+speed up the calculations (see the examples).
 }
 \examples{
 
@@ -46,7 +61,7 @@ This function uses a lower bound that is only defined for time series of equal l
 data(uciCT)
 
 # Reinterpolate to same length
-data <- lapply(CharTraj, reinterpolate, newLength = 205)
+data <- lapply(CharTraj, reinterpolate, newLength = 180)
 
 # Calculate the DTW distance between a certain subset aided with the lower bound
 system.time(d <- dtw_lb(data[1:5], data[6:50], window.size = 20))
@@ -63,6 +78,29 @@ NN2 <- apply(d2, 1, which.min)
 
 # Same results?
 all(NN1 == NN2)
+
+\dontrun{
+#### Running DTW_LB with parallel support
+# For such a small dataset, this is probably slower in parallel
+require(doParallel)
+
+# Create parallel workers
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+
+# Distance matrix
+D <- dtw_lb(data[1:50], data[51:100], window.size = 20)
+
+# Stop parallel workers
+stopCluster(cl)
+
+# Return to sequential computations
+registerDoSEQ()
+
+# Nearest neighbors
+NN <- apply(D, 1, which.min)
+cbind(names(data[1:50]), names(data[51:100][NN]))
+}
 
 }
 \author{
