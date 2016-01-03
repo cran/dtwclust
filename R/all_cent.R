@@ -2,255 +2,185 @@
 # Custom functions to calculate centroids
 # ========================================================================================================
 
-all_cent <- function(case = NULL,
-                     distmat, distfun,
-                     dba.iter, window.size, norm, trace) {
+all_cent <- function(case = NULL, distmat, distfun, control) {
 
      if (is.function(case))
           return(case)
      else if (!is.character(case))
-          stop("Possible mistake in all_cent.R")
+          stop("Centroid definition must be either a function or a character")
 
-     allcent <- switch(EXPR = case,
+     case <- match.arg(case, c("mean", "median", "shape", "dba", "pam"))
 
-                       pam = {
-                            foo <- function(x, cluster, k) {
+     pam_cent <- function(x, x_split, cl_id, id_changed, ...) {
 
-                                 indX <- lapply(sort(unique(cluster)), function(i) {
-                                      which(cluster == i)
-                                 })
+          if(is.null(distmat)) {
+               new_cent <- lapply(x_split, function(xsub) {
+                    distmat <- distfun(xsub, xsub)
 
-                                 if(is.null(distmat)) {
-                                      C <- sapply(indX, function(i.x) {
-                                           if (is.matrix(x)) {
-                                                xsub <- x[i.x, , drop = FALSE] # function will deal with matrices
-                                                distmat <- distfun(xsub, xsub)
+                    d <- apply(distmat, 1, sum)
 
-                                           } else if (is.list(x)) {
-                                                xsub <- x[i.x]
-                                                distmat <- distfun(xsub, xsub)
-                                           }
+                    i_cent <- xsub[[which.min(d)]]
+                    attr(i_cent, "id_cent") <- pmatch(names(xsub[which.min(d)]), names(x))
 
-                                           d <- apply(distmat, 1, sum)
+                    i_cent
+               })
 
-                                           if (is.matrix(x))
-                                                x[i.x[which.min(d)], ]
-                                           else if (is.list(x))
-                                                x[i.x[which.min(d)]]
-                                      })
+          } else {
+               id_x <- lapply(id_changed, function(cl_num) which(cl_id == cl_num))
 
-                                 } else {
-                                      C <- sapply(indX, function(i.x) {
-                                           d <- apply(distmat[i.x, i.x, drop=FALSE], 1, sum)
+               new_cent <- lapply(id_x, function(i_x) {
+                    d <- apply(distmat[i_x, i_x, drop=FALSE], 1L, sum)
 
-                                           if (is.matrix(x))
-                                                x[i.x[which.min(d)], ]
-                                           else if (is.list(x))
-                                                x[i.x[which.min(d)]]
-                                      })
-                                 }
+                    i_cent <- x[[i_x[which.min(d)]]]
+                    attr(i_cent, "id_cent") <- i_x[which.min(d)]
 
-                                 if (is.matrix(C))
-                                      return(t(C))
-                                 else
-                                      return(C)
-                            }
+                    i_cent
+               })
+          }
 
-                            foo
-                       },
+          new_cent
+     }
 
-                       shape = {
-                            cluster.old <- NULL
+     shape_cent <- function(x_split, cent, id_changed, cl_id, cl_old, ...) {
 
-                            foo <- function(x, cluster, k) {
+          check_parallel()
 
-                                 # This will be read from parent environment
-                                 cen <- get("centers", envir=parent.frame())
-                                 C <- consistency_check(cen, "tsmat")
+          x_split <- split_parallel(x_split)
+          cent <- split_parallel(cent)
 
-                                 if (is.matrix(x)) {
-                                      X <- split.data.frame(x, cluster)
-                                 } else if (is.list(x)) {
-                                      X <- split(x, cluster)
-                                      X <- lapply(X, function(l) t(sapply(l, rbind)))
-                                 }
+          new_cent <- foreach(x_split = x_split,
+                              cent = cent,
+                              .combine = c,
+                              .multicombine = TRUE,
+                              .packages = "dtwclust") %dopar% {
+                                   mapply(x_split, cent,
+                                          SIMPLIFY = FALSE,
+                                          FUN = function(x, c) {
+                                               new_c <- shape_extraction(x, c)
 
-                                 cl <- sort(unique(cluster))
+                                               new_c
+                                          })
+                              }
 
-                                 ## Check which clusters changed
-                                 if (is.null(cluster.old)) {
-                                      indChanged <- cl
+          new_cent
+     }
 
-                                 } else {
-                                      idchng <- cluster != cluster.old
-                                      indChanged <- which( cl %in%
-                                                                sort(unique(c( cluster[idchng],
-                                                                               cluster.old[idchng] ))) )
-                                 }
+     dba_cent <- function(x_split, cent, id_changed, cl_id, cl_old, ...) {
 
-                                 if(length(indChanged) == 0) {
-                                      return(cen)
-                                 }
+          check_parallel()
 
-                                 cluster.old <<- cluster # update
+          x_split <- split_parallel(x_split)
+          cent <- split_parallel(cent)
 
-                                 new.C <- cen # initialize
+          new_cent <- foreach(x_split = x_split,
+                              cent = cent,
+                              .combine = c,
+                              .multicombine = TRUE,
+                              .packages = "dtwclust",
+                              .export = "control") %dopar% {
+                                   mapply(x_split, cent,
+                                          SIMPLIFY = FALSE,
+                                          FUN = function(x, c) {
+                                               new_c <- DBA(x, c,
+                                                            norm = control@norm,
+                                                            window.size = control@window.size,
+                                                            max.iter = control@dba.iter,
+                                                            error.check = FALSE)
 
-                                 ## recompute centers for the clusters that changed
-                                 if(is.matrix(cen)) {
-                                      new.C[indChanged, ] <- t(mapply(X[indChanged], C[indChanged],
-                                                                      FUN = function(x, c) {
-                                                                           new.c <- shape_extraction(x, c)
+                                               new_c
+                                          })
+                              }
 
-                                                                           new.c
-                                                                      }))
+          new_cent
+     }
 
-                                 } else if (is.list(cen)) {
-                                      new.C[indChanged] <- mapply(X[indChanged], C[indChanged],
-                                                                  SIMPLIFY = FALSE,
-                                                                  FUN = function(x, c) {
-                                                                       new.c <- shape_extraction(x, c)
+     mean_cent <- function(x_split, ...) {
+          x_split <- lapply(x_split, function(xx) do.call(rbind, xx))
 
-                                                                       new.c
-                                                                  })
-                                 }
+          new_cent <- lapply(x_split, colMeans)
 
-                                 new.C
-                            }
+          new_cent
+     }
 
-                            foo
-                       },
+     median_cent <- function(x_split, ...) {
+          x_split <- lapply(x_split, function(xx) do.call(rbind, xx))
 
-                       dba = {
-                            cluster.old <- NULL
+          new_cent <- lapply(x_split, colMedians)
 
-                            ## Closure
-                            foo <- function(x, cluster, k) {
+          new_cent
+     }
 
-                                 # This will be read from parent environment
-                                 cen <- get("centers", envir=parent.frame())
-                                 C <- consistency_check(cen, "tsmat")
-                                 x <- consistency_check(x, "tsmat")
+     allcent <- function(x, cl_id, k, cent, cl_old, ...) {
+          ## Check which clusters changed
+          if (all(cl_old == 0L)) {
+               id_changed <- sort(unique(cl_id))
 
-                                 cl <- sort(unique(cluster))
+          } else {
+               id_changed <- cl_id != cl_old
+               id_changed <- union(cl_id[id_changed], cl_old[id_changed])
+          }
 
-                                 indXC <- lapply(cl, function(i.cl) which(cluster == i.cl))
-                                 X <- lapply(indXC, function(ii) x[ii])
+          if(length(id_changed) == 0) {
+               return(cent)
+          }
 
-                                 ## Check which clusters changed
-                                 if (is.null(cluster.old)) {
-                                      indChanged <- cl
+          ## Split data according to cluster memebership
+          x_split <- split(x, factor(cl_id, levels = 1:k))
 
-                                 } else {
-                                      idchng <- cluster != cluster.old
-                                      indChanged <- which( cl %in%
-                                                                sort(unique(c( cluster[idchng],
-                                                                               cluster.old[idchng] ))) )
-                                 }
+          ## In case of empty new clusters
+          empty_clusters <- which(sapply(x_split, length) == 0L)
+          id_changed <- setdiff(id_changed, empty_clusters)
 
-                                 if(length(indChanged) == 0) {
-                                      return(cen)
-                                 }
+          ## Calculate new centers
+          new_cent <- do.call(paste0(case, "_cent"),
+                              c(list(x = x,
+                                     x_split = x_split[id_changed],
+                                     cent = cent[id_changed],
+                                     id_changed = id_changed,
+                                     cl_id = cl_id,
+                                     cl_old = cl_old),
+                                list(...)))
 
-                                 cluster.old <<- cluster # update
+          cent[id_changed] <- new_cent
 
-                                 new.C <- cen # initialize
+          ## Any empty clusters?
+          num_empty <- length(empty_clusters)
 
-                                 ## Recompute centers for those clusters that changed
-                                 if (is.matrix(cen)) {
-                                      new.C[indChanged, ] <- t(mapply(X[indChanged],
-                                                                      C[indChanged],
-                                                                      indChanged,
-                                                                      FUN = function(x, c, i) {
-                                                                           if(trace)
-                                                                                cat("\t\tComputing DBA center ",
-                                                                                    i,
-                                                                                    "...\n",
-                                                                                    sep = "")
+          ## If so, initialize new clusters
+          if (num_empty > 0L) {
+               ## Make sure no center is repeated (especially in case of PAM)
+               any_rep <- logical(num_empty)
 
-                                                                           new.c <- DBA(x, c,
-                                                                                        norm = norm,
-                                                                                        window.size = window.size,
-                                                                                        max.iter = dba.iter,
-                                                                                        error.check = FALSE)
+               while(TRUE) {
+                    id_cent_extra <- sample(length(x), num_empty)
+                    extra_cent <- x[id_cent_extra]
 
-                                                                           new.c
-                                                                      }))
+                    for (id_extra in 1L:num_empty) {
+                         any_rep[id_extra] <- any(sapply(cent, function(i.center) {
+                              if (length(i.center) != length(extra_cent[[id_extra]]))
+                                   ret <- FALSE
+                              else
+                                   ret <- all(i.center == extra_cent[[id_extra]])
 
-                                 } else if (is.list(cen)) {
-                                      new.C[indChanged] <- mapply(X[indChanged],
-                                                                  C[indChanged],
-                                                                  indChanged,
-                                                                  SIMPLIFY = FALSE,
-                                                                  FUN = function(x, c, i) {
-                                                                       if(trace)
-                                                                            cat("\t\tComputing DBA center ",
-                                                                                i,
-                                                                                "...\n",
-                                                                                sep = "")
+                              ret
+                         }))
 
-                                                                       new.c <- DBA(x, c,
-                                                                                    norm = norm,
-                                                                                    window.size = window.size,
-                                                                                    max.iter = dba.iter,
-                                                                                    error.check = FALSE)
+                         if (case == "pam")
+                              attr(extra_cent[[id_extra]], "id_cent") <- id_cent_extra[id_extra]
+                    }
 
-                                                                       new.c
-                                                                  })
-                                 }
+                    if (all(!any_rep))
+                         break
+               }
 
-                                 new.C
-                            }
+               cent[empty_clusters] <- extra_cent
+          }
 
-                            foo
-                       },
+          if (case == "pam")
+               attr(cent, "id_cent") <- sapply(cent, attr, which = "id_cent")
 
-                       mean = {
-                            foo <- function(x, cluster, k) {
-                                 if (is.list(x)) {
-                                      X <- split(x, cluster)
-                                      X <- lapply(X, function(xx) do.call(rbind, xx))
-
-                                      centers <- lapply(X, foo)
-
-                                 } else {
-                                      X <- split.data.frame(x, cluster)
-
-                                      centers <- lapply(X, colMeans)
-                                      centers <- do.call(rbind, centers)
-                                 }
-
-                                 centers
-                            }
-
-                            foo
-                       },
-
-                       median = {
-                            colMedians <- function(mat) { apply(mat, 2, stats::median) }
-
-                            foo <- function(x, cluster, k) {
-                                 if (is.list(x)) {
-                                      X <- split(x, cluster)
-                                      X <- lapply(X, function(xx) do.call(rbind, xx))
-
-                                      centers <- lapply(X, foo)
-
-                                 } else {
-                                      X <- split.data.frame(x, cluster)
-
-                                      centers <- lapply(X, colMedians)
-                                      centers <- do.call(rbind, centers)
-                                 }
-
-                                 centers
-                            }
-
-                            foo
-                       },
-
-                       ## Otherwise
-                       stop("Invalid centroid definition"))
+          cent
+     }
 
      allcent
 }

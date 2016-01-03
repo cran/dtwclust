@@ -1,10 +1,11 @@
 #' Time series clustering under Dynamic Time Warping (DTW) distance.
 #'
 #' Perform time series clustering using different techniques related to the DTW distance and its
-#' corresponding lower bounds (LB). Additionally, an implementation of k-Shape clustering is available.
+#' corresponding lower bounds (LB). Additionally, an implementation of k-Shape clustering is available,
+#' and the package can be easily extended with custom distance measures and centroid definitions.
 #'
 #' This package tries to consolidate the different procedures available to perform clustering of time series
-#' under DTW. Most of the optimizations require time series to have equal lengths. DTW itself doesn't, but
+#' based on shape. Most of the optimizations require time series to have equal lengths. DTW itself doesn't, but
 #' it's much slower to compute. The shape-based distance (SBD) can also be used for series of different
 #' lengths, and it could be faster. If series have different lengths, it is debatable whether it makes sense
 #' to cluster them directly. If possible, reinterpolating them could be one way of speeding up calculations
@@ -12,17 +13,19 @@
 #'
 #' Please see the documentation for \code{\link{dtwclust}}, which serves as the main entry point.
 #'
-#' Other packages that are particularly leveraged here are the \code{flexclust} package for partitional
-#' clustering, the \code{proxy} package for distance matrix calculations, and the \code{dtw} package for the
-#' core DTW calculations.
+#' Other packages that are particularly leveraged here are the \code{proxy} package for distance matrix calculations,
+#' and the \code{dtw} package for the core DTW calculations.
 #'
-#' Five distances are registered via \code{\link[proxy]{pr_DB}}: \code{"LB_Keogh", "LB_Improved", "SBD", "DTW2"}
-#' and \code{"DTW_LB"}. See \code{\link{lb_keogh}}, \code{\link{lb_improved}} and \code{\link{SBD}} for more
-#' details on the first 3. DTW2 is done with \code{\link[dtw]{dtw}} using \code{L2} norm, but it
-#' differs from the result you would obtain if you specify \code{L2} as \code{dist.method}: with \code{DTW2},
-#' pointwise distances (the local cost matrix) are calculated with \code{L1} norm, \emph{each} element of the
-#' matrix is squared and the result is fed into \code{\link[dtw]{dtw}}, which finds the optimum warping path.
-#' The square root of the resulting distance is \emph{then} computed. See \code{\link{dtw_lb}} for the last one.
+#' Five distances are registered via \code{\link[proxy]{pr_DB}}: "LB_Keogh", "LB_Improved", "SBD", "DTW_LB"
+#' and "DTW2". See \code{\link{lb_keogh}}, \code{\link{lb_improved}}, \code{\link{SBD}} and
+#' \code{\link{dtw_lb}} for more details on the first 4.
+#'
+#' DTW2 is done with \code{\link[dtw]{dtw}} using
+#' \code{L2} norm, but it differs from the result you would obtain if you specify \code{L2} as
+#' \code{dist.method}: with \code{DTW2}, pointwise distances (the local cost matrix) are calculated with
+#' \code{L1} norm, \emph{each} element of the matrix is squared and the result is fed into
+#' \code{\link[dtw]{dtw}}, which finds the optimum warping path. The square root of the resulting
+#' distance is \emph{then} computed.
 #'
 #' Please note that the \code{\link[proxy]{dist}} function in the \code{proxy} package accepts one or two
 #' arguments for data objects. Users should usually use the two-input \strong{list} version, even if there is
@@ -74,60 +77,80 @@
 #' and distance measures for time series data.'' \emph{Data Mining and Knowledge Discovery}, \strong{26}(2), pp. 275-309. ISSN 1384-5810,
 #' \url{http://doi.org/10.1007/s10618-012-0250-5}, \url{http://dx.doi.org/10.1007/s10618-012-0250-5}.
 #'
-#' @seealso \code{\link{dtwclust}}, \code{\link[flexclust]{kcca}}, \code{\link[proxy]{dist}},
-#' \code{\link[dtw]{dtw}}
+#' @seealso
+#' Type \code{news(package = "dtwclust")} to see what changed.
+#'
+#' \code{\link{dtwclust}}, \code{\link[proxy]{dist}}, \code{\link[dtw]{dtw}}
+#'
+#' @include utils.R
 #'
 #' @useDynLib dtwclust
+#'
+#' @import methods
+#' @import flexclust
+#' @import doRNG
+#' @import proxy
+#' @import foreach
+#' @import ggplot2
+#'
+#' @importFrom dtw dtw
+#' @importFrom reshape2 melt
+#' @importFrom parallel splitIndices
+#' @importFrom caTools runmin
+#' @importFrom caTools runmax
+#' @importFrom stats aggregate
+#' @importFrom stats approx
+#' @importFrom stats convolve
+#' @importFrom stats cutree
+#' @importFrom stats fft
+#' @importFrom stats hclust
+#' @importFrom stats median
+#' @importFrom stats nextn
+#' @importFrom stats update
 #'
 NULL
 
 .onAttach <- function(lib, pkg) {
 
      ## Register DTW2
-
-     if (proxy::pr_DB$entry_exists("DTW2"))
-          proxy::pr_DB$delete_entry("DTW2")
-
-     proxy::pr_DB$set_entry(FUN = dtw2, names=c("DTW2", "dtw2"),
-                            loop = TRUE, type = "metric", distance = TRUE,
-                            description = "DTW with L2 as pointwise norm")
+     if (!consistency_check("DTW2", "dist", silent = TRUE))
+          proxy::pr_DB$set_entry(FUN = dtw2, names=c("DTW2", "dtw2"),
+                                 loop = TRUE, type = "metric", distance = TRUE,
+                                 description = "DTW with L2 norm",
+                                 PACKAGE = "dtwclust")
 
      ## Register LB_Keogh with the 'proxy' package for distance matrix calculation
-
-     if (proxy::pr_DB$entry_exists("LB_Keogh"))
-          proxy::pr_DB$delete_entry("LB_keogh")
-
-     proxy::pr_DB$set_entry(FUN = lb_keogh_loop, names=c("LBK", "LB_Keogh", "lbk"),
-                            loop = FALSE, type = "metric", distance = TRUE,
-                            description = "Keogh's DTW lower bound but using L1 norm")
+     if (!consistency_check("LB_Keogh", "dist", silent = TRUE))
+          proxy::pr_DB$set_entry(FUN = lb_keogh_loop, names=c("LBK", "LB_Keogh", "lbk"),
+                                 loop = FALSE, type = "metric", distance = TRUE,
+                                 description = "Keogh's DTW lower bound for the Sakoe-Chiba band",
+                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
 
 
      ## Register LB_Improved with the 'proxy' package for distance matrix calculation
-
-     if (proxy::pr_DB$entry_exists("LB_Improved"))
-          proxy::pr_DB$delete_entry("LB_Improved")
-
-     proxy::pr_DB$set_entry(FUN = lb_improved_loop, names=c("LBI", "LB_Improved", "lbi"),
-                            loop = FALSE, type = "metric", distance = TRUE,
-                            description = "Lemire's improved DTW lower bound using L1 norm")
+     if (!consistency_check("LB_Improved", "dist", silent = TRUE))
+          proxy::pr_DB$set_entry(FUN = lb_improved_loop, names=c("LBI", "LB_Improved", "lbi"),
+                                 loop = FALSE, type = "metric", distance = TRUE,
+                                 description = "Lemire's improved DTW lower bound for the Sakoe-Chiba band",
+                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
 
      ## Register SBD
-
-     if (proxy::pr_DB$entry_exists("SBD"))
-          proxy::pr_DB$delete_entry("SBD")
-
-     proxy::pr_DB$set_entry(FUN = SBD.proxy, names=c("SBD", "sbd"),
-                            loop = FALSE, type = "metric", distance = TRUE,
-                            description = "Paparrizos' shape-based distance for time series")
+     if (!consistency_check("SBD", "dist", silent = TRUE))
+          proxy::pr_DB$set_entry(FUN = SBD.proxy, names=c("SBD", "sbd"),
+                                 loop = FALSE, type = "metric", distance = TRUE,
+                                 description = "Paparrizos' shape-based distance for time series",
+                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
 
      ## Register DTW_LB
+     if (!consistency_check("DTW_LB", "dist", silent = TRUE))
+          proxy::pr_DB$set_entry(FUN = dtw_lb, names=c("DTW_LB", "dtw_lb"),
+                                 loop = FALSE, type = "metric", distance = TRUE,
+                                 description = "DTW distance aided with Lemire's lower bound",
+                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
 
-     if (proxy::pr_DB$entry_exists("DTW_LB"))
-          proxy::pr_DB$delete_entry("DTW_LB")
-
-     proxy::pr_DB$set_entry(FUN = dtw_lb, names=c("DTW_LB", "dtw_lb"),
-                            loop = FALSE, type = "metric", distance = TRUE,
-                            description = "DTW distance aided with Lemire's lower bound")
+     packageStartupMessage("Type news(package = ",
+                           dQuote("dtwclust"),
+                           ") to see what changed")
 }
 
 .onUnload <- function(libpath) {

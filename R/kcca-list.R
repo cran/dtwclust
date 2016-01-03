@@ -2,64 +2,57 @@
 # Modified version of kcca to use lists of time series (to support different lengths)
 # ========================================================================================================
 
-kcca.list <- function (x, k, family = kccaFamily("kmeans"), control = NULL)
+kcca.list <- function (x, k, family, iter.max = 30L, trace = FALSE, ...)
 {
-     MYCALL <- match.call()
-     control <- as(control, "flexclustControl")
-     x <- family@preproc(x)
      N <- length(x)
 
-     if (k < 2)
-          stop("Number of clusters must be at least 2")
      if (N < k)
           stop("Number of clusters cannot be greater than number of observations in the data")
 
-     if (control@classify == "auto") {
-          control@classify = "hard"
-     }
+     if (is.null(names(x)))
+          names(x) <- paste0("series_", 1:N) # used by custom PAM centers
 
-     centers <- x[sample(N,k)]
+     id_cent <- sample(N,k)
+     centers <- x[id_cent]
+     attr(centers, "id_cent") <- id_cent
      cluster <- integer(N)
      k <- as.integer(k)
+     iter <- 1L
 
-     sannprob <- control@simann[1]
+     while (iter <= iter.max) {
+          clustold <- cluster
+          distmat <- family@dist(x, centers, ...)
+          cluster <- family@cluster(distmat = distmat)
 
-     if (control@classify %in% c("hard", "simann")) {
-          for (iter in 1:control@iter.max) {
-               clustold <- cluster
-               distmat <- family@dist(x, centers)
-               cluster <- family@cluster(x, distmat = distmat)
+          centers <- family@allcent(x, cluster, k, centers, clustold, ...)
 
-               if (control@classify == "simann") {
-                    #cluster <- flexclust:::perturbClusters(cluster, sannprob)
-                    #sannprob <- sannprob * control@simann[2]
-                    stop("Unimplemented here")
-               }
+          changes <- sum(cluster != clustold)
 
-               k <- ifelse(is.matrix(centers), nrow(centers), length(centers))
-
-               centers <- family@allcent(x, cluster = cluster, k = k)
-
-               changes <- sum(cluster != clustold)
-
-               if (control@verbose && (iter%%control@verbose == 0)) {
-                    td <- sum(distmat[cbind(1:N, cluster)])
-                    txt <- paste(changes, format(td), sep = " / ")
-                    cat(formatC(iter, width = 6),
-                        "Changes / Distsum :",
-                        formatC(txt, width = 12, format = "f"),
-                        "\n")
-               }
-
-               if (changes == 0)
-                    break
+          if (trace) {
+               td <- sum(distmat[cbind(1:N, cluster)])
+               txt <- paste(changes, format(td), sep = " / ")
+               cat("Iteration ", iter, ": ",
+                   "Changes / Distsum = ",
+                   formatC(txt, width = 12, format = "f"),
+                   "\n", sep = "")
           }
+
+          if (changes == 0) {
+               if (trace) cat("\n")
+               break
+          }
+
+          iter <- iter + 1L
      }
-     else if (control@classify == "weighted") {
-          stop("Unsupported for series of different lengths")
+
+     if (iter > iter.max) {
+          warning("Partitional clustering did not converge within the allowed iterations.")
+          converged <- FALSE
+          iter <- iter.max
+
+     } else {
+          converged <- TRUE
      }
-     else
-          stop("Unknown classification method")
 
      cluster <- as.integer(family@cluster(distmat=distmat))
      cldist <- as.matrix(distmat[cbind(1:N, cluster)])
@@ -67,17 +60,14 @@ kcca.list <- function (x, k, family = kccaFamily("kmeans"), control = NULL)
      clusinfo <- data.frame(size = size,
                             av_dist = as.vector(tapply(cldist[,1], cluster, sum))/size)
 
-     z <- new("kccasimple",
-              k = as.integer(k),
-              cluster = cluster,
-              centers = centers,
-              family = family,
-              clusinfo = clusinfo,
-              cldist = cldist,
-              iter = iter,
-              converged = (iter < control@iter.max),
-              call = MYCALL,
-              control = control)
+     names(centers) <- NULL
+     attr(centers, "id_cent") <- NULL
+     centers <- lapply(centers, "attr<-", which = "id_cent", value = NULL)
 
-     z
+     list(cluster = cluster,
+          centers = centers,
+          clusinfo = clusinfo,
+          cldist = cldist,
+          iter = iter,
+          converged = converged)
 }

@@ -14,7 +14,11 @@
 #' @note
 #'
 #' If you wish to calculate the lower bound between several time series, it would be better to use the version
-#' registered with the 'proxy' package, since it includes some small optimizations. See the examples.
+#' registered with the \code{proxy} package, since it includes some small optimizations. See the examples.
+#'
+#' However, because of said optimizations and the way \code{proxy}'s \code{\link[proxy]{dist}} works, the
+#' latter's \code{pairwise} argument will not work with this distance. You can use the custom argument
+#' \code{force.pairwise} to get the correct result.
 #'
 #' @references
 #'
@@ -77,23 +81,27 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
 
      ## LB Keogh first
 
-     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runmax/min'
-     if (is.null(lower.env)) {
-          lower.env <- caTools::runmin(y, window.size*2+1, endrule="constant")
-     } else {
-          if (length(lower.env) != length(y))
-               stop("Length mismatch between 'y' and its lower envelope")
+     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
+     if (is.null(lower.env) && is.null(upper.env)) {
+          envelopes <- call_runminmax(y, window.size*2+1)
+          lower.env <- envelopes$min
+          upper.env <- envelopes$max
+
+     } else if (is.null(lower.env)) {
+          lower.env <- caTools::runmin(y, window.size*2+1)
+
+     } else if (is.null(upper.env)) {
+          upper.env <- caTools::runmax(y, window.size*2+1)
      }
 
-     if (is.null(upper.env)) {
-          upper.env <- caTools::runmax(y, window.size*2+1, endrule="constant")
-     } else {
-          if (length(upper.env) != length(y))
-               stop("Length mismatch between 'y' and its upper envelope")
-     }
+     if (length(lower.env) != length(y))
+          stop("Length mismatch between 'y' and its lower envelope")
 
-     ind1 <- which(x > upper.env)
-     ind2 <- which(x < lower.env)
+     if (length(upper.env) != length(y))
+          stop("Length mismatch between 'y' and its upper envelope")
+
+     ind1 <- x > upper.env
+     ind2 <- x < lower.env
 
      H <- x
      H[ind1] <- upper.env[ind1]
@@ -102,15 +110,14 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
      d1 <- abs(x-H)
 
      ## From here on is Lemire's improvement
-     UH <- caTools::runmax(H, window.size*2+1, endrule="constant")
-     LH <- caTools::runmin(H, window.size*2+1, endrule="constant")
+     EH <- call_runminmax(H, window.size*2+1)
 
-     ind3 <- which(y > UH)
-     ind4 <- which(y < LH)
+     ind3 <- y > EH$max
+     ind4 <- y < EH$min
 
      H2 <- y
-     H2[ind3] <- UH[ind3]
-     H2[ind4] <- LH[ind4]
+     H2[ind3] <- EH$max[ind3]
+     H2[ind4] <- EH$min[ind4]
 
      d2 <- abs(y-H2)
 
@@ -129,23 +136,10 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
 # Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
 # ========================================================================================================
 
-lb_improved_loop <- function(x, y = NULL, ...) {
+lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE,
+                             force.symmetry = FALSE, norm = "L1", force.pairwise = FALSE) {
 
-     ARGS <- list(...)
-     window.size <- ARGS$window.size
-     error.check <- ARGS$error.check
-     force.symmetry <- ARGS$force.symmetry
-     norm <- ARGS$norm
-
-     if (is.null(error.check))
-          error.check <- TRUE
-     if (is.null(force.symmetry))
-          force.symmetry <- FALSE
-
-     if (is.null(norm))
-          norm <- "L1"
-     else
-          norm <- match.arg(norm, c("L1", "L2"))
+     norm <- match.arg(norm, c("L1", "L2"))
 
      if (error.check)
           window.size <- consistency_check(window.size, "window")
@@ -162,7 +156,6 @@ lb_improved_loop <- function(x, y = NULL, ...) {
           y <- x
 
      } else {
-
           y <- consistency_check(y, "tsmat")
 
           if (error.check)
@@ -172,24 +165,36 @@ lb_improved_loop <- function(x, y = NULL, ...) {
                stop("Window size should not exceed length of the time series")
      }
 
-     ## from 'caTools' package
-     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runmax/min'
-     upper.env <- lapply(y, runmax, k=window.size*2+1, endrule="constant")
-     lower.env <- lapply(y, runmin, k=window.size*2+1, endrule="constant")
+     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
+     envelops <- lapply(y, function(s) {
+          call_runminmax(s, window.size*2+1)
+     })
 
-     DD <- sapply(X=x, U=upper.env, L=lower.env, Y=y,
-                  FUN = function(x, ...) {
-                       U <- list(...)$U
-                       L <- list(...)$L
-                       Y <- list(...)$Y
+     lower.env <- lapply(envelops, "[[", "min")
+     upper.env <- lapply(envelops, "[[", "max")
 
-                       ## This will return one column of the distance matrix
-                       D <- mapply(U, L, Y, MoreArgs=list(x=x),
+     check_parallel()
+
+     x <- split_parallel(x)
+
+     if (force.pairwise) {
+          y <- split_parallel(y)
+          lower.env <- split_parallel(lower.env)
+          upper.env <- split_parallel(upper.env)
+     }
+
+     if (force.pairwise) {
+          D <- foreach(x = x, y = y, lower.env = lower.env, upper.env = upper.env,
+                       .combine = c,
+                       .multicombine = TRUE,
+                       .export = "call_runminmax",
+                       .packages = "dtwclust") %dopar% {
+                            mapply(upper.env, lower.env, y, x,
                                    FUN = function(u, l, y, x) {
 
                                         ## LB Keogh
-                                        ind1 <- which(x > u)
-                                        ind2 <- which(x < l)
+                                        ind1 <- x > u
+                                        ind2 <- x < l
 
                                         H <- x
                                         H[ind1] <- u[ind1]
@@ -198,15 +203,14 @@ lb_improved_loop <- function(x, y = NULL, ...) {
                                         d1 <- abs(x-H)
 
                                         ## Lemire's improvement
-                                        UH <- caTools::runmax(H, window.size*2+1, endrule="constant")
-                                        LH <- caTools::runmin(H, window.size*2+1, endrule="constant")
+                                        EH <- call_runminmax(H, window.size*2+1)
 
-                                        ind3 <- which(y > UH)
-                                        ind4 <- which(y < LH)
+                                        ind3 <- y > EH$max
+                                        ind4 <- y < EH$min
 
                                         H2 <- y
-                                        H2[ind3] <- UH[ind3]
-                                        H2[ind4] <- LH[ind4]
+                                        H2[ind3] <- EH$max[ind3]
+                                        H2[ind4] <- EH$min[ind4]
 
                                         d2 <- abs(y-H2)
 
@@ -219,28 +223,79 @@ lb_improved_loop <- function(x, y = NULL, ...) {
 
                                         d
                                    })
+                       }
 
-                       D
-                  })
+          attr(D, "class") <- "pairdist"
 
-     if (force.symmetry) {
-          if (nrow(DD) != ncol(DD)) {
+     } else {
+          D <- foreach(x = x,
+                       .combine = cbind,
+                       .multicombine = TRUE,
+                       .export = "call_runminmax",
+                       .packages = "dtwclust") %dopar% {
+                            sapply(X=x, U=upper.env, L=lower.env, Y=y,
+                                   FUN = function(x, U, L, Y) {
+
+                                        ## This will return one column of the distance matrix
+                                        D <- mapply(U, L, Y, MoreArgs=list(x=x),
+                                                    FUN = function(u, l, y, x) {
+
+                                                         ## LB Keogh
+                                                         ind1 <- x > u
+                                                         ind2 <- x < l
+
+                                                         H <- x
+                                                         H[ind1] <- u[ind1]
+                                                         H[ind2] <- l[ind2]
+
+                                                         d1 <- abs(x-H)
+
+                                                         ## Lemire's improvement
+                                                         EH <- call_runminmax(H, window.size*2+1)
+
+                                                         ind3 <- y > EH$max
+                                                         ind4 <- y < EH$min
+
+                                                         H2 <- y
+                                                         H2[ind3] <- EH$max[ind3]
+                                                         H2[ind4] <- EH$min[ind4]
+
+                                                         d2 <- abs(y-H2)
+
+                                                         ## calculate LB_Improved
+
+                                                         d <- switch(EXPR = norm,
+                                                                     L1 = sum(d1) + sum(d2),
+                                                                     L2 = sqrt(sum(d1^2) + sum(d2^2))
+                                                         )
+
+                                                         d
+                                                    })
+                                        D
+                                   })
+                       }
+
+          attr(D, "class") <- "crossdist"
+          D <- t(D)
+     }
+
+     if (force.symmetry && !force.pairwise) {
+          if (nrow(D) != ncol(D)) {
                warning("Unable to force symmetry. Resulting distance matrix is not square.")
           } else {
-               ind.tri <- lower.tri(DD)
+               ind.tri <- lower.tri(D)
 
-               new.low.tri.vals <- t(DD)[ind.tri]
-               indCorrect <- DD[ind.tri] > new.low.tri.vals
-               new.low.tri.vals[indCorrect] <- DD[ind.tri][indCorrect]
+               new.low.tri.vals <- t(D)[ind.tri]
+               indCorrect <- D[ind.tri] > new.low.tri.vals
+               new.low.tri.vals[indCorrect] <- D[ind.tri][indCorrect]
 
-               DD[ind.tri] <- new.low.tri.vals
-               DD <- t(DD)
-               DD[ind.tri] <- new.low.tri.vals
+               D[ind.tri] <- new.low.tri.vals
+               D <- t(D)
+               D[ind.tri] <- new.low.tri.vals
           }
      }
 
-     attr(DD, "class") <- "crossdist"
-     attr(DD, "method") <- "LB_Improved"
+     attr(D, "method") <- "LB_Improved"
 
-     t(DD)
+     D
 }

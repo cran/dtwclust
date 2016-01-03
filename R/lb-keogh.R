@@ -14,7 +14,11 @@
 #' @note
 #'
 #' If you wish to calculate the lower bound between several time series, it would be better to use the version
-#' registered with the 'proxy' package, since it includes some small optimizations. See the examples.
+#' registered with the \code{proxy} package, since it includes some small optimizations. See the examples.
+#'
+#' However, because of said optimizations and the way \code{proxy}'s \code{\link[proxy]{dist}} works, the
+#' latter's \code{pairwise} argument will not work with this distance. You can use the custom argument
+#' \code{force.pairwise} to get the correct result.
 #'
 #' @references
 #'
@@ -61,8 +65,7 @@
 #' }
 #'
 #' @export
-#' @importFrom caTools runmax
-#' @importFrom caTools runmin
+#'
 
 lb_keogh <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, upper.env = NULL) {
 
@@ -80,26 +83,30 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, up
      if (window.size > length(x))
           stop("The width of the window should not exceed the length of the series")
 
-     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runmax/min'
-     if (is.null(lower.env)) {
-          lower.env <- caTools::runmin(y, window.size*2+1, endrule="constant")
-     } else {
-          if (length(lower.env) != length(y))
-               stop("Length mismatch between 'y' and its lower envelope")
+     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
+     if (is.null(lower.env) && is.null(upper.env)) {
+          envelopes <- call_runminmax(y, window.size*2+1)
+          lower.env <- envelopes$min
+          upper.env <- envelopes$max
+
+     } else if (is.null(lower.env)) {
+          lower.env <- caTools::runmin(y, window.size*2+1)
+
+     } else if (is.null(upper.env)) {
+          upper.env <- caTools::runmax(y, window.size*2+1)
      }
 
-     if (is.null(upper.env)) {
-          upper.env <- caTools::runmax(y, window.size*2+1, endrule="constant")
-     } else {
-          if (length(upper.env) != length(y))
-               stop("Length mismatch between 'y' and its upper envelope")
-     }
+     if (length(lower.env) != length(y))
+          stop("Length mismatch between 'y' and its lower envelope")
+
+     if (length(upper.env) != length(y))
+          stop("Length mismatch between 'y' and its upper envelope")
 
      D <- rep(0, length(x))
 
-     ind1 <- which(x > upper.env)
+     ind1 <- x > upper.env
      D[ind1] <- x[ind1] - upper.env[ind1]
-     ind2 <- which(x < lower.env)
+     ind2 <- x < lower.env
      D[ind2] <- lower.env[ind2] - x[ind2]
 
      d <- switch(EXPR = norm,
@@ -113,27 +120,12 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, up
 
 # ========================================================================================================
 # Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
-# - About 10 times faster
 # ========================================================================================================
 
-lb_keogh_loop <- function(x, y = NULL, ...) {
+lb_keogh_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE,
+                          force.symmetry = FALSE, norm = "L1", force.pairwise = FALSE) {
 
-     ARGS <- list(...)
-     window.size <- ARGS$window.size
-     error.check <- ARGS$error.check
-     force.symmetry <- ARGS$force.symmetry
-     norm <- ARGS$norm
-
-
-     if (is.null(error.check))
-          error.check <- TRUE
-     if (is.null(force.symmetry))
-          force.symmetry <- FALSE
-
-     if (is.null(norm))
-          norm <- "L1"
-     else
-          norm <- match.arg(norm, c("L1", "L2"))
+     norm <- match.arg(norm, c("L1", "L2"))
 
      if (error.check)
           window.size <- consistency_check(window.size, "window")
@@ -159,25 +151,35 @@ lb_keogh_loop <- function(x, y = NULL, ...) {
                stop("Window size should not exceed length of the time series")
      }
 
-     ## from 'caTools' package
-     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runmax/min'
-     upper.env <- lapply(y, runmax, k=window.size*2+1, endrule="constant")
-     lower.env <- lapply(y, runmin, k=window.size*2+1, endrule="constant")
+     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
+     envelops <- lapply(y, function(s) {
+          call_runminmax(s, window.size*2+1)
+     })
 
-     DD <- sapply(X=x, U=upper.env, L=lower.env,
-                  FUN = function(x, ...) {
-                       U <- list(...)$U
-                       L <- list(...)$L
+     lower.env <- lapply(envelops, "[[", "min")
+     upper.env <- lapply(envelops, "[[", "max")
 
-                       ## This will return one column of the distance matrix
-                       D <- mapply(U, L, MoreArgs=list(x=x),
+     check_parallel()
+
+     x <- split_parallel(x)
+
+     if (force.pairwise) {
+          lower.env <- split_parallel(lower.env)
+          upper.env <- split_parallel(upper.env)
+     }
+
+     if (force.pairwise) {
+          D <- foreach(x = x, lower.env = lower.env, upper.env = upper.env,
+                       .combine = c,
+                       .multicombine = TRUE) %dopar% {
+                            mapply(upper.env, lower.env, x,
                                    FUN = function(u, l, x) {
 
                                         D <- rep(0, length(x))
 
-                                        ind1 <- which(x > u)
+                                        ind1 <- x > u
                                         D[ind1] <- x[ind1] - u[ind1]
-                                        ind2 <- which(x < l)
+                                        ind2 <- x < l
                                         D[ind2] <- l[ind2] - x[ind2]
 
                                         d <- switch(EXPR = norm,
@@ -185,30 +187,61 @@ lb_keogh_loop <- function(x, y = NULL, ...) {
                                                     L2 = sqrt(sum(D^2)))
 
                                         d
-
                                    })
+                       }
 
-                       D
-                  })
+          attr(D, "class") <- "pairdist"
 
-     if (force.symmetry) {
-          if (nrow(DD) != ncol(DD)) {
+     } else {
+          D <- foreach(x = x,
+                       .combine = cbind,
+                       .multicombine = TRUE) %dopar% {
+                            sapply(X=x, U=upper.env, L=lower.env,
+                                   FUN = function(x, U, L) {
+
+                                        ## This will return one column of the distance matrix
+                                        D <- mapply(U, L, MoreArgs=list(x=x),
+                                                    FUN = function(u, l, x) {
+
+                                                         D <- rep(0, length(x))
+
+                                                         ind1 <- x > u
+                                                         D[ind1] <- x[ind1] - u[ind1]
+                                                         ind2 <- x < l
+                                                         D[ind2] <- l[ind2] - x[ind2]
+
+                                                         d <- switch(EXPR = norm,
+                                                                     L1 = sum(D),
+                                                                     L2 = sqrt(sum(D^2)))
+
+                                                         d
+                                                    })
+                                        D
+                                   })
+                       }
+
+          attr(D, "class") <- "crossdist"
+          D <- t(D)
+     }
+
+     if (force.symmetry && !force.pairwise) {
+          if (nrow(D) != ncol(D)) {
                warning("Unable to force symmetry. Resulting distance matrix is not square.")
+
           } else {
-               ind.tri <- lower.tri(DD)
+               ind.tri <- lower.tri(D)
 
-               new.low.tri.vals <- t(DD)[ind.tri]
-               indCorrect <- DD[ind.tri] > new.low.tri.vals
-               new.low.tri.vals[indCorrect] <- DD[ind.tri][indCorrect]
+               new.low.tri.vals <- t(D)[ind.tri]
+               indCorrect <- D[ind.tri] > new.low.tri.vals
+               new.low.tri.vals[indCorrect] <- D[ind.tri][indCorrect]
 
-               DD[ind.tri] <- new.low.tri.vals
-               DD <- t(DD)
-               DD[ind.tri] <- new.low.tri.vals
+               D[ind.tri] <- new.low.tri.vals
+               D <- t(D)
+               D[ind.tri] <- new.low.tri.vals
           }
      }
 
-     attr(DD, "class") <- "crossdist"
-     attr(DD, "method") <- "LB_Keogh"
+     attr(D, "method") <- "LB_Keogh"
 
-     t(DD)
+     D
 }

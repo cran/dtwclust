@@ -6,11 +6,12 @@
 \title{Time series clustering under Dynamic Time Warping (DTW) distance.}
 \description{
 Perform time series clustering using different techniques related to the DTW distance and its
-corresponding lower bounds (LB). Additionally, an implementation of k-Shape clustering is available.
+corresponding lower bounds (LB). Additionally, an implementation of k-Shape clustering is available,
+and the package can be easily extended with custom distance measures and centroid definitions.
 }
 \details{
 This package tries to consolidate the different procedures available to perform clustering of time series
-under DTW. Most of the optimizations require time series to have equal lengths. DTW itself doesn't, but
+based on shape. Most of the optimizations require time series to have equal lengths. DTW itself doesn't, but
 it's much slower to compute. The shape-based distance (SBD) can also be used for series of different
 lengths, and it could be faster. If series have different lengths, it is debatable whether it makes sense
 to cluster them directly. If possible, reinterpolating them could be one way of speeding up calculations
@@ -18,17 +19,19 @@ to cluster them directly. If possible, reinterpolating them could be one way of 
 
 Please see the documentation for \code{\link{dtwclust}}, which serves as the main entry point.
 
-Other packages that are particularly leveraged here are the \code{flexclust} package for partitional
-clustering, the \code{proxy} package for distance matrix calculations, and the \code{dtw} package for the
-core DTW calculations.
+Other packages that are particularly leveraged here are the \code{proxy} package for distance matrix calculations,
+and the \code{dtw} package for the core DTW calculations.
 
-Five distances are registered via \code{\link[proxy]{pr_DB}}: \code{"LB_Keogh", "LB_Improved", "SBD", "DTW2"}
-and \code{"DTW_LB"}. See \code{\link{lb_keogh}}, \code{\link{lb_improved}} and \code{\link{SBD}} for more
-details on the first 3. DTW2 is done with \code{\link[dtw]{dtw}} using \code{L2} norm, but it
-differs from the result you would obtain if you specify \code{L2} as \code{dist.method}: with \code{DTW2},
-pointwise distances (the local cost matrix) are calculated with \code{L1} norm, \emph{each} element of the
-matrix is squared and the result is fed into \code{\link[dtw]{dtw}}, which finds the optimum warping path.
-The square root of the resulting distance is \emph{then} computed. See \code{\link{dtw_lb}} for the last one.
+Five distances are registered via \code{\link[proxy]{pr_DB}}: "LB_Keogh", "LB_Improved", "SBD", "DTW_LB"
+and "DTW2". See \code{\link{lb_keogh}}, \code{\link{lb_improved}}, \code{\link{SBD}} and
+\code{\link{dtw_lb}} for more details on the first 4.
+
+DTW2 is done with \code{\link[dtw]{dtw}} using
+\code{L2} norm, but it differs from the result you would obtain if you specify \code{L2} as
+\code{dist.method}: with \code{DTW2}, pointwise distances (the local cost matrix) are calculated with
+\code{L1} norm, \emph{each} element of the matrix is squared and the result is fed into
+\code{\link[dtw]{dtw}}, which finds the optimum warping path. The square root of the resulting
+distance is \emph{then} computed.
 
 Please note that the \code{\link[proxy]{dist}} function in the \code{proxy} package accepts one or two
 arguments for data objects. Users should usually use the two-input \strong{list} version, even if there is
@@ -78,7 +81,8 @@ and distance measures for time series data.'' \emph{Data Mining and Knowledge Di
 \url{http://doi.org/10.1007/s10618-012-0250-5}, \url{http://dx.doi.org/10.1007/s10618-012-0250-5}.
 }
 \seealso{
-\code{\link{dtwclust}}, \code{\link[flexclust]{kcca}}, \code{\link[proxy]{dist}},
-\code{\link[dtw]{dtw}}
+Type \code{news(package = "dtwclust")} to see what changed.
+
+\code{\link{dtwclust}}, \code{\link[proxy]{dist}}, \code{\link[dtw]{dtw}}
 }
 

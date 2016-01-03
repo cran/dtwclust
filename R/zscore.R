@@ -1,15 +1,16 @@
 #' Wrapper for z-normalization
 #'
 #' Wrapper for function \code{\link[base]{scale}} that returns zeros instead of \code{NaN}. It also
-#' supports a list of vectors and matrices.
+#' supports a list of vectors and a matrix input.
 #'
 #' @param x Data to normalize. Either a vector, a matrix where each row is to be normalized, or a list of vectors.
 #' @param ... Further arguments to pass to \code{\link[base]{scale}}.
 #' @param na.rm Logical flag. Should \code{NA}s be removed? Ignored for matrix input.
 #'
-#' @return Normalized data.
+#' @return Normalized data in the same format as provided.
 #'
 #' @export
+#'
 
 zscore <- function(x, ..., na.rm = FALSE) {
 

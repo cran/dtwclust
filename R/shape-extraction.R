@@ -3,7 +3,13 @@
 #' Time-series shape extraction based on optimal alignments as proposed by Papparizos and Gravano, 2015, for
 #' the k-Shape clustering algorithm.
 #'
-#' This works only if the signals are \emph{z-normalized}, since the output will also have this normalization.
+#' This works only if the series are \emph{z-normalized}, since the output will also have this normalization.
+#'
+#' The resulting centroid will have the same length as \code{center} if provided. Otherwise, there are two
+#' possibilities: if all series from \code{X} have the same length, all of them
+#' will be used as-is, and the output will have the same length as the series; if series have different
+#' lengths, a series will be chosen at random and used as reference. The output series will then have the
+#' same length as the chosen series.
 #'
 #' This centroid computation is casted as an optimization problem called maximization of Rayleigh Quotient.
 #' See the cited article for more details.
@@ -23,78 +29,91 @@
 #' # Sample data
 #' data(uciCT)
 #'
-#' # Subset of interest, normalized
-#' X <- t(sapply(CharTraj[1:5], zscore))
+#' # Normalize desired subset
+#' X <- zscore(CharTraj[1:5])
 #'
 #' # Obtain centroid series
-#' C <- shape_extraction(X, znorm = FALSE)
+#' C <- shape_extraction(X)
 #'
 #' # Result
-#' matplot(t(X), type = "l", col = 1:5)
+#' matplot(do.call(cbind, X),
+#'         type = "l", col = 1:5)
 #' points(C)
 #'
-#' @param X Numeric matrix where each row is a time series.
-#' @param cz Center to use as basis. It should already be \emph{normalized}. Calculation uses all \code{X}
-#' if \code{cz = NULL}.
-#' @param znorm Boolean flag. Should z-scores be calculated for \code{X} before processing?
+#' @param X Numeric matrix where each row is a time series, or a list of time series.
+#' @param center Center to use as basis. \emph{It will be z-normalized}.
+#' @param znorm Logical flag. Should z-scores be calculated for \code{X} before processing?
 #'
 #' @return Centroid time series.
 #'
 #' @export
+#'
 
-shape_extraction <- function(X, cz = NULL, znorm = FALSE) {
+shape_extraction <- function(X, center = NULL, znorm = FALSE) {
 
-     if (!is.matrix(X))
-          stop("Unsupported type for X")
+     X <- consistency_check(X, "tsmat")
+
+     consistency_check(X, "vltslist")
 
      if (znorm)
-          Xz <- t(apply(X, 1, zscore))
+          Xz <- zscore(X)
      else
           Xz <- X
 
-     if (!is.null(cz)) {
-
-          cz <- as.numeric(cz)
-
-          if (all(cz == 0)) {
-               a <- Xz
+     ## make sure at least one series is not just a flat line at zero
+     if (all(sapply(Xz, sum) == 0)) {
+          if (is.null(center)) {
+               lengths <- sapply(Xz, length)
+               return(rep(0, sample(lengths,1)))
 
           } else {
-               a <- t(apply(Xz, 1, function(A) {
-                    sbd <- SBD(cz, A)
+               return(center)
+          }
+     }
 
-                    sbd$yshift
-               }))
+     if (is.null(center)) {
+          if (length(unique(sapply(Xz, length))) == 1L)
+               A <- do.call(rbind, Xz) # use all
+          else {
+               center <- Xz[[sample(length(Xz), 1L)]] # random choice as reference
+
+               A <- lapply(Xz, function(a) {
+                    SBD(center, a)$yshift
+               })
+
+               A <- do.call(rbind, A)
           }
 
      } else {
+          center <- zscore(center) # use given reference
 
-          a <- Xz
+          A <- lapply(Xz, function(a) {
+               SBD(center, a)$yshift
+          })
 
+          A <- do.call(rbind, A)
      }
 
-     Y <- t(apply(a, 1, zscore))
+     Y <- zscore(A)
 
      if (is.matrix(Y))
           S <- t(Y) %*% Y
      else
           S <- Y %*% t(Y)
 
-     nc <- ncol(a)
+     nc <- ncol(A)
      P <- diag(nc) - 1 / nc * matrix(1, nc, nc)
      M <- P %*% S %*% P
 
      ksc <- eigen(M)$vectors[,1]
 
-     d1 <- sqrt(crossprod(a[1,] - ksc))
-     d2 <- sqrt(crossprod(a[1,] + ksc))
+     d1 <- sqrt(crossprod(A[1,] - ksc))
+     d2 <- sqrt(crossprod(A[1,] + ksc))
 
      if (d1 >= d2)
           ksc <- -ksc
 
      ksc <- zscore(ksc)
-     attributes(ksc) <- NULL
-     ksc <- as.numeric(ksc)
 
      ksc
 }

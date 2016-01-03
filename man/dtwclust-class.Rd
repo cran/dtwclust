@@ -4,22 +4,50 @@
 \alias{dtwclust-class}
 \title{Class definition for \code{dtwclust}}
 \description{
-Formal S4 class to know how to handle data for plotting.
+Formal S4 class.
 }
 \details{
-The class inherits from \code{\link[flexclust]{kccasimple-class}}, so most related slots and
-methods are also supported.
+The class no longer inherits from \code{\link[flexclust]{kccasimple-class}}, but most slots and methods were ported.
+Namely, \code{data} and \code{index} slots were not.
+
+However, this class now contains \code{\link[stats]{hclust}} as superclass and supports all its methods. Plot is a
+special case (see \code{\link{dtwclust-methods}}).
 }
 \section{Slots}{
 
 \describe{
+\item{\code{call}}{The function call.}
+
+\item{\code{control}}{An object of class \code{\link{dtwclustControl}}.}
+
+\item{\code{family}}{An object of class \code{\link{dtwclustFamily}}.}
+
+\item{\code{distmat}}{If computed, the cross-distance matrix.}
+
+\item{\code{k}}{Integer indicating the number of desired clusters.}
+
+\item{\code{cluster}}{Integer vector indicating which cluster a series belongs to.}
+
+\item{\code{iter}}{The number of iterations used.}
+
+\item{\code{converged}}{A logical indicating whether the function converged.}
+
+\item{\code{clusinfo}}{A data frame with two columns: \code{size} indicates the number of series each cluster has, and
+\code{av_dist} indicates the average distance between series for each cluster.}
+
+\item{\code{centers}}{A list with the centroid time series.}
+
+\item{\code{cldist}}{A column vector with the distance between each series in the data and its corresponding centroid.}
+
 \item{\code{type}}{A string indicating one of the supported clustering types of \code{\link{dtwclust}}.}
 
-\item{\code{distance}}{A string indicating the distance used with \code{\link{dtwclust}}.}
+\item{\code{method}}{A string indicating which hierarchical method was used.}
 
-\item{\code{centroid}}{A string indicating the centroid used with \code{\link{dtwclust}}.}
+\item{\code{distance}}{A string indicating the distance used.}
 
-\item{\code{preproc}}{A string indicating the preprocessing used with \code{\link{dtwclust}}.}
+\item{\code{centroid}}{A string indicating the centroid used.}
+
+\item{\code{preproc}}{A string indicating the preprocessing used.}
 
 \item{\code{datalist}}{The provided data in the form of a list, where each element is a time series.}
 
