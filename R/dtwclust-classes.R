@@ -1,19 +1,19 @@
 #' Class definition for \code{dtwclustFamily}
 #'
-#' Formal S4 class with the family of functions used for partitional and hierarchical procedures in
-#' \code{\link{dtwclust}}.
+#' Formal S4 class with a family of functions used in \code{\link{dtwclust}}.
 #'
 #' The custom implementations also handle parallelization.
 #'
 #' Since the distance function makes use of \code{proxy}, it also supports any extra \code{\link[proxy]{dist}}
 #' parameters in \code{...}.
 #'
-#' The prototype includes the \code{cluster} function, as well as a pass-through \code{preproc} function.
+#' The prototype includes the \code{cluster} function for partitional methods, as well as a
+#' pass-through \code{preproc} function.
 #'
 #' @slot dist The function to calculate the distance matrices.
 #' @slot allcent The function to calculate centroids at each iteration.
 #' @slot cluster The function used to assign a series to a cluster.
-#' @slot preproc The function used to preprocess the data (important for \code{\link[stats]{predict}}).
+#' @slot preproc The function used to preprocess the data (relevant for \code{\link[stats]{predict}}).
 #'
 #' @name dtwclustFamily-class
 #' @rdname dtwclustFamily-class
@@ -29,7 +29,7 @@ setClass("dtwclustFamily",
                    preproc = "function"),
 
          prototype = prototype(preproc = function(x) x,
-                               cluster = function(distmat = NULL) {
+                               cluster = function(distmat = NULL, ...) {
                                     if (is.null(distmat))
                                          stop("Something is wrong, couldn't calculate distances.")
 
@@ -41,10 +41,6 @@ setClass("dtwclustFamily",
 #'
 #' Formal S4 class with several control parameters used in \code{\link{dtwclust}}.
 #'
-#' The included slots were some of the formal arguments of \code{\link{dtwclust}}.
-#' In the next release, all arguments that correspond to one of the slots here will not be detected by the dtwclust function
-#' unless specified in the \code{control} parameter.
-#'
 #' Default values are shown at the end.
 #'
 #' @section Common parameters:
@@ -52,40 +48,55 @@ setClass("dtwclustFamily",
 #' \itemize{
 #'   \item \code{window.size} = \code{NULL}
 #'   \item \code{norm} = "L1"
+#'   \item \code{delta} = 1e-3
 #'   \item \code{trace} = \code{FALSE}
 #'   \item \code{save.data} = \code{TRUE}
 #'   \item \code{symmetric} = \code{FALSE}
 #'   \item \code{packages} = \code{character(0)}
 #' }
 #'
-#' @slot window.size Integer or \code{NULL}. Window constraint for DTW and LB calculations. See Sakoe-Chiba section in
-#' \code{\link{dtwclust}}.
-#' @slot norm Character. Pointwise distance for DTW, DBA and the LB. Either \code{"L1"} for Manhattan distance or \code{"L2"}
-#' for Euclidean. Ignored for \code{distance = "DTW"} (which always uses \code{"L1"}) and
+#' @slot window.size Integer or \code{NULL}. Window constraint for DTW, DBA and LB calculations.
+#' @slot norm Character. Pointwise distance for DTW, DBA and the LBs. Either \code{"L1"} for Manhattan distance
+#' or \code{"L2"} for Euclidean. Ignored for \code{distance = "DTW"} (which always uses \code{"L1"}) and
 #' \code{distance = "DTW2"} (which always uses \code{"L2"}).
+#' @slot delta Numeric. Stopping criterion for \code{\link{DBA}} centroids and fuzzy clustering.
 #' @slot trace Logical flag. If \code{TRUE}, more output regarding the progress is printed to screen.
 #' @slot save.data Return a "copy" of the data in the returned object? Because of the way \code{R} handles
 #' things internally, all copies should point to the same memory address.
-#' @slot symmetric Is the distance function symmetric? In other words, is \code{dist(x,y)} == \code{dist(y,x)}?
-#' If \code{TRUE}, half the distance matrix can be computed and some time saved.
-#' @slot packages Character vector with the names of any packages required for custom \code{proxy} functions. See
-#' Parallel Computing section in \code{\link{dtwclust}}.
+#' @slot symmetric Logical flag. Is the distance function symmetric? In other words, is \code{dist(x,y)} ==
+#' \code{dist(y,x)}? If \code{TRUE}, only half the distance matrix needs to be computed.
+#' @slot packages Character vector with the names of any packages required for custom \code{proxy} functions.
+#' See Parallel Computing section in \code{\link{dtwclust}}.
 #'
 #' @section Only for partitional procedures:
 #'
 #' \itemize{
 #'   \item \code{dba.iter} = \code{15L}
 #'   \item \code{pam.precompute} = \code{TRUE}
-#'   \item \code{iter.max} = \code{30L}
-#'   \item \code{nrep} = \code{1L}
 #' }
 #'
 #' @slot dba.iter Integer. Maximum number of iterations for \code{\link{DBA}} centroids.
-#' @slot pam.precompute Logical flag. Precompute the whole distance matrix once and reuse it at each iteration if using PAM
-#' centroids. Otherwise calculate distances at every iteration.
+#' @slot pam.precompute Logical flag. Precompute the whole distance matrix once and reuse it at each iteration
+#' if using PAM centroids. Otherwise calculate distances at every iteration.
+#'
+#' @section Only for fuzzy clustering:
+#'
+#' \itemize{
+#'   \item \code{fuzziness} = \code{2}
+#' }
+#'
+#' @slot fuzziness Numeric. Exponent used for fuzzy clustering. Commonly termed \code{m} in the literature.
+#'
+#' @section For both partitional and fuzzy:
+#'
+#' \itemize{
+#'   \item \code{iter.max} = \code{100L}
+#'   \item \code{nrep} = \code{1L}
+#' }
+#'
 #' @slot iter.max Integer. Maximum number of iterations.
-#' @slot nrep Integer. How many times to repeat partitional clustering with different starting points. See section Repetitions
-#' in \code{\link{dtwclust}}.
+#' @slot nrep Integer. How many times to repeat clustering with different starting points. See section
+#' Repetitions in \code{\link{dtwclust}}.
 #'
 #' @name dtwclustControl-class
 #' @rdname dtwclustControl-class
@@ -102,6 +113,8 @@ setClass("dtwclustControl",
          slots = c(window.size = "intORnull",
                    norm = "character",
                    dba.iter = "integer",
+                   fuzziness = "numeric",
+                   delta = "numeric",
                    pam.precompute = "logical",
                    iter.max = "integer",
                    trace = "logical",
@@ -113,8 +126,10 @@ setClass("dtwclustControl",
          prototype = prototype(window.size = NULL,
                                norm = "L1",
                                dba.iter = 15L,
+                               fuzziness = 2,
+                               delta = 1e-3,
                                pam.precompute = TRUE,
-                               iter.max = 30L,
+                               iter.max = 100L,
                                trace = FALSE,
                                nrep = 1L,
                                save.data = TRUE,
@@ -126,11 +141,12 @@ setClass("dtwclustControl",
 #'
 #' Formal S4 class.
 #'
-#' The class no longer inherits from \code{\link[flexclust]{kccasimple-class}}, but most slots and methods were ported.
-#' Namely, \code{data} and \code{index} slots were not.
-#'
-#' However, this class now contains \code{\link[stats]{hclust}} as superclass and supports all its methods. Plot is a
+#' This class contains \code{\link[stats]{hclust}} as superclass and supports all its methods. Plot is a
 #' special case (see \code{\link{dtwclust-methods}}).
+#'
+#' Please note that not all slots will contain valid information for all clustering types. In some cases,
+#' for example for fuzzy and hierarchical clustering, some results are computed assuming a hard partition
+#' is created based on the fuzzy memberships or dendrogram tree, and the provided value of \code{k}.
 #'
 #' @slot call The function call.
 #' @slot control An object of class \code{\link{dtwclustControl}}.
@@ -138,19 +154,22 @@ setClass("dtwclustControl",
 #' @slot distmat If computed, the cross-distance matrix.
 #' @slot k Integer indicating the number of desired clusters.
 #' @slot cluster Integer vector indicating which cluster a series belongs to.
+#' @slot fcluster Numeric matrix that contains membership of fuzzy clusters. It has one row for each
+#' series and one column for each cluster. The rows must sum to 1. Only relevant for fuzzy clustering.
 #' @slot iter The number of iterations used.
 #' @slot converged A logical indicating whether the function converged.
-#' @slot clusinfo A data frame with two columns: \code{size} indicates the number of series each cluster has, and
-#' \code{av_dist} indicates the average distance between series for each cluster.
+#' @slot clusinfo A data frame with two columns: \code{size} indicates the number of series each cluster has,
+#' and \code{av_dist} indicates the average distance between series of each cluster.
 #' @slot centers A list with the centroid time series.
-#' @slot cldist A column vector with the distance between each series in the data and its corresponding centroid.
+#' @slot cldist A column vector with the distance between each series in the data and its corresponding
+#' centroid.
 #' @slot type A string indicating one of the supported clustering types of \code{\link{dtwclust}}.
 #' @slot method A string indicating which hierarchical method was used.
 #' @slot distance A string indicating the distance used.
 #' @slot centroid A string indicating the centroid used.
 #' @slot preproc A string indicating the preprocessing used.
 #' @slot datalist The provided data in the form of a list, where each element is a time series.
-#' @slot proctime Time during function execution, as measured by \code{\link[base]{proc.time}}.
+#' @slot proctime Time during function execution, as measured with \code{\link[base]{proc.time}}.
 #'
 #' @name dtwclust-class
 #' @rdname dtwclust-class
@@ -175,6 +194,7 @@ setClass("dtwclust", contains = c("hclust"),
 
                    k = "integer",
                    cluster = "integer",
+                   fcluster = "matrix",
                    iter = "integer",
                    converged = "logical",
                    clusinfo = "data.frame",

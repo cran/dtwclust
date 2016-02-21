@@ -7,11 +7,12 @@
 Formal S4 class.
 }
 \details{
-The class no longer inherits from \code{\link[flexclust]{kccasimple-class}}, but most slots and methods were ported.
-Namely, \code{data} and \code{index} slots were not.
-
-However, this class now contains \code{\link[stats]{hclust}} as superclass and supports all its methods. Plot is a
+This class contains \code{\link[stats]{hclust}} as superclass and supports all its methods. Plot is a
 special case (see \code{\link{dtwclust-methods}}).
+
+Please note that not all slots will contain valid information for all clustering types. In some cases,
+for example for fuzzy and hierarchical clustering, some results are computed assuming a hard partition
+is created based on the fuzzy memberships or dendrogram tree, and the provided value of \code{k}.
 }
 \section{Slots}{
 
@@ -28,16 +29,20 @@ special case (see \code{\link{dtwclust-methods}}).
 
 \item{\code{cluster}}{Integer vector indicating which cluster a series belongs to.}
 
+\item{\code{fcluster}}{Numeric matrix that contains membership of fuzzy clusters. It has one row for each
+series and one column for each cluster. The rows must sum to 1. Only relevant for fuzzy clustering.}
+
 \item{\code{iter}}{The number of iterations used.}
 
 \item{\code{converged}}{A logical indicating whether the function converged.}
 
-\item{\code{clusinfo}}{A data frame with two columns: \code{size} indicates the number of series each cluster has, and
-\code{av_dist} indicates the average distance between series for each cluster.}
+\item{\code{clusinfo}}{A data frame with two columns: \code{size} indicates the number of series each cluster has,
+and \code{av_dist} indicates the average distance between series of each cluster.}
 
 \item{\code{centers}}{A list with the centroid time series.}
 
-\item{\code{cldist}}{A column vector with the distance between each series in the data and its corresponding centroid.}
+\item{\code{cldist}}{A column vector with the distance between each series in the data and its corresponding
+centroid.}
 
 \item{\code{type}}{A string indicating one of the supported clustering types of \code{\link{dtwclust}}.}
 
@@ -51,6 +56,6 @@ special case (see \code{\link{dtwclust-methods}}).
 
 \item{\code{datalist}}{The provided data in the form of a list, where each element is a time series.}
 
-\item{\code{proctime}}{Time during function execution, as measured by \code{\link[base]{proc.time}}.}
+\item{\code{proctime}}{Time during function execution, as measured with \code{\link[base]{proc.time}}.}
 }}
 

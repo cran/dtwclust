@@ -1,17 +1,19 @@
 #' Lemire's improved DTW lower bound
 #'
-#' This function calculates a lower bound (LB) on the Dynamic Time Warp (DTW) distance between two time
-#' series. It uses a Sakoe-Chiba constraint.
-#'
-#' The lower bound is defined for time series of equal length only.
+#' This function calculates an improved lower bound (LB) on the Dynamic Time Warp (DTW) distance between two
+#' time series. It uses a Sakoe-Chiba constraint.
 #'
 #' The windowing constraint uses a centered window. The calculations expect a value in \code{window.size}
 #' that represents the distance between the point considered and one of the edges of the window. Therefore,
 #' if, for example, \code{window.size = 10}, the warping for an observation \eqn{x_i} considers the points
-#' between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10*2 + 1 = 21} observations falling within
+#' between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10(2) + 1 = 21} observations falling within
 #' the window.
 #'
+#' The reference time series should go in \code{x}, whereas the query time series should go in \code{y}.
+#'
 #' @note
+#'
+#' The lower bound is defined for time series of equal length only and is \strong{not} symmetric.
 #'
 #' If you wish to calculate the lower bound between several time series, it would be better to use the version
 #' registered with the \code{proxy} package, since it includes some small optimizations. See the examples.
@@ -22,9 +24,10 @@
 #'
 #' @references
 #'
-#' Lemire D (2009). ``Faster retrieval with a two-pass dynamic-time-warping lower bound .'' \emph{Pattern Recognition}, \strong{42}(9), pp.
-#' 2169 - 2180. ISSN 0031-3203, \url{http://dx.doi.org/10.1016/j.patcog.2008.11.030}, \url{
-#' http://www.sciencedirect.com/science/article/pii/S0031320308004925}.
+#' Lemire D (2009). ``Faster retrieval with a two-pass dynamic-time-warping lower bound .''
+#' \emph{Pattern Recognition}, \strong{42}(9), pp. 2169 - 2180. ISSN 0031-3203,
+#' \url{http://dx.doi.org/10.1016/j.patcog.2008.11.030},
+#' \url{http://www.sciencedirect.com/science/article/pii/S0031320308004925}.
 #'
 #' @examples
 #'
@@ -46,14 +49,14 @@
 #'                      window.size = 20, norm = "L2")
 #'
 #' # Corresponding true DTW distance
-#' # (see dtwclust-package description for an explanation of DTW2)
+#' # (see dtwclust documentation for an explanation of DTW2)
 #' D.dtw <- proxy::dist(CharTraj[1], CharTraj[2:5], method = "DTW2",
 #'                      window.type = "slantedband", window.size = 20)
 #'
 #' D.lbi <= D.dtw
 #'
-#' @param x A time series.
-#' @param y A time series with the same length as \code{x}.
+#' @param x A time series (reference).
+#' @param y A time series with the same length as \code{x} (query).
 #' @param window.size Window size for envelope calculation. See details.
 #' @param norm Pointwise distance. Either \code{L1} for Manhattan distance or \code{L2} for Euclidean.
 #' @param lower.env Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided.
@@ -70,9 +73,8 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
      consistency_check(x, "ts")
      consistency_check(y, "ts")
 
-     if (length(x) != length(y)) {
+     if (length(x) != length(y))
           stop("The series must have the same length")
-     }
 
      window.size <- consistency_check(window.size, "window")
 
@@ -83,15 +85,15 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
 
      ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
      if (is.null(lower.env) && is.null(upper.env)) {
-          envelopes <- call_runminmax(y, window.size*2+1)
+          envelopes <- call_runminmax(y, window.size*2L + 1L)
           lower.env <- envelopes$min
           upper.env <- envelopes$max
 
      } else if (is.null(lower.env)) {
-          lower.env <- caTools::runmin(y, window.size*2+1)
+          lower.env <- caTools::runmin(y, window.size*2L + 1L)
 
      } else if (is.null(upper.env)) {
-          upper.env <- caTools::runmax(y, window.size*2+1)
+          upper.env <- caTools::runmax(y, window.size*2L + 1L)
      }
 
      if (length(lower.env) != length(y))
@@ -128,7 +130,6 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
      )
 
      ## Finish
-
      d
 }
 
@@ -149,7 +150,7 @@ lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE
      if (error.check)
           consistency_check(x, "tslist")
 
-     if (window.size > length(x[[1]]))
+     if (window.size > length(x[[1L]]))
           stop("Window size should not exceed length of the time series")
 
      if (is.null(y)) {
@@ -161,14 +162,12 @@ lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE
           if (error.check)
                consistency_check(y, "tslist")
 
-          if (window.size > length(y[[1]]))
+          if (window.size > length(y[[1L]]))
                stop("Window size should not exceed length of the time series")
      }
 
      ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
-     envelops <- lapply(y, function(s) {
-          call_runminmax(s, window.size*2+1)
-     })
+     envelops <- lapply(y, function(s) { call_runminmax(s, window.size*2L + 1L) })
 
      lower.env <- lapply(envelops, "[[", "min")
      upper.env <- lapply(envelops, "[[", "max")
@@ -203,7 +202,7 @@ lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE
                                         d1 <- abs(x-H)
 
                                         ## Lemire's improvement
-                                        EH <- call_runminmax(H, window.size*2+1)
+                                        EH <- call_runminmax(H, window.size*2L + 1L)
 
                                         ind3 <- y > EH$max
                                         ind4 <- y < EH$min
@@ -251,7 +250,7 @@ lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE
                                                          d1 <- abs(x-H)
 
                                                          ## Lemire's improvement
-                                                         EH <- call_runminmax(H, window.size*2+1)
+                                                         EH <- call_runminmax(H, window.size*2L + 1L)
 
                                                          ind3 <- y > EH$max
                                                          ind4 <- y < EH$min

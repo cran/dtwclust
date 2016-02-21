@@ -43,7 +43,7 @@ information, the algorithm then tries to prune as many DTW calculations as possi
 the clustering procedure. The series that lie in dense areas (i.e. that have lots of neighbors) are taken
 as cluster centers.
 
-The algorithm relies on the DTW bounds, which are only defined for time series of equal lengths.
+The algorithm relies on the DTW bounds, which are only defined for time series of equal length.
 
 The windowing constraint uses a centered window. The calculations expect a value in \code{window.size}
 that represents the distance between the point considered and one of the edges of the window. Therefore,
@@ -57,7 +57,7 @@ the window.
 Please note that running tasks in parallel does \strong{not} guarantee faster computations.
 The overhead introduced is sometimes too large, and it's better to run tasks sequentially.
 
-The user can register a parallel backend with the \code{doParallel} package in order to attempt to
+The user can register a parallel backend, e.g. with the \code{doParallel} package, in order to attempt to
 speed up the calculations (see the examples).
 }
 \examples{

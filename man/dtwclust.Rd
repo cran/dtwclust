@@ -12,110 +12,138 @@ dtwclust(data = NULL, type = "partitional", k = 2L, method = "average",
 \item{data}{A list where each element is a time series, or a numeric matrix (it will be coerced to a list
 row-wise).}
 
-\item{type}{What type of clustering method to use: \code{partitional}, \code{hierarchical} or \code{tadpole}.}
+\item{type}{What type of clustering method to use: \code{partitional}, \code{hierarchical}, \code{tadpole}
+or \code{fuzzy}.}
 
-\item{k}{Numer of desired clusters in partitional methods. For hierarchical methods, the
-\code{\link[stats]{cutree}} function is called with this value of \code{k} and the result is returned in the
-\code{cluster} slot of the \code{dtwclust} object.}
+\item{k}{Numer of desired clusters. It may be a numeric vector with different values.}
 
 \item{method}{One or more linkage methods to use in hierarchical procedures. See \code{\link[stats]{hclust}}.
 You can provide a character vector to compute different hierarchical cluster structures in one go, or
-specify \code{method} = "all" to use all the available ones.}
+specify \code{method} \code{=} \code{"all"} to use all the available ones.}
 
-\item{distance}{A supported distance from \code{\link[proxy]{pr_DB}} (see Distance section). Ignored for
-\code{type} = \code{"tadpole"}.}
+\item{distance}{A supported distance from \code{proxy}'s \code{\link[proxy]{dist}} (see Distance section).
+Ignored for \code{type} = \code{"tadpole"}.}
 
 \item{centroid}{Either a supported string or an appropriate function to calculate centroids
-when using partitional methods (see Centroid section).}
+when using partitional methods. See Centroid section.}
 
 \item{preproc}{Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
 \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.}
 
 \item{dc}{Cutoff distance for the \code{\link{TADPole}} algorithm.}
 
-\item{control}{NEW: Named list of parameters for clustering algorithms. See \code{\link{dtwclustControl}}.
-\code{NULL} means defaults.}
+\item{control}{Named list of parameters or \code{dtwclustControl} object for clustering algorithms. See
+\code{\link{dtwclustControl}}. \code{NULL} means defaults.}
 
-\item{seed}{Random seed for reproducibility of partitional algorithms.}
+\item{seed}{Random seed for reproducibility of partitional and fuzzy algorithms.}
 
-\item{distmat}{If a cross-distance matrix is already available, it can be provided here so it's re-used. Only relevant if
-\code{centroid} = "pam" or \code{type} = "hierarchical". See examples.}
+\item{distmat}{If a cross-distance matrix is already available, it can be provided here so it's re-used.
+Only relevant if \code{centroid} = "pam" or \code{type} = "hierarchical". See examples.}
 
-\item{...}{Additional arguments to pass to \code{\link[proxy]{dist}} or a custom function. For now, old parameters
-can also be provided here. See \code{\link{dtwclustControl}}.}
+\item{...}{Additional arguments to pass to \code{\link[proxy]{dist}} or a custom function.}
 }
 \value{
 An object with formal class \code{\link{dtwclust-class}}.
-If \code{control@nrep > 1} and a partitional procedure is used, or \code{length(method)} \code{> 1} and hierarchical
-procedures are used, a list of objects is returned.
+
+If \code{control@nrep > 1} and a partitional procedure is used, \code{length(method)} \code{> 1} and
+hierarchical procedures are used, or \code{length(k)} \code{>} \code{1}, a list of objects is returned.
 }
 \description{
-This function uses the DTW distance and related techniques to cluster time series. It also supports custom
-distances, especially through \code{\link[proxy]{dist}}, as well as custom centroid functions.
-For now, all series must be univariate.
+This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy
+and TADPole clustering. See the details and the examples for more information.
 }
 \details{
-Partitional algorithms use custom functions inspired by \code{\link[flexclust]{kcca}}. Hierarchical algorithms use
-the \code{\link[stats]{hclust}} function. The \code{tadpole} algorithm uses the \code{\link{TADPole}} function.
+Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering is done
+with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPole}} function. Specifying
+\code{type} = \code{"partitional"}, \code{distance} = \code{"sbd"} and \code{centroid} = \code{"shape"} is
+equivalent to the k-Shape algorithm (Paparrizos and Gravano, 2015).
 
-The \code{data} may be a matrix or a list, but the matrix will be coerced to a list row-wise. A matrix requires
-that all time series have equal lengths. If the lengths vary slightly between time series, reinterpolating them to
-a common length is most likely an acceptable approach (Ratanamahatana and Keogh, 2004). See the examples.
+The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to a list,
+the former row-wise and the latter column-wise. Only lists can have series with different lengths. Most of
+the optimizations require series to have the same length, so consider reinterpolating them to save some
+time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}). No missing values are allowed.
 
-Several parameters can be adjusted with the \code{control} argument. See \code{\link{dtwclustControl}}.
+Several parameters can be adjusted with the \code{control} argument. See \code{\link{dtwclustControl}}. In
+the following sections, elements marked with an asterisk (*) are those that can be adjutsed with this
+argument.
 }
-\section{Distance}{
+\section{Partitional Clustering}{
 
 
-The supported option is to provide a string. The string can represent a compatible registered distance of
-\code{proxy}'s \code{\link[proxy]{dist}}. Extra parameters can be provided in \code{...}.
+Stochastic algorithm that creates a hard partition of the data into \code{k} clusters, where each cluster
+has a center/centroid. In case of time series clustering, the centroids are also time series.
 
-It can be a string of one of the following custom implementations (all registered with \code{proxy}):
+The cluster centroids are first randomly initialized by selecting some of the series in the data. The
+distance between each series and each centroid is calculated, and the series are assigned to the cluster
+whose centroid is closest. The centroids are then updated by using a given rule, and the procedure is
+repeated until no series changes from one cluster to another, or until the maximum number of iterations*
+has been reached. The distance and centroid definitions can be specified through the corresponding
+parameters of this function. See their respective sections below.
 
-\itemize{
-  \item \code{"dtw"}: DTW with L1 norm and optionally a Sakoe-Chiba/Slanted-band constraint.
-  \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint.
-  \item \code{"dtw_lb"}: DTW with L1 or L2 norm and optionally a Sakoe-Chiba constraint. Some computations
-  are avoided by first estimating the distance matrix with Lemire's lower bound and then iteratively
-  refining with DTW. See \code{\link{dtw_lb}}. Not suitable for \code{pam.precompute} = \code{TRUE}
-  (see \code{\link{dtwclustControl}}).
-  \item \code{"lbk"}: Keogh's lower bound with either L1 or L2 norm for the Sakoe-Chiba constraint.
-  \item \code{"lbi"}: Lemire's lower bound with either L1 or L2 norm for the Sakoe-Chiba constraint.
-  \item \code{"sbd"}: Shape-based distance. Each series is z-normalized in this case. As a result,
-  the cluster centers (for partitional methods) are also z-normalized. See \code{\link{SBD}} for more
-  details.
-}
-
-Note that only \code{dtw}, \code{dtw2} and \code{sbd} support series of different lengths. The lower bounds
-are probably unsuitable for direct clustering unless series are very easily distinguishable.
-
-If you create your own distance and also register it with \code{proxy} (see \code{\link[proxy]{pr_DB}}),
-and it includes the ellipsis (\code{...}) in its definition, it will receive
-the following parameters (see \code{\link{dtwclustControl}}):
-
-\itemize{
-  \item \code{window.type}: Either \code{"none"} for a \code{NULL} \code{window.size}, or \code{"slantedband"}
-  otherwise
-  \item \code{window.size}: The provided window size
-  \item \code{norm}: The provided desired norm
-  \item \code{...}: Any additional parameters provided in the original call's ellipsis
+Note that it is possible for a cluster to become empty, in which case a new cluster is reinitialized
+randomly. However, if you see that the algorithm doesn't converge or the overall distance sum increases,
+it could mean that the chosen value of \code{k} is too large, or the chosen distance measure is not
+able to assess similarity effectively. The random reinitialization attempts to enforce a certain number
+of clusters, but can result in instability in the aforementioned cases.
 }
 
-Whether the function makes use of them or not, is up to you. See the examples.
+\section{Fuzzy Clustering}{
 
-If you know that the distance function is symmetric, consider setting the corresponding slot in
-\code{\link{dtwclustControl}} to \code{TRUE} to save some time in case of \code{pam.precompute}
-= \code{TRUE} or hierarchical procedures.
+
+This procedure is very similar to partitional clustering, except that each series no longer belongs
+exclusively to one cluster, but belongs to each cluster to a certain degree. For each series, the total
+degree of membership across clusters must sum to 1.
+
+The default implementation uses the fuzzy c-means algorithm. In its definition, an objective function is to
+be minimized. The objective is defined in terms of a squared distance, which is usually the Euclidean (L2)
+distance, although the definition could be modified. The \code{distance} parameter of this function controls
+the one that is utilized. The fuzziness of the clustering can be controlled by means of the fuzziness
+exponent*. Bear in mind that the centroid definition of fuzzy c-means requires equal dimensions, which
+means that all series must have the same length. This problem can be circumvented by applying
+transformations to the series (see for example D'Urso and Maharaj, 2009).
+
+Note that the fuzzy clustering could be transformed to a crisp one by finding the highest membership
+coefficient. Some of the slots of the object returned by this function assume this, so be careful with
+interpretation (see \code{\link{dtwclust-class}}).
 }
 
-\section{Centroid}{
+\section{Hierarchical Clustering}{
 
 
-In the case of partitional algorithms, a suitable function should calculate the cluster centers at
-every iteration. In this case, the centers are themselves time series.
+This is a deterministic algorithm that creates a hierarchy of groups by using different linkage methods
+(see \code{\link[stats]{hclust}}). The linkage method is controlled through the \code{method} parameter
+of this function, with the additional option "all" that uses all of the available methods. The distance
+to be used can be controlled with the \code{distance} parameter.
 
-If a custom function is provided, it will receive the following inputs in the shown order (examples
-shown in parenthesis):
+The hierarchy does not imply a specific number of clusters, but one can be induced by cutting the resulting
+dendrogram (see \code{\link[stats]{cutree}}). As with fuzzy clustering, this results in a crisp partition,
+and some of the slots of the returned object are calculated by cutting the dendrogram so that \code{k}
+clusters are created.
+}
+
+\section{TADPole Clustering}{
+
+
+TADPole clustering adopts a relatively new clustering framework and adapts it to time series clustering
+with DTW. Because of the way it works, it can be considered a kind of Partitioning Around Medoids (PAM).
+This means that the cluster centers are always elements of the data. However, this algorithm is
+deterministic, depending on the value of the cutoff distance \code{dc}, which can be controlled with the
+corresponding parameter of this function.
+
+The algorithm relies on the DTW lower bounds, which are only defined for time series of equal length.
+Additionally, it requires a window constraint* for DTW. See the Sakoe-Chiba constraint section below.
+Unlike the other algorithms, TADPole always uses DTW2 as a distance (with a symmetric1 step pattern).
+}
+
+\section{Centroid Calculation}{
+
+
+In the case of partitional/fuzzy algorithms, a suitable function should calculate the cluster centers at
+every iteration. In this case, the centers are themselves time series. Fuzzy clustering uses the standard
+fuzzy c-means centroid by default.
+
+In either case, a custom function can be provided. If one is provided, it will receive the following
+inputs in the shown order (examples for partitional clustering are shown in parenthesis):
 
 \itemize{
   \item The \emph{whole} data list (\code{list(ts1, ts2, ts3)})
@@ -127,7 +155,10 @@ shown in parenthesis):
   \item The elements of \code{...}
 }
 
-Therefore, the function should always include the ellipsis \code{...} in its definition.
+Therefore, the function should \emph{always} include the ellipsis \code{...} in its definition. In case of
+fuzzy clustering, the membership vectors (2nd and 5th elements above) are matrices with number of rows
+equal to amount of elements in the data, and number of columns equal to the number of desired clusters.
+Each row must sum to 1.
 
 The other option is to provide a character string for the custom implementations. The following options
 are available:
@@ -136,40 +167,90 @@ are available:
   \item "mean": The average along each dimension. In other words, the average of all \eqn{x^j_i}
   among the \eqn{j} series that belong to the same cluster for all time points \eqn{t_i}.
   \item "median": The median along each dimension. Similar to mean.
-  \item "shape": Shape averaging. See \code{\link{shape_extraction}} for more details.
+  \item "shape": Shape averaging. By default, all series are z-normalized in this case, since the resulting
+  centroids will also have this normalization. See \code{\link{shape_extraction}} for more details.
   \item "dba": DTW Barycenter Averaging. See \code{\link{DBA}} for more details.
-  \item: "pam": Partition around medoids. This basically means that the cluster centers are always
+  \item "pam": Partition around medoids (PAM). This basically means that the cluster centers are always
   one of the time series in the data. In this case, the distance matrix can be pre-computed once using all
   time series in the data and then re-used at each iteration. It usually saves overhead overall.
+  \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and always used for that type of clustering
+  if a string is provided in \code{centroid}.
 }
 
-These check for the special cases where parallelization is desired.
+These check for the special cases where parallelization might be desired. Note that only \code{shape},
+\code{dba} and \code{pam} support series of different length. Also note that, for \code{shape} and
+\code{dba}, this support has a caveat: the final centroids' length will depend on the length of those
+series that were randomly chosen at the beginning of the clustering algorithm. For example, if the series
+in the dataset have a length of either 10 or 15, 2 clusters are desired, and the initial choice selects
+two series with length of 10, the final centroids will have this same length.
+}
 
-If a cluster becomes empty, the functions reinitialize a new cluster randomly. However, if you see
-that the algorithm doesn't converge or the overall distance sum increases, this probably means that
-the chosen value of \code{k} is too large, or the chosen distance function is not able to assess
-similarity effectively. The random reinitialization attempts to enforce a certain number of clusters,
-but can result in instability in the aforementioned cases.
+\section{Distance Measures}{
 
-Note that only \code{shape}, \code{dba} and \code{pam} support series of different lengths.
+
+The distance measure to be used with partitional, hierarchical and fuzzy clustering can be modified with
+the \code{distance} parameter. The supported option is to provide a string, which must represent a
+compatible distance registered with \code{proxy}'s \code{\link[proxy]{dist}}. Registration is done via
+\code{\link[proxy]{pr_DB}}, and extra parameters can be provided in \code{...}.
+
+Note that you are free to create your own distance functions and register them. Optionally, you can use
+one of the following custom implementations (all registered with \code{proxy}):
+
+\itemize{
+  \item \code{"dtw"}: DTW with L1 norm and optionally a Sakoe-Chiba/Slanted-band constraint*.
+  \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*.
+  \item \code{"dtw_lb"}: DTW with L1 or L2 norm* and optionally a Sakoe-Chiba constraint*. Some
+  computations are avoided by first estimating the distance matrix with Lemire's lower bound and then
+  iteratively refining with DTW. See \code{\link{dtw_lb}}. Not suitable for \code{pam.precompute}* =
+  \code{TRUE}.
+  \item \code{"lbk"}: Keogh's lower bound with either L1 or L2 norm* for the Sakoe-Chiba constraint*.
+  \item \code{"lbi"}: Lemire's lower bound with either L1 or L2 norm* for the Sakoe-Chiba constraint*.
+  \item \code{"sbd"}: Shape-based distance. See \code{\link{SBD}} for more details.
+}
+
+DTW2 is done with \code{\link[dtw]{dtw}}, but it differs from the result you would obtain if you specify
+\code{L2} as \code{dist.method}: with \code{DTW2}, pointwise distances (the local cost matrix) are
+calculated with \code{L1} norm, \emph{each} element of the matrix is squared and the result is fed into
+\code{\link[dtw]{dtw}}, which finds the optimum warping path. The square root of the resulting
+distance is \emph{then} computed.
+
+Only \code{dtw}, \code{dtw2} and \code{sbd} support series of different length. The lower bounds
+are probably unsuitable for direct clustering unless series are very easily distinguishable.
+
+If you create your own distance, register it with \code{proxy}, and it includes the ellipsis (\code{...})
+in its definition, it will receive the following parameters*:
+
+\itemize{
+  \item \code{window.type}: Either \code{"none"} for a \code{NULL} \code{window.size}, or \code{"slantedband"}
+  otherwise
+  \item \code{window.size}: The provided window size
+  \item \code{norm}: The provided desired norm
+  \item \code{...}: Any additional parameters provided in the original call's ellipsis
+}
+
+Whether your function makes use of them or not, is up to you.
+
+If you know that the distance function is symmetric, and you use a hierarchical algorithm or a partitional
+algorithm with PAM centroids and \code{pam.precompute}* = \code{TRUE}, some time can be saved by
+calculating only half the distance matrix. Therefore, consider setting the symmetric* control parameter
+to \code{TRUE} if this is the case.
 }
 
 \section{Sakoe-Chiba Constraint}{
 
 
-A global constraint to speed up the DTW calculation is the Sakoe-Chiba band (Sakoe and Chiba, 1978). To
-use it, a window width must be defined via the \code{window.size} slot in \code{control} (see
-\code{\link{dtwclustControl}}).
+A global constraint to speed up the DTW calculations is the Sakoe-Chiba band (Sakoe and Chiba, 1978). To
+use it, a window width* must be defined.
 
-The windowing constraint uses a centered window. The calculations expect a value in \code{window.size}
+The windowing constraint uses a centered window. The function expects a value in \code{window.size}
 that represents the distance between the point considered and one of the edges of the window. Therefore,
 if, for example, \code{window.size = 10}, the warping for an observation \eqn{x_i} considers the points
-between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10*2 + 1 = 21} observations falling within
+between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10(2) + 1 = 21} observations falling within
 the window.
 
 The computations actually use a \code{slantedband} window, which is equivalent to the Sakoe-Chiba one
-if series have equal lengths, and stays along the diagonal of the local cost matrix if series have
-different lengths.
+if series have equal length, and stays along the diagonal of the local cost matrix if series have
+different length.
 }
 
 \section{Preprocessing}{
@@ -177,32 +258,34 @@ different lengths.
 
 It is strongly advised to use z-normalization in case of \code{centroid = "shape"}, because the resulting
 series have this normalization (see \code{\link{shape_extraction}}). Therefore, \code{\link{zscore}} is the
-default in this case. The user can, however, specify a
-custom function that performs any transformation on the data, but the user must make sure that the format
-stays consistent, i.e. a list of time series.
+default in this case. The user can, however, specify a custom function that performs any transformation
+on the data, but the user must make sure that the format stays consistent, i.e. a list of time series.
 
-Setting to \code{NULL} means no preprocessing (except for \code{centroid = "shape"}).
+Setting to \code{NULL} means no preprocessing (except for \code{centroid = "shape"}). A provided function
+will receive the data as first and only argument.
 
-A provided function will receive the data as first and only argument.
-
-It is convenient to provide this function if you're planning on using the \code{\link[stats]{predict}} generic.
+It is convenient to provide this function if you're planning on using the \code{\link[stats]{predict}}
+generic.
 }
 
 \section{Repetitions}{
 
 
-Due to their stochastic nature, partitional clustering is usually repeated several times with different random
-seeds to allow for different starting points. This function can now run several repetitions by using the
-\code{doRNG} package. This package ensures that each repetition uses a statistically independent random sequence.
+Due to their stochastic nature, partitional clustering is usually repeated* several times with different
+random seeds to allow for different starting points. This function uses \code{\link[rngtools]{RNGseq}} to
+obtain different seed streams for each repetition, utilizing the \code{seed} parameter (if provided) to
+initialize it. If more than one repetition is made, the streams are returned in an attribute called
+\code{rng}.
 
-If more than one repetition is made, the \code{\link[doRNG]{\%dorng\%}} operator is used. If provided, the
-\code{seed} parameter is used to initialize it. The different seed sequences used are returned in the
-\code{rng} attribute in such cases.
+Technically, you can also perform random repetitions for fuzzy clustering, although it might be difficult
+to evaluate the results, since they are usually evaluated relative to each other and not in an absolute
+way. Ideally, the groups wouldn't change too much once the algorithm converges.
 
-Repetitions are greatly optimized when PAM centroids are used and the whole distance matrix is precomputed,
-since said matrix is reused for every repetition, and can be comptued in parallel (see next section).
+Multiple values of \code{k} can also be provided to get different partitions using any \code{type} of
+clustering.
 
-The number of desired repetitions is provided through the \code{control} parameter. See \code{\link{dtwclustControl}}.
+Repetitions are greatly optimized when PAM centroids are used and the whole distance matrix is precomputed*,
+since said matrix is reused for every repetition, and can be comptued in parallel (see Parallel section).
 }
 
 \section{Parallel Computing}{
@@ -211,55 +294,46 @@ The number of desired repetitions is provided through the \code{control} paramet
 Please note that running tasks in parallel does \strong{not} guarantee faster computations.
 The overhead introduced is sometimes too large, and it's better to run tasks sequentially.
 
-The user can register a parallel backend with the \code{doParallel} package (and possibly any other
-package compatible with \code{foreach}'s \code{\%dopar\%} operator) in order to do the
-repetitions in parallel, as well as distance and some centroid calculations (see the examples).
-\code{\link{TADPole}} and \code{\link{DBA}} also take advantage of parallel support.
+The user can register a parallel backend, for eample with the \code{doParallel} package, in order to do
+the repetitions in parallel, as well as distance and some centroid calculations.
 
-Unless each repetition requires a few seconds, parallel computing probably isn't worth it. As such, I would only
-use this feature with \code{shape} and \code{DBA} centroids, or an expensive distance function like \code{DTW}
-(see the next paragraph).
+Unless each repetition requires a few seconds, parallel computing probably isn't worth it. As such, I
+would only use this feature with \code{shape} and \code{DBA} centroids, or an expensive distance function
+like \code{DTW}.
 
 If you register a parallel backend, the function will also try to do the calculation of the distance
 matrices in parallel. This should work with any function registered with \code{\link[proxy]{dist}} via
-\code{\link[proxy]{pr_DB}} whose \code{loop} flag is set to \code{TRUE}. If the function requires special packages
-to be loaded, provide their names in the \code{packages} slot of \code{control} (see \code{\link{dtwclustControl}}).
-In addition, "dtwclust" is always loaded in each parallel worker, so that doesn't need to be included.
-Alternatively, you may want to pre-load \code{dtwclust} in each worker with \code{\link[parallel]{clusterEvalQ}}.
+\code{\link[proxy]{pr_DB}} whose \code{loop} flag is set to \code{TRUE}. If the function requires special
+packages to be loaded, provide their names in the \code{packages}* slot of \code{control}. Note that
+"dtwclust" is always loaded in each parallel worker, so that doesn't need to be included. Alternatively,
+you may want to pre-load \code{dtwclust} in each worker with \code{\link[parallel]{clusterEvalQ}}.
 
-Note that, by default, if a parallel backend is registered, multiple repetitions are to be performed (partitional clustering,
-\code{control@nrep} \code{>=} 1)
-AND \code{centroid} \code{!=} \code{"pam"}, each parallel worker will get a repetition task, but any calculations
-within each worker will be done sequentially. Load balance for such a scenario should be fine as long as the
-\code{control@nrep} parameter is greater than or equal to the number of parallel workers.
-If you believe your task would benefit more from parallelization within each repetition,
-consider registering the parallel backend and calling \code{dtwclust} several times sequentially,
-with \code{control@nrep = 1} and different \code{seeds}.
+In case of multiple repetitions, each worker gets a repetition task. Otherwise, the tasks (which can be
+a distance matrix or a centroid calculation) are usually divided into chunks according to the number of
+workers available.
 }
 
 \section{Notes}{
 
 
-The lower bounds are defined only for time series of equal lengths. \code{DTW} and \code{DTW2}
+The lower bounds are defined only for time series of equal length. \code{DTW} and \code{DTW2}
 don't require this, but they are much slower to compute.
 
-The lower bounds are \strong{not} symmetrical, and \code{DTW} is only symmetrical if series are of equal
+The lower bounds are \strong{not} symmetric, and \code{DTW} is only symmetric if series have equal
 lengths.
-
-Specifying \code{distance = "sbd"} and \code{centroid = "shape"} is equivalent to the k-Shape algorithm
-(Papparizos and Gravano, 2015). See \code{\link{SBD}} and \code{\link{shape_extraction}} for more info.
-
-Hierarchical (conditional on \code{method}) and TADpole (conditional on \code{dc}) procedures are deterministic.
-
-DTW2 is done with \code{\link[dtw]{dtw}},but it differs from the result you would obtain if you specify
-\code{L2} as \code{dist.method}: with \code{DTW2}, pointwise distances (the local cost matrix) are calculated with
-\code{L1} norm, \emph{each} element of the matrix is squared and the result is fed into
-\code{\link[dtw]{dtw}}, which finds the optimum warping path. The square root of the resulting
-distance is \emph{then} computed.
 }
 \examples{
-#### Load data
+## NOTE: All examples should work, some are simply set to not run automatically
+
+# Load data
 data(uciCT)
+
+# Controls
+ctrl <- new("dtwclustControl", trace = TRUE)
+
+# ====================================================================================
+# Simple partitional clustering with Euclidean distance and PAM centroids
+# ====================================================================================
 
 # Reinterpolate to same length and coerce as matrix
 data <- t(sapply(CharTraj, reinterpolate, newLength = 180))
@@ -268,25 +342,32 @@ data <- t(sapply(CharTraj, reinterpolate, newLength = 180))
 data <- data[1:20, ]
 labels <- CharTrajLabels[1:20]
 
-# Controls
-ctrl <- list(trace = TRUE, window.size = 20L)
-
-#### Simple partitional clustering with L2 distance and PAM
-kc.l2 <- dtwclust(data, k = 4, distance = "L2", centroid = "pam",
+# Testing several values of k
+kc.l2 <- dtwclust(data, k = 2:4,
+                  distance = "L2", centroid = "pam",
                   seed = 3247, control = ctrl)
-cat("Rand index for L2+PAM:", randIndex(kc.l2, labels), "\\n\\n")
 
-#### TADPole clustering
-kc.tadp <- dtwclust(data, type = "tadpole", k = 4,
-                    dc = 1.5, control = ctrl)
-cat("Rand index for TADPole:", randIndex(kc.tadp, labels), "\\n\\n")
-plot(kc.tadp)
+cat("Rand indices for L2+PAM:\\n")
+sapply(kc.l2, randIndex, y = labels)
 
-# Modify plot
-plot(kc.tadp, clus = 3:4, labs.arg = list(title = "TADPole, clusters 3 and 4",
-                                          x = "time", y = "series"))
+plot(kc.l2[[3L]])
 
-#### Registering a custom distance with the 'proxy' package and using it
+# ====================================================================================
+# Hierarchical clustering with Euclidean distance
+# ====================================================================================
+
+# Re-use the distance matrix from the previous example
+hc.l2 <- update(kc.l2[[3L]], k = 4L,
+                type = "hierarchical", method = "all",
+                distmat = kc.l2[[3L]]@distmat)
+
+cat("Rand indices for L2+HC:\\n")
+sapply(hc.l2, randIndex, y = labels)
+
+# ====================================================================================
+# Registering a custom distance with the 'proxy' package and using it
+# ====================================================================================
+
 # Normalized DTW distance
 ndtw <- function(x, y, ...) {
      dtw::dtw(x, y, step.pattern = symmetric2,
@@ -297,94 +378,130 @@ ndtw <- function(x, y, ...) {
 if (!pr_DB$entry_exists("nDTW"))
      proxy::pr_DB$set_entry(FUN = ndtw, names=c("nDTW"),
                             loop = TRUE, type = "metric", distance = TRUE,
-                            description = "Normalized DTW with L1 norm")
+                            description = "Normalized DTW")
 
 # Subset of (original) data for speed
-kc.ndtw <- dtwclust(CharTraj[31:40], distance = "nDTW",
+kc.ndtw <- dtwclust(CharTraj[31:40], k = 2L,
+                    distance = "nDTW",
                     control = ctrl, seed = 8319)
-cat("Rand index for nDTW (subset):",
-    randIndex(kc.ndtw, CharTrajLabels[31:40]), "\\n\\n")
+
 plot(kc.ndtw)
 
-#### Hierarchical clustering based on shabe-based distance (different lengths)
-hc.sbd <- dtwclust(CharTraj, type = "hierarchical",
-                   method = c("average", "single"),
-                   k = 20, distance = "sbd", control = ctrl)
-plot(hc.sbd[[1]])
+# ====================================================================================
+# Hierarchical clustering based on shabe-based distance
+# ====================================================================================
 
-# Update parameters and re-use distmat
-hc.sbd2 <- update(hc.sbd[[1]], method = "complete", distmat = hc.sbd[[1]]@distmat)
-plot(hc.sbd2, type = "series")
+# Original data
+hc.sbd <- dtwclust(CharTraj, type = "hierarchical",
+                   k = 20, method = "all",
+                   distance = "sbd", control = ctrl)
+
+plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]])
+
+# ====================================================================================
+# Autocorrelation-based fuzzy clustering (see D'Urso and Maharaj 2009)
+# ====================================================================================
+
+# Calculate autocorrelation up to 50th lag, considering a list of time series as input
+acf_fun <- function(dat) {
+     lapply(dat, function(x) as.numeric(acf(x, lag.max = 50, plot = FALSE)$acf))
+}
+
+# Fuzzy c-means
+fc <- dtwclust(CharTraj[1:25], type = "fuzzy", k = 5,
+               preproc = acf_fun, distance = "L2",
+               seed = 123, control = ctrl)
+
+# Fuzzy memberships
+print(fc@fcluster)
+
+# Plot crisp partition in the original space
+plot(fc, data = CharTraj[1:25], show.centroids = FALSE)
 
 \dontrun{
-     #### Saving and modifying the ggplot object with custom time
-     t <- seq(Sys.Date(), len = 180, by = "day")
-     gkc <- plot(kc.l2, time = t, plot = FALSE)
+# ====================================================================================
+# TADPole clustering
+# ====================================================================================
 
-     require(scales)
-     gkc + scale_x_date(labels = date_format("\%b-\%Y"),
-                        breaks = date_breaks("2 months"))
+ctrl@window.size <- 20L
 
-     #### Using parallel computation to optimize several random repetitions
-     #### and distance matrix calculation
-     require(doParallel)
+kc.tadp <- dtwclust(data, type = "tadpole", k = 4,
+                    dc = 1.5, control = ctrl)
 
-     # Create parallel workers
-     cl <- makeCluster(detectCores())
-     invisible(clusterEvalQ(cl, library(dtwclust)))
-     registerDoParallel(cl)
+cat("Rand index for TADPole:", randIndex(kc.tadp, labels), "\\n\\n")
 
-     ctrl <- new("dtwclustControl")
-     ctrl@trace <- TRUE
+# Modify plot
+plot(kc.tadp, clus = 3:4,
+     labs.arg = list(title = "TADPole, clusters 3 and 4",
+                     x = "time", y = "series"))
 
-     ## Use full DTW and PAM
-     kc.dtw <- dtwclust(CharTraj, k = 20, seed = 3251, control = ctrl)
+# ====================================================================================
+# Saving and modifying the ggplot object with custom time labels
+# ====================================================================================
 
-     ## Use full DTW with DBA centroids
-     kc.dba <- dtwclust(CharTraj, k = 20, centroid = "dba", seed = 3251, control = ctrl)
+t <- seq(Sys.Date(), len = 180, by = "day")
+gkc <- plot(kc.tadp, time = t, plot = FALSE)
 
-     ## Use constrained DTW with original series of different lengths
-     ctrl@window.size <- 20L
-     kc.cdtw <- dtwclust(CharTraj, k = 20, seed = 3251, control = ctrl)
+require(scales)
+gkc + scale_x_date(labels = date_format("\%b-\%Y"),
+                   breaks = date_breaks("2 months"))
 
-     ## This uses the "nDTW" function registered in another example above
-     # For reference, this took around 2.25 minutes with 8 cores (all 8 repetitions).
-     kc.ndtw.list <- dtwclust(CharTraj, k = 20, distance = "nDTW", centroid = "dba",
-                              preproc = zscore, seed = 8319,
-                              control = list(window.size = 10L, nrep = 8L))
+# ====================================================================================
+# Using parallel computation to optimize several random repetitions
+# and distance matrix calculation
+# ====================================================================================
+require(doParallel)
 
-     # Stop parallel workers
-     stopCluster(cl)
+# Create parallel workers
+cl <- makeCluster(detectCores())
+invisible(clusterEvalQ(cl, library(dtwclust)))
+registerDoParallel(cl)
 
-     # Return to sequential computations
-     registerDoSEQ()
+## Use constrained DTW and PAM (~20 seconds)
+kc.dtw <- dtwclust(CharTraj, k = 20, seed = 3251, control = ctrl)
 
-     # See Rand Index for each repetition
-     sapply(kc.ndtw.list, randIndex, y = CharTrajLabels)
+## Use constrained DTW with DBA centroids (~20 seconds)
+kc.dba <- dtwclust(CharTraj, k = 20, centroid = "dba", seed = 3251, control = ctrl)
+
+## This uses the "nDTW" function registered in another example above
+# For reference, this took around 2.25 minutes with 8 cores (all 8 repetitions).
+kc.ndtw.reps <- dtwclust(CharTraj, k = 20, distance = "nDTW", centroid = "dba",
+                         preproc = zscore, seed = 8319,
+                         control = list(window.size = 10L, nrep = 8L))
+
+# See Rand index for each repetition
+sapply(kc.ndtw.reps, randIndex, y = CharTrajLabels)
+
+# Stop parallel workers
+stopCluster(cl)
+
+# Return to sequential computations
+registerDoSEQ()
 }
 }
 \author{
 Alexis Sarda-Espinosa
 }
 \references{
-Sakoe H and Chiba S (1978). ``Dynamic programming algorithm optimization for spoken word recognition.'' \emph{Acoustics, Speech
-and
-Signal Processing, IEEE Transactions on}, \strong{26}(1), pp. 43-49. ISSN 0096-3518, \url{http://doi.org/10.1109/TASSP.1978.1163055}.
+Sakoe H and Chiba S (1978). ``Dynamic programming algorithm optimization for spoken word
+recognition.'' \emph{Acoustics, Speech and Signal Processing, IEEE Transactions on},
+\strong{26}(1), pp. 43-49. ISSN 0096-3518, \url{http://doi.org/10.1109/TASSP.1978.1163055}.
 
-Ratanamahatana A and Keogh E (2004). ``Everything you know about dynamic time warping is wrong.'' In \emph{3rd Workshop on Mining
-Temporal and Sequential Data, in conjunction with 10th ACM SIGKDD Int. Conf. Knowledge Discovery and Data Mining (KDD-2004),
-Seattle, WA}.
+Ratanamahatana A and Keogh E (2004). ``Everything you know about dynamic time warping is wrong.''
+In \emph{3rd Workshop on Mining Temporal and Sequential Data, in conjunction with 10th ACM SIGKDD
+Int. Conf. Knowledge Discovery and Data Mining (KDD-2004), Seattle, WA}.
 
-Paparrizos J and Gravano L (2015). ``k-Shape: Efficient and Accurate Clustering of Time Series.'' In \emph{Proceedings of the 2015
-ACM SIGMOD International Conference on Management of Data}, series SIGMOD '15, pp. 1855-1870. ISBN 978-1-4503-2758-9, \url{
-http://doi.org/10.1145/2723372.2737793}.
+Bedzek, J.C. (1981). Pattern recognition with fuzzy objective function algorithms.
+
+D'Urso, P., & Maharaj, E. A. (2009). Autocorrelation-based fuzzy clustering of time series.
+Fuzzy Sets and Systems, 160(24), 3565-3589.
+
+Paparrizos J and Gravano L (2015). ``k-Shape: Efficient and Accurate Clustering of Time Series.''
+In \emph{Proceedings of the 2015 ACM SIGMOD International Conference on Management of Data},
+series SIGMOD '15, pp. 1855-1870. ISBN 978-1-4503-2758-9, \url{http://doi.org/10.1145/2723372.2737793}.
 }
 \seealso{
-Please check the brief description in \code{\link{dtwclust-package}}.
-
-Type \code{news(package = "dtwclust")} to see what changed.
-
-Additionally: \code{\link{dtwclust-methods}}, \code{\link{dtwclust-class}}, \code{\link{dtwclustControl}},
+\code{\link{dtwclust-methods}}, \code{\link{dtwclust-class}}, \code{\link{dtwclustControl}},
 \code{\link{dtwclustFamily}}.
 }
 

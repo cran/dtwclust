@@ -16,8 +16,8 @@
 \S4method{predict}{dtwclust}(object, newdata = NULL, ...)
 
 \S4method{plot}{dtwclust,missing}(x, y, ..., clus = seq_len(x@k),
-  labs.arg = NULL, data = NULL, time = NULL, plot = TRUE,
-  type = "dendrogram")
+  labs.arg = NULL, show.centroids = TRUE, data = NULL, time = NULL,
+  plot = TRUE, type = "dendrogram")
 }
 \arguments{
 \item{object, x}{An object of class \code{\link{dtwclust-class}} as returned by \code{\link{dtwclust}}.}
@@ -36,6 +36,8 @@ a new \code{dtwclust} object. Otherwise, it returns the unevaluated call.}
 
 \item{labs.arg}{Arguments to change the title and/or axis labels. See \code{\link[ggplot2]{labs}} for more
 information}
+
+\item{show.centroids}{Logical flag. Should cluster centroids be included in the plots?}
 
 \item{data}{The data in the same format as it was provided to \code{\link{dtwclust}}.}
 
@@ -60,7 +62,7 @@ Supported generics from the \code{flexclust} package are: \code{\link[flexclust]
 Show method displays basic information from the clustering results.
 
 The \code{update} method takes the original function call, replaces any provided argument and optionally
-evaluates the call again. Use \code{evaluate = FALSE)} if you want to get the
+evaluates the call again. Use \code{evaluate = FALSE} if you want to get the
 unevaluated call.
 
 The \code{predict} generic can take the usual \code{newdata} argument and it returns the cluster(s) to which
