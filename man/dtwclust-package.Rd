@@ -3,7 +3,7 @@
 \docType{package}
 \name{dtwclust-package}
 \alias{dtwclust-package}
-\title{Time series clustering with optimizations for the Dynamic Time Warping distance}
+\title{Time series clustering along with optimizations for the Dynamic Time Warping distance}
 \description{
 Time series clustering with a wide variety of strategies and a series of optimizations specific to
 the Dynamic Time Warping (DTW) distance and its corresponding lower bounds (LBs). There are
@@ -23,7 +23,7 @@ more efficient. Please refer to the included references for more information, es
 (2009), which is a good practical introduction.
 
 Most optimizations require equal dimensionality, which means time series should have equal length.
-DTW itself does not require this, but it is relatively slow to compute. Other distance definitions
+DTW itself does not require this, but it is relatively expensive to compute. Other distance definitions
 may be used, or series could be reinterpolated to a matching length (Ratanamahatana and Keogh,
 2004).
 

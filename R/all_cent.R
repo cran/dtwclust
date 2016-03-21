@@ -116,6 +116,7 @@ all_cent <- function(case = NULL, distmat, distfun, control, fuzzy = FALSE) {
                cent <- t(u) %*% do.call(rbind, x)
                cent <- apply(cent, 2L, "/", e2 = colSums(u))
 
+               # Coerce back to list
                consistency_check(cent, "tsmat")
           }
      } else {
@@ -137,7 +138,7 @@ all_cent <- function(case = NULL, distmat, distfun, control, fuzzy = FALSE) {
                x_split <- split(x, factor(cl_id, levels = 1L:k))
 
                ## In case of empty new clusters
-               empty_clusters <- which(sapply(x_split, length) == 0L)
+               empty_clusters <- which(lengths(x_split) == 0L)
                id_changed <- setdiff(id_changed, empty_clusters)
 
                ## Calculate new centers

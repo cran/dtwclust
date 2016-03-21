@@ -133,15 +133,23 @@ setMethod("update", "dtwclust",
 setMethod("predict", "dtwclust",
           function(object, newdata = NULL, ...) {
                if (is.null(newdata)) {
-                    ret <- object@cluster
+                    if (object@type != "fuzzy")
+                         ret <- object@cluster
+                    else
+                         ret <- object@fcluster
 
                } else {
                     newdata <- consistency_check(newdata, "tsmat")
+                    nm <- names(newdata)
                     consistency_check(newdata, "vltslist")
                     newdata <- object@family@preproc(newdata)
-                    distmat <- object@family@dist(newdata, object@centers)
-                    ret <- object@family@cluster(distmat = distmat)
-                    names(ret) <- names(newdata)
+                    distmat <- object@family@dist(newdata, object@centers, ...)
+                    ret <- object@family@cluster(distmat = distmat, m = object@control@fuzziness)
+
+                    if (object@type != "fuzzy")
+                         names(ret) <- nm
+                    else
+                         dimnames(ret) <- list(nm, paste0("cluster_", 1:ncol(ret)))
                }
 
                ret
@@ -281,7 +289,6 @@ setMethod("plot", signature(x="dtwclust", y="missing"),
                cenm <- data.frame(cenm, cl = cl)
 
                ## create gg object
-
                gg <- ggplot(dfm[dfm$cl %in% clus, ], aes_string(x = "t", y = "value", group = "variable"))
 
                if (show.centroids) {
