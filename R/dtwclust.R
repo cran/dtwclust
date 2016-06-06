@@ -1,7 +1,7 @@
 #' Time series clustering
 #'
-#' This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy
-#' and TADPole clustering. See the details and the examples for more information.
+#' This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy,
+#' k-Shape and TADPole clustering. See the details and the examples for more information.
 #'
 #' Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering is done
 #' with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPole}} function. Specifying
@@ -75,7 +75,7 @@
 #'
 #' The algorithm relies on the DTW lower bounds, which are only defined for time series of equal length.
 #' Additionally, it requires a window constraint* for DTW. See the Sakoe-Chiba constraint section below.
-#' Unlike the other algorithms, TADPole always uses DTW2 as a distance (with a symmetric1 step pattern).
+#' Unlike the other algorithms, TADPole always uses DTW2 as distance (with a symmetric1 step pattern).
 #'
 #' @section Centroid Calculation:
 #'
@@ -125,6 +125,10 @@
 #' in the dataset have a length of either 10 or 15, 2 clusters are desired, and the initial choice selects
 #' two series with length of 10, the final centroids will have this same length.
 #'
+#' As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid function that
+#' takes a list of series as only input and returns a single centroid series. These centroids are returned in
+#' the \code{centers} slot. By default, a type of PAM centroid function is used.
+#'
 #' @section Distance Measures:
 #'
 #' The distance measure to be used with partitional, hierarchical and fuzzy clustering can be modified with
@@ -136,8 +140,9 @@
 #' one of the following custom implementations (all registered with \code{proxy}):
 #'
 #' \itemize{
-#'   \item \code{"dtw"}: DTW with L1 norm and optionally a Sakoe-Chiba/Slanted-band constraint*.
-#'   \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*.
+#'   \item \code{"dtw"}: DTW, optionally with a Sakoe-Chiba/Slanted-band constraint*.
+#'   \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*. Read
+#'   details below.
 #'   \item \code{"dtw_lb"}: DTW with L1 or L2 norm* and optionally a Sakoe-Chiba constraint*. Some
 #'   computations are avoided by first estimating the distance matrix with Lemire's lower bound and then
 #'   iteratively refining with DTW. See \code{\link{dtw_lb}}. Not suitable for \code{pam.precompute}* =
@@ -169,7 +174,7 @@
 #'
 #' Whether your function makes use of them or not, is up to you.
 #'
-#' If you know that the distance function is symmetric, and you use a hierarchical algorithm or a partitional
+#' If you know that the distance function is symmetric, and you use a hierarchical algorithm, or a partitional
 #' algorithm with PAM centroids and \code{pam.precompute}* = \code{TRUE}, some time can be saved by
 #' calculating only half the distance matrix. Therefore, consider setting the symmetric* control parameter
 #' to \code{TRUE} if this is the case.
@@ -279,18 +284,18 @@
 #'
 #' @author Alexis Sarda-Espinosa
 #'
-#' @param data A list where each element is a time series, or a numeric matrix (it will be coerced to a list
-#' row-wise).
-#' @param type What type of clustering method to use: \code{partitional}, \code{hierarchical}, \code{tadpole}
-#' or \code{fuzzy}.
-#' @param k Numer of desired clusters. It may be a numeric vector with different values.
+#' @param data A list of series, a numeric matrix or a data frame. Matrices are coerced row-wise and data frames
+#' column-wise.
+#' @param type What type of clustering method to use: \code{"partitional"}, \code{"hierarchical"}, \code{"tadpole"}
+#' or \code{"fuzzy"}.
+#' @param k Number of desired clusters. It may be a numeric vector with different values.
 #' @param method One or more linkage methods to use in hierarchical procedures. See \code{\link[stats]{hclust}}.
 #' You can provide a character vector to compute different hierarchical cluster structures in one go, or
 #' specify \code{method} \code{=} \code{"all"} to use all the available ones.
 #' @param distance A supported distance from \code{proxy}'s \code{\link[proxy]{dist}} (see Distance section).
 #' Ignored for \code{type} = \code{"tadpole"}.
 #' @param centroid Either a supported string or an appropriate function to calculate centroids
-#' when using partitional methods. See Centroid section.
+#' when using partitional or prototypes for hierarchical/tadpole methods. See Centroid section.
 #' @param preproc Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
 #' \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.
 #' @param dc Cutoff distance for the \code{\link{TADPole}} algorithm.
@@ -342,8 +347,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
      }
 
      ## ----------------------------------------------------------------------------------------------------------
-     ## Backwards compatibility, check for old formal arguments in '...'
-     ## I might leave this here to prevent duplicate matching anyway
+     ## Prevent duplicate matching
      ## ----------------------------------------------------------------------------------------------------------
 
      dots <- list(...)
@@ -623,6 +627,12 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                hclust_methods <- c("ward.D", "ward.D2", "single", "complete",
                                    "average", "mcquitty", "median", "centroid")
 
+          ## Take advantage of the function I defined for the partitional methods
+          ## Which can do calculations in parallel if appropriate
+          distfun <- ddist(distance = distance,
+                           control = control,
+                           distmat = NULL)
+
           if (!is.null(distmat)) {
                if ( nrow(distmat) != length(data) || ncol(distmat) != length(data) )
                     stop("Dimensions of provided cross-distance matrix don't correspond to length of provided data")
@@ -631,7 +641,6 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                     cat("\n\tDistance matrix provided...\n")
 
                D <- distmat
-               distfun <- function(...) stop("'distmat' provided in call, no distance calculations performed")
 
                if (!is.null(attr(distmat, "method")))
                     distance <- attr(distmat, "method")
@@ -639,18 +648,11 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                     distance <- "unknown"
 
           } else {
-               ## Take advantage of the function I defined for the partitional methods
-               ## Which can do calculations in parallel if appropriate
-               distfun <- ddist(distance = distance,
-                                control = control,
-                                distmat = NULL)
-
                if (control@trace)
                     cat("\n\tCalculating distance matrix...\n")
 
                ## single argument is to calculate whole distance matrix
                D <- do.call("distfun", c(list(data), dots))
-
           }
 
           ## Required form for 'hclust'
@@ -666,23 +668,43 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
           ## Cluster
           hc <- lapply(hclust_methods, function(method) stats::hclust(Dist, method))
 
+          ## Invalid centroid specifier provided?
+          if (!missing(centroid) && !is.function(centroid))
+               warning("The 'centroid' argument was provided but it wasn't a function, so it was ignored.")
+          if (!is.function(centroid))
+               centroid <- NA
+
           RET <- lapply(k, function(k) {
                lapply(hc, function(hc) {
                     ## cutree and corresponding centers
                     cluster <- stats::cutree(hc, k)
 
-                    centers <- sapply(1L:k, function(kcent) {
-                         id_k <- cluster == kcent
+                    if (is.function(centroid)) {
+                         centers <- lapply(1L:k, function(kcent) centroid(data[cluster == kcent]))
 
-                         d_sub <- D[id_k, id_k, drop = FALSE]
+                         cldist <- do.call("distfun", c(list(x = data,
+                                                             centers = centers[cluster],
+                                                             pairwise = TRUE),
+                                                        dots))
 
-                         id_center <- which.min(apply(d_sub, 1L, sum))
+                         cldist <- as.matrix(cldist)
 
-                         which(id_k)[id_center]
-                    })
+                    } else {
+                         centers <- sapply(1L:k, function(kcent) {
+                              id_k <- cluster == kcent
+
+                              d_sub <- D[id_k, id_k, drop = FALSE]
+
+                              id_center <- which.min(apply(d_sub, 1L, sum))
+
+                              which(id_k)[id_center]
+                         })
+
+                         cldist <- as.matrix(D[,centers][cbind(1L:length(data), cluster)])
+                         centers <- data[centers]
+                    }
 
                     ## Some additional cluster information (taken from flexclust)
-                    cldist <- as.matrix(D[,centers][cbind(1L:length(data), cluster)])
                     size <- as.vector(table(cluster))
                     clusinfo <- data.frame(size = size,
                                            av_dist = as.vector(tapply(cldist[,1], cluster, sum))/size)
@@ -698,10 +720,10 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                         type = type,
                         method = hc$method,
                         distance = distance,
-                        centroid = "NA",
+                        centroid = as.character(substitute(centroid)),
                         preproc = preproc_char,
 
-                        centers = data[centers],
+                        centers = centers,
                         k = as.integer(k),
                         cluster = cluster,
                         fcluster = matrix(NA_real_),
@@ -749,6 +771,15 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
           ## mainly for predict generic
           distfun <- ddist("dtw_lb", control = control, distmat = NULL)
 
+          ## Invalid centroid specifier provided?
+          if (!missing(centroid) && !is.function(centroid))
+               warning("The 'centroid' argument was provided but it wasn't a function, so it was ignored.")
+
+          if(is.function(centroid))
+               centchar <- as.character(substitute(centroid))
+          else
+               centchar <- "PAM (TADPole)"
+
           RET <- foreach(k = k, .combine = list, .multicombine = TRUE, .packages = "dtwclust") %dopar% {
                R <- TADPole(data, window.size = control@window.size, k = k, dc = dc, error.check = FALSE)
 
@@ -763,9 +794,19 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                ## Prepare results
                ## ----------------------------------------------------------------------------------------------------------
 
+               if (is.function(centroid)) {
+                    centers <- lapply(1L:k, function(kcent) centroid(data[R$cl == kcent]))
+               } else {
+                    centers <- data[R$centers]
+               }
+
                ## Some additional cluster information (taken from flexclust)
-               subdistmat <- distfun(data, data[R$centers][R$cl], pairwise = TRUE)
-               cldist <- as.matrix(subdistmat)
+               cldist <- do.call("distfun", c(list(x = data,
+                                                   centers = centers[R$cl],
+                                                   pairwise = TRUE),
+                                              dots))
+
+               cldist <- as.matrix(cldist)
                size <- as.vector(table(R$cl))
                clusinfo <- data.frame(size = size,
                                       av_dist = as.vector(tapply(cldist[ , 1L], R$cl, sum))/size)
@@ -780,10 +821,10 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
                    type = type,
                    distance = "DTW2_LB",
-                   centroid = "pam (TADPole)",
+                   centroid = centchar,
                    preproc = preproc_char,
 
-                   centers = data[R$centers],
+                   centers = centers,
                    k = as.integer(k),
                    cluster = as.integer(R$cl),
                    fcluster = matrix(NA_real_),

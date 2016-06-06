@@ -9,13 +9,13 @@ dtwclust(data = NULL, type = "partitional", k = 2L, method = "average",
   control = NULL, seed = NULL, distmat = NULL, ...)
 }
 \arguments{
-\item{data}{A list where each element is a time series, or a numeric matrix (it will be coerced to a list
-row-wise).}
+\item{data}{A list of series, a numeric matrix or a data frame. Matrices are coerced row-wise and data frames
+column-wise.}
 
-\item{type}{What type of clustering method to use: \code{partitional}, \code{hierarchical}, \code{tadpole}
-or \code{fuzzy}.}
+\item{type}{What type of clustering method to use: \code{"partitional"}, \code{"hierarchical"}, \code{"tadpole"}
+or \code{"fuzzy"}.}
 
-\item{k}{Numer of desired clusters. It may be a numeric vector with different values.}
+\item{k}{Number of desired clusters. It may be a numeric vector with different values.}
 
 \item{method}{One or more linkage methods to use in hierarchical procedures. See \code{\link[stats]{hclust}}.
 You can provide a character vector to compute different hierarchical cluster structures in one go, or
@@ -25,7 +25,7 @@ specify \code{method} \code{=} \code{"all"} to use all the available ones.}
 Ignored for \code{type} = \code{"tadpole"}.}
 
 \item{centroid}{Either a supported string or an appropriate function to calculate centroids
-when using partitional methods. See Centroid section.}
+when using partitional or prototypes for hierarchical/tadpole methods. See Centroid section.}
 
 \item{preproc}{Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
 \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.}
@@ -49,8 +49,8 @@ If \code{control@nrep > 1} and a partitional procedure is used, \code{length(met
 hierarchical procedures are used, or \code{length(k)} \code{>} \code{1}, a list of objects is returned.
 }
 \description{
-This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy
-and TADPole clustering. See the details and the examples for more information.
+This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy,
+k-Shape and TADPole clustering. See the details and the examples for more information.
 }
 \details{
 Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering is done
@@ -132,7 +132,7 @@ corresponding parameter of this function.
 
 The algorithm relies on the DTW lower bounds, which are only defined for time series of equal length.
 Additionally, it requires a window constraint* for DTW. See the Sakoe-Chiba constraint section below.
-Unlike the other algorithms, TADPole always uses DTW2 as a distance (with a symmetric1 step pattern).
+Unlike the other algorithms, TADPole always uses DTW2 as distance (with a symmetric1 step pattern).
 }
 
 \section{Centroid Calculation}{
@@ -183,6 +183,10 @@ These check for the special cases where parallelization might be desired. Note t
 series that were randomly chosen at the beginning of the clustering algorithm. For example, if the series
 in the dataset have a length of either 10 or 15, 2 clusters are desired, and the initial choice selects
 two series with length of 10, the final centroids will have this same length.
+
+As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid function that
+takes a list of series as only input and returns a single centroid series. These centroids are returned in
+the \code{centers} slot. By default, a type of PAM centroid function is used.
 }
 
 \section{Distance Measures}{
@@ -197,8 +201,9 @@ Note that you are free to create your own distance functions and register them. 
 one of the following custom implementations (all registered with \code{proxy}):
 
 \itemize{
-  \item \code{"dtw"}: DTW with L1 norm and optionally a Sakoe-Chiba/Slanted-band constraint*.
-  \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*.
+  \item \code{"dtw"}: DTW, optionally with a Sakoe-Chiba/Slanted-band constraint*.
+  \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*. Read
+  details below.
   \item \code{"dtw_lb"}: DTW with L1 or L2 norm* and optionally a Sakoe-Chiba constraint*. Some
   computations are avoided by first estimating the distance matrix with Lemire's lower bound and then
   iteratively refining with DTW. See \code{\link{dtw_lb}}. Not suitable for \code{pam.precompute}* =
@@ -230,7 +235,7 @@ in its definition, it will receive the following parameters*:
 
 Whether your function makes use of them or not, is up to you.
 
-If you know that the distance function is symmetric, and you use a hierarchical algorithm or a partitional
+If you know that the distance function is symmetric, and you use a hierarchical algorithm, or a partitional
 algorithm with PAM centroids and \code{pam.precompute}* = \code{TRUE}, some time can be saved by
 calculating only half the distance matrix. Therefore, consider setting the symmetric* control parameter
 to \code{TRUE} if this is the case.
@@ -402,7 +407,7 @@ plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]])
 
 # Plot subset of crisp partition with k = 20
 plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]],
-     clus = 1, type = "series")
+     clus = 1, type = "sc")
 
 # ====================================================================================
 # Autocorrelation-based fuzzy clustering (see D'Urso and Maharaj 2009)
@@ -422,7 +427,7 @@ fc <- dtwclust(CharTraj[1:25], type = "fuzzy", k = 5,
 print(fc@fcluster)
 
 # Plot crisp partition in the original space
-plot(fc, data = CharTraj[1:25], show.centroids = FALSE)
+plot(fc, data = CharTraj[1:25], type = "series")
 
 # Membership for new series
 # (It's important that 'preproc' was specified in the original call)
@@ -435,7 +440,7 @@ predict(fc, newdata = CharTraj[26:28])
 
 ctrl@window.size <- 20L
 
-kc.tadp <- dtwclust(data, type = "tadpole", k = 4,
+kc.tadp <- dtwclust(data, type = "tadpole", k = 4L,
                     dc = 1.5, control = ctrl)
 
 cat("Rand index for TADPole:", randIndex(kc.tadp, labels), "\\n\\n")
@@ -455,6 +460,18 @@ gkc <- plot(kc.tadp, time = t, plot = FALSE)
 require(scales)
 gkc + scale_x_date(labels = date_format("\%b-\%Y"),
                    breaks = date_breaks("2 months"))
+
+# ====================================================================================
+# Specifying a centroid function for prototype extraction in hierarchical clustering
+# ====================================================================================
+
+# Seed is due to possible randomness in shape_extraction when selecting a basis series
+hc <- dtwclust(CharTraj, type = "hierarchical",
+               k = 20, distance = "sbd",
+               preproc = zscore, centroid = shape_extraction,
+               seed = 320)
+
+plot(hc, type = "sc")
 
 # ====================================================================================
 # Using parallel computation to optimize several random repetitions
