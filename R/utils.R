@@ -12,9 +12,6 @@ consistency_check <- function(obj, case, ...) {
           if (!is.numeric(obj)) {
                stop("The series must be numeric")
           }
-          if (!is.null(dim(obj))) {
-               stop("The series must be univariate vectors (provided object has non-NULL dim)")
-          }
           if (length(obj) < 1L) {
                stop("The series must have at least one point")
           }
@@ -30,9 +27,6 @@ consistency_check <- function(obj, case, ...) {
 
           if (length(obj) < 1L)
                stop("Data is empty")
-
-          if (any(sapply(obj, function(obj) !is.null(dim(obj)) )))
-               stop("Each element of the list must be a univariate vector (at least one has non-NULL dim)")
 
           if (any(!sapply(obj, is.numeric)))
                stop("Each element of the list must be a numeric vector")
@@ -56,9 +50,6 @@ consistency_check <- function(obj, case, ...) {
 
           if (length(obj) < 1L)
                stop("Data is empty")
-
-          if (any(sapply(obj, function(obj) !is.null(dim(obj)) )))
-               stop("Each element of the list must be a univariate vector (at least one has non-NULL dim)")
 
           if (any(!sapply(obj, is.numeric)))
                stop("Each element of the list must be a numeric vector")
@@ -101,8 +92,7 @@ consistency_check <- function(obj, case, ...) {
                included <- c("dtw", "dtw2", "dtw_lb", "lbk", "lbi", "sbd")
                valid <- c("dtw", "dtw2", "sbd")
 
-               ## pr_DB$entry_exists is acting weird
-               if (!is.character(obj) || class(try(pr_DB[[obj]], TRUE)) == "try-error") {
+               if (!is.character(obj) || !pr_DB$entry_exists(obj)) {
                     if (silent)
                          return(FALSE)
                     else
@@ -138,29 +128,7 @@ consistency_check <- function(obj, case, ...) {
 }
 
 # ========================================================================================================
-# Membership update for fuzzy c-means clustering
-# ========================================================================================================
-
-fcm_cluster <- function(distmat, m) {
-     cprime <- apply(distmat, 1L, function(dist_row) { sum( (1 / dist_row) ^ (2 / (m - 1)) ) })
-
-     u <- 1 / apply(distmat, 2L, function(dist_col) { cprime * dist_col ^ (2 / (m - 1)) })
-
-     if (is.null(dim(u))) u <- rbind(u) # for predict generic
-
-     u
-}
-
-# ========================================================================================================
-# Fuzzy objective function
-# ========================================================================================================
-
-fuzzy_objective <- function(u, distmat, m) {
-     sum(u^m * distmat^2)
-}
-
-# ========================================================================================================
-# Helper functions
+# Helper C/C++ functions
 # ========================================================================================================
 
 # Envelop calculation
@@ -184,6 +152,10 @@ call_pairs <- function(n = 2L, lower = TRUE) {
      .Call("pairs", n, lower, PACKAGE = "dtwclust")
 }
 
+# ========================================================================================================
+# Parallel helper functions
+# ========================================================================================================
+
 # Is there a registered parallel backend?
 check_parallel <- function() {
      if (is.null(foreach::getDoParName()))
@@ -192,7 +164,7 @@ check_parallel <- function() {
      foreach::getDoParWorkers() > 1L
 }
 
-# Split a given object into tasks for parallel workers
+# Split a given object into chunks for parallel workers
 split_parallel <- function(obj, margin = NULL) {
      num_workers <- foreach::getDoParWorkers()
 
@@ -221,12 +193,22 @@ split_parallel <- function(obj, margin = NULL) {
      ret
 }
 
+# ========================================================================================================
+# Helper distance-related
+# ========================================================================================================
+
 # column-wise medians
 colMedians <- function(mat) { apply(mat, 2L, stats::median) }
 
 # PREFUN for some of my proxy distances so that they support 'pairwise' direclty
-# Currently results in warnings because proxy does !is.na(reg_entry$PREFUN)
 proxy_prefun <- function(x, y, pairwise, params, reg_entry) {
+     if (!is.null(params$force.pairwise)) {
+          warning("The argument 'force.pairwise. has been deprecated. Simply use 'pairwise' instead.")
+
+          pairwise <- params$force.pairwise
+          params$force.pairwise <- NULL
+     }
+
      params$pairwise <- pairwise
 
      list(x = x, y = y,

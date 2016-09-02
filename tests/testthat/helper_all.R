@@ -4,9 +4,14 @@ data <- CharTraj
 data_list <- lapply(CharTraj, reinterpolate, newLength = 180)
 data_matrix <- do.call(rbind, data_list)
 data_subset <- data[1:20]
+data_multivariate <- lapply(seq(1L, 100L, 5L), function(x) cbind(data_list[[x]], data_list[[x+1L]]))
 
 labels <- CharTrajLabels
 labels_subset <- labels[1:20]
+labels_shuffled <- sample(labels)
+
+internal_cvis <- c("Sil", "D", "DB", "DBstar", "CH", "SF", "COP")
+external_cvis <- c("RI", "ARI", "J", "FM", "VI")
 
 ctrl <- new("dtwclustControl", window.size = 18L, save.data = FALSE)
 

@@ -36,8 +36,8 @@ hc.l2 <- update(kc.l2[[3L]], k = 4L,
                 type = "hierarchical", method = "all",
                 distmat = kc.l2[[3L]]@distmat)
 
-cat("Rand indices for L2+HC:\n")
-sapply(hc.l2, randIndex, y = labels)
+cat("VI for L2+HC:\n")
+sapply(hc.l2, cvi, b = labels, type = "VI")
 
 # ====================================================================================
 # Registering a custom distance with the 'proxy' package and using it
@@ -74,10 +74,6 @@ hc.sbd <- dtwclust(CharTraj, type = "hierarchical",
 
 # Plot dendrogram
 plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]])
-
-# Plot subset of crisp partition with k = 20
-plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]],
-     clus = 1, type = "sc")
 
 # ====================================================================================
 # Autocorrelation-based fuzzy clustering (see D'Urso and Maharaj 2009)
@@ -144,6 +140,20 @@ hc <- dtwclust(CharTraj, type = "hierarchical",
 plot(hc, type = "sc")
 
 # ====================================================================================
+# Multivariate time series
+# ====================================================================================
+
+# Dummy multivariate series
+mv <- lapply(seq(1L, 100L, 5L), function(x) cbind(CharTraj[[x]], CharTraj[[x+1L]]))
+
+# "dist.method" is for the dtw function, and it affects the values of the local
+# cost matrix in the case of multivariate series
+mvc <- dtwclust(mv, k = 4L, dist.method = "L1", seed = 390)
+
+# Note how the "dimensions" of each series are appended one after the other in the plot
+plot(mvc)
+
+# ====================================================================================
 # Using parallel computation to optimize several random repetitions
 # and distance matrix calculation
 # ====================================================================================
@@ -166,8 +176,8 @@ kc.ndtw.reps <- dtwclust(CharTraj, k = 20, distance = "nDTW", centroid = "dba",
                          preproc = zscore, seed = 8319,
                          control = list(window.size = 10L, nrep = 8L))
 
-# See Rand index for each repetition
-sapply(kc.ndtw.reps, randIndex, y = CharTrajLabels)
+# See VI index for each repetition
+sapply(kc.ndtw.reps, cvi, b = CharTrajLabels, type = "VI")
 
 # Stop parallel workers
 stopCluster(cl)

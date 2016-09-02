@@ -16,11 +16,8 @@
 #' The lower bound is defined for time series of equal length only and is \strong{not} symmetric.
 #'
 #' If you wish to calculate the lower bound between several time series, it would be better to use the version
-#' registered with the \code{proxy} package, since it includes some small optimizations. See the examples.
-#'
-#' However, because of said optimizations and the way \code{proxy}'s \code{\link[proxy]{dist}} works, the
-#' latter's \code{pairwise} argument will not work with this distance. You can use the custom argument
-#' \code{force.pairwise} to get the correct result.
+#' registered with the \code{proxy} package, since it includes some small optimizations. The convention
+#' mentioned above for references and queries still holds. See the examples.
 #'
 #' @references
 #'
@@ -58,15 +55,21 @@
 #' @param x A time series (reference).
 #' @param y A time series with the same length as \code{x} (query).
 #' @param window.size Window size for envelope calculation. See details.
-#' @param norm Pointwise distance. Either \code{L1} for Manhattan distance or \code{L2} for Euclidean.
-#' @param lower.env Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided.
-#' @param upper.env Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided.
+#' @param norm Vector norm. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.
+#' @param lower.env Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided
+#' (non-proxy version only).
+#' @param upper.env Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided
+#' (non-proxy version only).
+#' @param force.symmetry If \code{TRUE}, a second lower bound is calculated by swapping \code{x} and
+#' \code{y}, and whichever result has a \emph{higher} distance value is returned. The proxy version
+#' can only work if a square matrix is obtained, but use carefully.
 #'
 #' @return The improved lower bound for the DTW distance.
 #'
 #' @export
 
-lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, upper.env = NULL) {
+lb_improved <- function(x, y, window.size = NULL, norm = "L1",
+                        lower.env = NULL, upper.env = NULL, force.symmetry = FALSE) {
 
      norm <- match.arg(norm, c("L1", "L2"))
 
@@ -96,11 +99,11 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
           upper.env <- caTools::runmax(y, window.size*2L + 1L)
      }
 
-     if (length(lower.env) != length(y))
-          stop("Length mismatch between 'y' and its lower envelope")
+     if (length(lower.env) != length(x))
+          stop("Length mismatch between 'x' and the lower envelope")
 
-     if (length(upper.env) != length(y))
-          stop("Length mismatch between 'y' and its upper envelope")
+     if (length(upper.env) != length(x))
+          stop("Length mismatch between 'x' and the upper envelope")
 
      ind1 <- x > upper.env
      ind2 <- x < lower.env
@@ -109,7 +112,7 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
      H[ind1] <- upper.env[ind1]
      H[ind2] <- lower.env[ind2]
 
-     d1 <- abs(x-H)
+     d1 <- abs(x - H)
 
      ## From here on is Lemire's improvement
      EH <- call_envelop(H, window.size*2+1)
@@ -121,13 +124,19 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
      H2[ind3] <- EH$max[ind3]
      H2[ind4] <- EH$min[ind4]
 
-     d2 <- abs(y-H2)
+     d2 <- abs(y - H2)
 
      ## LB_Improved is defined as root-p of the sum of LB_Keoghs^p
      d <- switch(EXPR = norm,
                  L1 = sum(d1) + sum(d2),
                  L2 = sqrt(sum(d1^2) + sum(d2^2))
      )
+
+     if (force.symmetry) {
+          d2 <- lb_improved(x = y, y = x, window.size = window.size, norm = norm)
+
+          if (d2 > d) d <- d2
+     }
 
      ## Finish
      d
@@ -137,8 +146,8 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
 # Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
 # ========================================================================================================
 
-lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE,
-                             force.symmetry = FALSE, norm = "L1", force.pairwise = FALSE) {
+lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
+                              force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE) {
 
      norm <- match.arg(norm, c("L1", "L2"))
 
@@ -176,51 +185,24 @@ lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE
 
      x <- split_parallel(x)
 
-     if (force.pairwise) {
+     if (pairwise) {
           y <- split_parallel(y)
           lower.env <- split_parallel(lower.env)
           upper.env <- split_parallel(upper.env)
      }
 
-     if (force.pairwise) {
+     if (pairwise) {
           D <- foreach(x = x, y = y, lower.env = lower.env, upper.env = upper.env,
                        .combine = c,
                        .multicombine = TRUE,
-                       .export = "call_envelop",
                        .packages = "dtwclust") %dopar% {
                             mapply(upper.env, lower.env, y, x,
                                    FUN = function(u, l, y, x) {
-
-                                        ## LB Keogh
-                                        ind1 <- x > u
-                                        ind2 <- x < l
-
-                                        H <- x
-                                        H[ind1] <- u[ind1]
-                                        H[ind2] <- l[ind2]
-
-                                        d1 <- abs(x-H)
-
-                                        ## Lemire's improvement
-                                        EH <- call_envelop(H, window.size*2L + 1L)
-
-                                        ind3 <- y > EH$max
-                                        ind4 <- y < EH$min
-
-                                        H2 <- y
-                                        H2[ind3] <- EH$max[ind3]
-                                        H2[ind4] <- EH$min[ind4]
-
-                                        d2 <- abs(y-H2)
-
-                                        ## calculate LB_Improved
-
-                                        d <- switch(EXPR = norm,
-                                                    L1 = sum(d1) + sum(d2),
-                                                    L2 = sqrt(sum(d1^2) + sum(d2^2))
-                                        )
-
-                                        d
+                                        lb_improved(x, y,
+                                                    window.size = window.size,
+                                                    norm = norm,
+                                                    lower.env = l,
+                                                    upper.env = u)
                                    })
                        }
 
@@ -228,59 +210,33 @@ lb_improved_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE
 
      } else {
           D <- foreach(x = x,
-                       .combine = cbind,
+                       .combine = rbind,
                        .multicombine = TRUE,
-                       .export = "call_envelop",
                        .packages = "dtwclust") %dopar% {
-                            sapply(X=x, U=upper.env, L=lower.env, Y=y,
-                                   FUN = function(x, U, L, Y) {
+                            ret <- lapply(X = x, U = upper.env, L = lower.env, Y = y,
+                                          FUN = function(x, U, L, Y) {
+                                               ## This will return one row of the distance matrix
+                                               mapply(U, L, Y,
+                                                      MoreArgs = list(x = x),
+                                                      FUN = function(u, l, y, x) {
+                                                           lb_improved(x, y,
+                                                                       window.size = window.size,
+                                                                       norm = norm,
+                                                                       lower.env = l,
+                                                                       upper.env = u)
+                                                      })
+                                          })
 
-                                        ## This will return one column of the distance matrix
-                                        D <- mapply(U, L, Y, MoreArgs=list(x=x),
-                                                    FUN = function(u, l, y, x) {
-
-                                                         ## LB Keogh
-                                                         ind1 <- x > u
-                                                         ind2 <- x < l
-
-                                                         H <- x
-                                                         H[ind1] <- u[ind1]
-                                                         H[ind2] <- l[ind2]
-
-                                                         d1 <- abs(x-H)
-
-                                                         ## Lemire's improvement
-                                                         EH <- call_envelop(H, window.size*2L + 1L)
-
-                                                         ind3 <- y > EH$max
-                                                         ind4 <- y < EH$min
-
-                                                         H2 <- y
-                                                         H2[ind3] <- EH$max[ind3]
-                                                         H2[ind4] <- EH$min[ind4]
-
-                                                         d2 <- abs(y-H2)
-
-                                                         ## calculate LB_Improved
-
-                                                         d <- switch(EXPR = norm,
-                                                                     L1 = sum(d1) + sum(d2),
-                                                                     L2 = sqrt(sum(d1^2) + sum(d2^2))
-                                                         )
-
-                                                         d
-                                                    })
-                                        D
-                                   })
+                            do.call(rbind, ret)
                        }
 
           attr(D, "class") <- "crossdist"
-          D <- t(D)
      }
 
-     if (force.symmetry && !force.pairwise) {
+     if (force.symmetry && !pairwise) {
           if (nrow(D) != ncol(D)) {
                warning("Unable to force symmetry. Resulting distance matrix is not square.")
+
           } else {
                ind.tri <- lower.tri(D)
 

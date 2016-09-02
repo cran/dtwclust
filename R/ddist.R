@@ -58,6 +58,11 @@ ddist <- function(distance, control, distmat) {
                ## I need to re-register any custom distances in each parallel worker
                dist_entry <- proxy::pr_DB$get_entry(distance)
 
+               ## dtw uses L2 by default, but in dtwclust I want dtw to use L1 by default
+               ## Important for multivariate series
+               if (toupper(dist_entry$names[1L]) == "DTW" && is.null(dots$dist.method))
+                    dots$dist.method <- "L1"
+
                ## Does the registered function possess '...' in its definition?
                has_dots <- is.function(dist_entry$FUN) && !is.null(formals(dist_entry$FUN)$...)
 
@@ -83,7 +88,6 @@ ddist <- function(distance, control, distmat) {
 
                     ## strict pairwise as in proxy::dist doesn't make sense here, but this case needs it
                     dots$pairwise <- TRUE
-                    dots$force.pairwise <- TRUE # in case it's one of my own
 
                     pairs <- call_pairs(length(x), lower = FALSE)
 
@@ -127,16 +131,12 @@ ddist <- function(distance, control, distmat) {
 
                     dim_names <- list(names(x), names(centers))
 
-                    if ((!is.null(dots$pairwise) && dots$pairwise) ||
-                        (!is.null(dots$force.pairwise) && dots$force.pairwise)){
+                    if (!is.null(dots$pairwise) && dots$pairwise) {
                          if (length(x) != length(centers))
                               stop("Both sets of data must have the same amount of series for pairwise calculation")
 
                          centers <- split_parallel(centers)
                          combine <- c
-
-                         dots$pairwise <- TRUE # in case force.pairwise was provided
-                         dots$force.pairwise <- TRUE # in case it's one of my own
 
                     } else {
                          centers <- lapply(1:length(x), function(dummy) centers)

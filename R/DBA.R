@@ -59,18 +59,21 @@
 #' }
 #'
 #' @param X A data matrix where each row is a time series, or a list where each element is a time series.
-#' @param center Optionally, a time series to use as reference. It must be a numeric vector. Defaults to a
-#' random series of \code{X} if \code{NULL}.
+#' Multivariate series should be provided as a list of matrices where time spans the rows and the variables
+#' span the columns.
+#' @param center Optionally, a time series to use as reference. Defaults to a random series of \code{X} if
+#' \code{NULL}. For multivariate series, this should be a matrix with the same characteristics as the
+#' matrices in \code{X}.
 #' @param max.iter Maximum number of iterations allowed.
 #' @param norm Norm for the local cost matrix of DTW. Either "L1" for Manhattan distance or "L2" for Euclidean
 #' distance.
-#' @param window.size Window constraint for the DTW calculations. \code{NULL} means no constraint.
+#' @param window.size Window constraint for the DTW calculations. \code{NULL} means no constraint. A slanted
+#' band is used by default.
 #' @param delta At iteration \code{i}, if \code{all(abs(center_{i}} \code{ - center_{i-1})} \code{ < delta)},
 #' convergence is assumed.
 #' @param error.check Should inconsistencies in the data be checked?
 #' @param trace If \code{TRUE}, the current iteration is printed to screen.
-#' @param ... Further arguments for \code{\link[dtw]{dtw}}, e.g. \code{step.pattern}. Do not provide
-#' \code{window.type} here, just set \code{window.size} to the desired value.
+#' @param ... Further arguments for \code{\link[dtw]{dtw}}, e.g. \code{step.pattern}.
 #'
 #' @return The average time series.
 #'
@@ -83,22 +86,6 @@ DBA <- function(X, center = NULL, max.iter = 20L,
 
      X <- consistency_check(X, "tsmat")
 
-     if (!is.null(window.size)) {
-          w <- consistency_check(window.size, "window")
-          window.type = "slantedband"
-
-     } else {
-          w <- NULL
-          window.type = "none"
-     }
-
-     norm <- match.arg(norm, c("L1", "L2"))
-
-     ## for C helper
-     square <- norm == "L2"
-
-     n <- length(X)
-
      if (is.null(center))
           center <- X[[sample(n, 1L)]] # Random choice
 
@@ -106,6 +93,63 @@ DBA <- function(X, center = NULL, max.iter = 20L,
           consistency_check(X, "vltslist")
           consistency_check(center, "ts")
      }
+
+     norm <- match.arg(norm, c("L1", "L2"))
+
+     dots <- list(...)
+
+     if (!is.null(window.size)) {
+          w <- consistency_check(window.size, "window")
+
+          if (is.null(dots$window.type))
+               dots$window.type <- "slantedband"
+
+     } else {
+          w <- NULL
+     }
+
+     ## check for multivariate case
+     dims <- sapply(X, function(x) {
+          if (is.null(dim(x)))
+               0L
+          else
+               ncol(x)
+     })
+
+     if (length(unique(dims)) != 1L)
+          stop("Inconsistent dimensions across series.")
+
+     if (any(dims > 0L)) {
+          ## multivariate
+          ncols <- ncol(X[[1L]])
+          ncols <- rep(1L:ncols, length(X))
+
+          x <- do.call(cbind, X)
+          x <- split.data.frame(t(x), ncols)
+
+          c <- lapply(1L:ncol(center), function(idc) {
+               center[ , idc, drop = TRUE]
+          })
+
+          new_c <- mapply(x, c, SIMPLIFY = FALSE,
+                          FUN = function(xx, cc) {
+                               DBA(xx, cc,
+                                   norm = norm,
+                                   window.size = window.size,
+                                   max.iter = max.iter,
+                                   delta = delta,
+                                   error.check = FALSE,
+                                   trace = trace,
+                                   ...)
+                          })
+
+          return(do.call(cbind, new_c))
+     }
+
+     ## for C helper
+     square <- norm == "L2"
+
+     n <- length(X)
 
      ## pre-allocate local cost matrices
      LCM <- lapply(X, function(x) { matrix(0, length(x), length(center)) })
@@ -118,8 +162,6 @@ DBA <- function(X, center = NULL, max.iter = 20L,
 
      Xs <- split_parallel(X)
      LCMs <- split_parallel(LCM)
-
-     dots <- list(...)
 
      ## Iterations
      iter <- 1L
@@ -136,7 +178,6 @@ DBA <- function(X, center = NULL, max.iter = 20L,
                                   .Call("update_lcm", lcm, x, center, square, PACKAGE = "dtwclust")
 
                                   d <- do.call(dtw::dtw, c(list(x = lcm,
-                                                                window.type = window.type,
                                                                 window.size = w),
                                                            dots))
 
@@ -177,8 +218,8 @@ DBA <- function(X, center = NULL, max.iter = 20L,
           }
      }
 
-     if (iter > max.iter)
-          warning("DBA algorithm did not converge within the allowed iterations.")
+     if (iter > max.iter && trace)
+          warning("DBA algorithm did not 'converge' within the allowed iterations.")
 
      as.numeric(center)
 }

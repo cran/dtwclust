@@ -5,7 +5,7 @@
 \title{Keogh's DTW lower bound}
 \usage{
 lb_keogh(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
-  upper.env = NULL)
+  upper.env = NULL, force.symmetry = FALSE)
 }
 \arguments{
 \item{x}{A time series (reference).}
@@ -14,11 +14,17 @@ lb_keogh(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
 
 \item{window.size}{Window size for envelope calculation. See details.}
 
-\item{norm}{Pointwise distance. Either \code{L1} for Manhattan distance or \code{L2} for Euclidean.}
+\item{norm}{Vector norm. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.}
 
-\item{lower.env}{Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided.}
+\item{lower.env}{Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided
+(non-proxy version only).}
 
-\item{upper.env}{Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided.}
+\item{upper.env}{Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided
+(non-proxy version only).}
+
+\item{force.symmetry}{If \code{TRUE}, a second lower bound is calculated by swapping \code{x} and
+\code{y}, and whichever result has a \emph{higher} distance value is returned. The proxy version
+can only work if a square matrix is obtained, but use carefully.}
 }
 \value{
 A list with: \itemize{
@@ -44,11 +50,8 @@ The reference time series should go in \code{x}, whereas the query time series s
 The lower bound is defined for time series of equal length only and is \strong{not} symmetric.
 
 If you wish to calculate the lower bound between several time series, it would be better to use the version
-registered with the \code{proxy} package, since it includes some small optimizations. See the examples.
-
-However, because of said optimizations and the way \code{proxy}'s \code{\link[proxy]{dist}} works, the
-latter's \code{pairwise} argument will not work with this distance. You can use the custom argument
-\code{force.pairwise} to get the correct result.
+registered with the \code{proxy} package, since it includes some small optimizations. The convention
+mentioned above for references and queries still holds. See the examples.
 }
 \examples{
 

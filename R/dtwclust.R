@@ -1,7 +1,8 @@
 #' Time series clustering
 #'
 #' This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy,
-#' k-Shape and TADPole clustering. See the details and the examples for more information.
+#' k-Shape and TADPole clustering. See the details and the examples for more information, as well as the
+#' included package vignette (which can be loaded by typing \code{vignette("dtwclust")}).
 #'
 #' Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering is done
 #' with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPole}} function. Specifying
@@ -9,9 +10,17 @@
 #' equivalent to the k-Shape algorithm (Paparrizos and Gravano, 2015).
 #'
 #' The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to a list,
-#' the former row-wise and the latter column-wise. Only lists can have series with different lengths. Most of
-#' the optimizations require series to have the same length, so consider reinterpolating them to save some
-#' time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}). No missing values are allowed.
+#' the former row-wise and the latter column-wise. Only lists can have series with different lengths or
+#' multiple dimensions. Most of the optimizations require series to have the same length, so consider
+#' reinterpolating them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}).
+#' No missing values are allowed.
+#'
+#' In the case of multivariate time series, they should be provided as a list of matrices, where time spans
+#' the rows of each matrix and the dimensions span the columns. At the moment, only \code{DTW} and \code{DTW2}
+#' suppport such series, which means only partitional and hierarchical procedures using those distances will
+#' work. You can of course create your own custom distances. All included centroid functions should work with
+#' the aforementioned format, although \code{shape} is \strong{not} recommended. Note that the \code{plot}
+#' method will simply append all dimensions (columns) one after the other.
 #'
 #' Several parameters can be adjusted with the \code{control} argument. See \code{\link{dtwclustControl}}. In
 #' the following sections, elements marked with an asterisk (*) are those that can be adjutsed with this
@@ -84,15 +93,15 @@
 #' fuzzy c-means centroid by default.
 #'
 #' In either case, a custom function can be provided. If one is provided, it will receive the following
-#' inputs in the shown order (examples for partitional clustering are shown in parenthesis):
+#' parameters with the shown names (examples for partitional clustering are shown in parenthesis):
 #'
 #' \itemize{
-#'   \item The \emph{whole} data list (\code{list(ts1, ts2, ts3)})
-#'   \item A numeric vector with length equal to the number of series in \code{data}, indicating which
-#'   cluster a series belongs to (\code{c(1L, 2L, 2L)})
-#'   \item The desired number of total clusters (\code{2L})
-#'   \item The current centers in order, in a list (\code{list(center1, center2)})
-#'   \item The membership vector of the \emph{previous} iteration (\code{c(1L, 1L, 2L)})
+#'   \item \code{"x"}: The \emph{whole} data list (\code{list(ts1, ts2, ts3)})
+#'   \item \code{"cl_id"}: A numeric vector with length equal to the number of series in \code{data},
+#'   indicating which cluster a series belongs to (\code{c(1L, 2L, 2L)})
+#'   \item \code{"k"}: The desired number of total clusters (\code{2L})
+#'   \item \code{"cent"}: The current centers in order, in a list (\code{list(center1, center2)})
+#'   \item \code{"cl_old"}: The membership vector of the \emph{previous} iteration (\code{c(1L, 1L, 2L)})
 #'   \item The elements of \code{...}
 #' }
 #'
@@ -507,7 +516,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                         preproc = preproc)
 
           if (type == "fuzzy")
-               family@cluster <- fcm_cluster # utils.R
+               family@cluster <- fcm_cluster # fuzzy.R
 
           if (control@trace && control@nrep > 1L)
                message("Tracing of repetitions might not be available if done in parallel.\n")
@@ -574,8 +583,6 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
           ## If distmat was provided, let it be shown in the results
           if (distmat_flag) {
-               family@dist <- function(...) stop("'distmat' provided in call, no distance calculations performed")
-
                if (!is.null(attr(distmat, "method")))
                     distance <- attr(distmat, "method")
                else
@@ -626,6 +633,9 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
           if (any(hclust_methods == "all"))
                hclust_methods <- c("ward.D", "ward.D2", "single", "complete",
                                    "average", "mcquitty", "median", "centroid")
+
+          if (tolower(distance) == "dtw_lb")
+               warning("Using dtw_lb with hierarchical clustering is not advised.")
 
           ## Take advantage of the function I defined for the partitional methods
           ## Which can do calculations in parallel if appropriate
@@ -680,6 +690,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                     cluster <- stats::cutree(hc, k)
 
                     if (is.function(centroid)) {
+                         allcent <- centroid
+
                          centers <- lapply(1L:k, function(kcent) centroid(data[cluster == kcent]))
 
                          cldist <- do.call("distfun", c(list(x = data,
@@ -690,6 +702,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                          cldist <- as.matrix(cldist)
 
                     } else {
+                         allcent <- function(dummy) { data[which.min(apply(D, 1L, sum))] }
+
                          centers <- sapply(1L:k, function(kcent) {
                               id_k <- cluster == kcent
 
@@ -714,6 +728,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                         control = control,
                         family = new("dtwclustFamily",
                                      dist = distfun,
+                                     allcent = allcent,
                                      preproc = preproc),
                         distmat = D,
 
@@ -766,7 +781,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
           ## ----------------------------------------------------------------------------------------------------------
 
           if (control@trace)
-               cat("\nEntering TADPole...\n")
+               cat("\nEntering TADPole...\n\n")
 
           ## mainly for predict generic
           distfun <- ddist("dtw_lb", control = control, distmat = NULL)
@@ -784,7 +799,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                R <- TADPole(data, window.size = control@window.size, k = k, dc = dc, error.check = FALSE)
 
                if (control@trace) {
-                    cat("\nTADPole completed, pruning percentage = ",
+                    cat("TADPole completed, pruning percentage = ",
                         formatC(100 - R$distCalcPercentage, digits = 3L, width = -1L, format = "fg"),
                         "%\n\n",
                         sep = "")
@@ -795,8 +810,10 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                ## ----------------------------------------------------------------------------------------------------------
 
                if (is.function(centroid)) {
+                    allcent <- centroid
                     centers <- lapply(1L:k, function(kcent) centroid(data[R$cl == kcent]))
                } else {
+                    allcent <- function(dummy) { data[R$centers[1L]] }
                     centers <- data[R$centers]
                }
 
@@ -816,6 +833,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                    control = control,
                    family = new("dtwclustFamily",
                                 dist = distfun,
+                                allcent = allcent,
                                 preproc = preproc),
                    distmat = NULL,
 
@@ -840,14 +858,18 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
      toc <- proc.time() - tic
 
-     if (class(RET) == "dtwclust")
+     if (class(RET) == "dtwclust") {
           RET@proctime <- toc
-     else
+          RET@dots <- dots
+
+     } else {
           RET <- lapply(RET, function(ret) {
                ret@proctime <- toc
+               ret@dots <- dots
 
                ret
           })
+     }
 
      if (type %in% c("partitional", "fuzzy") && (control@nrep > 1L || length(k) > 1L))
           attr(RET, "rng") <- unlist(rng0, recursive = FALSE, use.names = FALSE)

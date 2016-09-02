@@ -28,7 +28,9 @@
 \item{evaluate}{Logical. Defaults to \code{TRUE} and evaluates the updated call, which will result in
 a new \code{dtwclust} object. Otherwise, it returns the unevaluated call.}
 
-\item{newdata}{New data to be evaluated. It can take any of the supported formats of \code{\link{dtwclust}}.}
+\item{newdata}{New data to be evaluated. It can take any of the supported formats of \code{\link{dtwclust}}.
+Note that for multivariate series, this means that it \strong{must} be a list of matrices, even if the list
+has only one element.}
 
 \item{y}{Ignored.}
 
@@ -94,6 +96,7 @@ If created, the function returns the \code{gg} object invisibly, in case you wan
 liking. You might want to look at \code{\link[ggplot2]{ggplot_build}} if that's the case.
 }
 \seealso{
-\code{\link{dtwclust-class}}, \code{\link{dtwclust}}, \code{\link[ggplot2]{ggplot}}
+\code{\link{dtwclust-class}}, \code{\link{dtwclust}}, \code{\link[ggplot2]{ggplot}},
+\code{\link{cvi}}
 }
 

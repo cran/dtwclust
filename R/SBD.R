@@ -17,10 +17,6 @@
 #' If you wish to calculate the distance between several time series, it would be better to use the version
 #' registered with the \code{proxy} package, since it includes some small optimizations. See the examples.
 #'
-#' However, because of said optimizations and the way \code{proxy}'s \code{\link[proxy]{dist}} works, the
-#' latter's \code{pairwise} argument will not work with this distance. You can use the custom argument
-#' \code{force.pairwise} to get the correct result.
-#'
 #' This distance is calculated with help of the Fast Fourier Transform, so it can be sensitive to numerical
 #' precision. Results could vary slightly between 32 and 64 bit architectures.
 #'
@@ -86,17 +82,17 @@ SBD <- function(x, y, znorm = FALSE) {
      shift <- which.max(CCseq) - max(nx, ny)
 
      if (is.null(flip)) {
-          if (shift < 0)
-               yshift <- y[(-shift+1):ny]
+          if (shift < 0L)
+               yshift <- y[(-shift + 1L):ny]
           else
                yshift <- c( rep(0, shift), y )
 
      } else {
           ## Remember, if I flipped them, then I have to shift what is now saved in 'x'
-          if (shift < 0)
+          if (shift < 0L)
                yshift <- c( rep(0, -shift), x )
           else
-               yshift <- x[(shift+1):ny]
+               yshift <- x[(shift + 1L):ny]
      }
 
      nys <- length(yshift)
@@ -104,7 +100,7 @@ SBD <- function(x, y, znorm = FALSE) {
      if (nys < nx)
           yshift <- c( yshift, rep(0, nx-nys) )
      else
-          yshift <- yshift[1:nx]
+          yshift <- yshift[1L:nx]
 
      list(dist = 1 - m, yshift = yshift)
 }
@@ -113,7 +109,7 @@ SBD <- function(x, y, znorm = FALSE) {
 # Wrapper for proxy::dist
 # ========================================================================================================
 
-SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, force.pairwise = FALSE) {
+SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise = FALSE) {
 
      x <- consistency_check(x, "tsmat")
 
@@ -150,13 +146,13 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, force.pair
      x <- split_parallel(x)
      fftx <- split_parallel(fftx)
 
-     if (force.pairwise) {
+     if (pairwise) {
           y <- split_parallel(y)
           ffty <- split_parallel(ffty)
      }
 
      ## Calculate distance matrix
-     if (force.pairwise) {
+     if (pairwise) {
           D <- foreach(x = x, fftx = fftx, y = y, ffty = ffty,
                        .combine = c,
                        .multicombine = TRUE,
@@ -168,8 +164,8 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, force.pair
                                         CCseq <- Re(stats::fft(fftx * Conj(ffty), inverse = TRUE)) / length(fftx)
 
                                         ## Truncate to correct length
-                                        CCseq <- c(CCseq[(length(ffty)-length(y)+2):length(CCseq)],
-                                                   CCseq[1:length(x)])
+                                        CCseq <- c(CCseq[(length(ffty) - length(y) + 2L):length(CCseq)],
+                                                   CCseq[1L:length(x)])
 
                                         CCseq <- CCseq / (sqrt(crossprod(x)) * sqrt(crossprod(y)))
 
@@ -183,35 +179,36 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, force.pair
 
      } else {
           D <- foreach(x = x, fftx = fftx,
-                       .combine = cbind,
+                       .combine = rbind,
                        .multicombine = TRUE,
                        .packages = "stats") %dopar% {
-                            mapply(x, fftx, MoreArgs = list(Y = y, FFTY = ffty),
-                                   FUN = function(x, fftx, Y, FFTY) {
+                            ret <- mapply(x, fftx,
+                                          MoreArgs = list(Y = y, FFTY = ffty),
+                                          SIMPLIFY = FALSE,
+                                          FUN = function(x, fftx, Y, FFTY) {
+                                               mapply(Y, FFTY,
+                                                      MoreArgs = list(x = x, fftx = fftx),
+                                                      FUN = function(y, ffty, x, fftx) {
+                                                           ## Manually normalize by length
+                                                           CCseq <- Re(stats::fft(fftx * Conj(ffty),
+                                                                                  inverse = TRUE)) / length(fftx)
 
-                                        d <- mapply(Y, FFTY, MoreArgs = list(x = x, fftx = fftx),
-                                                    FUN = function(y, ffty, x, fftx) {
+                                                           ## Truncate to correct length
+                                                           CCseq <- c(CCseq[(length(ffty) - length(y) + 2L):length(CCseq)],
+                                                                      CCseq[1L:length(x)])
 
-                                                         ## Manually normalize by length
-                                                         CCseq <- Re(stats::fft(fftx * Conj(ffty), inverse = TRUE)) / length(fftx)
+                                                           CCseq <- CCseq / (sqrt(crossprod(x)) * sqrt(crossprod(y)))
 
-                                                         ## Truncate to correct length
-                                                         CCseq <- c(CCseq[(length(ffty)-length(y)+2):length(CCseq)],
-                                                                    CCseq[1:length(x)])
+                                                           dd <- 1 - max(CCseq)
 
-                                                         CCseq <- CCseq / (sqrt(crossprod(x)) * sqrt(crossprod(y)))
+                                                           dd
+                                                      })
+                                          })
 
-                                                         dd <- 1 - max(CCseq)
-
-                                                         dd
-                                                    })
-
-                                        d
-                                   })
+                            do.call(rbind, ret)
                        }
 
           attr(D, "class") <- "crossdist"
-          D <- t(D)
      }
 
      attr(D, "method") <- "SBD"

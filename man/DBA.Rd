@@ -8,17 +8,21 @@ DBA(X, center = NULL, max.iter = 20L, norm = "L1", window.size = NULL,
   delta = 0.001, error.check = TRUE, trace = FALSE, ...)
 }
 \arguments{
-\item{X}{A data matrix where each row is a time series, or a list where each element is a time series.}
+\item{X}{A data matrix where each row is a time series, or a list where each element is a time series.
+Multivariate series should be provided as a list of matrices where time spans the rows and the variables
+span the columns.}
 
-\item{center}{Optionally, a time series to use as reference. It must be a numeric vector. Defaults to a
-random series of \code{X} if \code{NULL}.}
+\item{center}{Optionally, a time series to use as reference. Defaults to a random series of \code{X} if
+\code{NULL}. For multivariate series, this should be a matrix with the same characteristics as the
+matrices in \code{X}.}
 
 \item{max.iter}{Maximum number of iterations allowed.}
 
 \item{norm}{Norm for the local cost matrix of DTW. Either "L1" for Manhattan distance or "L2" for Euclidean
 distance.}
 
-\item{window.size}{Window constraint for the DTW calculations. \code{NULL} means no constraint.}
+\item{window.size}{Window constraint for the DTW calculations. \code{NULL} means no constraint. A slanted
+band is used by default.}
 
 \item{delta}{At iteration \code{i}, if \code{all(abs(center_{i}} \code{ - center_{i-1})} \code{ < delta)},
 convergence is assumed.}
@@ -27,8 +31,7 @@ convergence is assumed.}
 
 \item{trace}{If \code{TRUE}, the current iteration is printed to screen.}
 
-\item{...}{Further arguments for \code{\link[dtw]{dtw}}, e.g. \code{step.pattern}. Do not provide
-\code{window.type} here, just set \code{window.size} to the desired value.}
+\item{...}{Further arguments for \code{\link[dtw]{dtw}}, e.g. \code{step.pattern}.}
 }
 \value{
 The average time series.

@@ -16,11 +16,8 @@
 #' The lower bound is defined for time series of equal length only and is \strong{not} symmetric.
 #'
 #' If you wish to calculate the lower bound between several time series, it would be better to use the version
-#' registered with the \code{proxy} package, since it includes some small optimizations. See the examples.
-#'
-#' However, because of said optimizations and the way \code{proxy}'s \code{\link[proxy]{dist}} works, the
-#' latter's \code{pairwise} argument will not work with this distance. You can use the custom argument
-#' \code{force.pairwise} to get the correct result.
+#' registered with the \code{proxy} package, since it includes some small optimizations. The convention
+#' mentioned above for references and queries still holds. See the examples.
 #'
 #' @references
 #'
@@ -56,9 +53,14 @@
 #' @param x A time series (reference).
 #' @param y A time series with the same length as \code{x} (query).
 #' @param window.size Window size for envelope calculation. See details.
-#' @param norm Pointwise distance. Either \code{L1} for Manhattan distance or \code{L2} for Euclidean.
-#' @param lower.env Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided.
-#' @param upper.env Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided.
+#' @param norm Vector norm. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.
+#' @param lower.env Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided
+#' (non-proxy version only).
+#' @param upper.env Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided
+#' (non-proxy version only).
+#' @param force.symmetry If \code{TRUE}, a second lower bound is calculated by swapping \code{x} and
+#' \code{y}, and whichever result has a \emph{higher} distance value is returned. The proxy version
+#' can only work if a square matrix is obtained, but use carefully.
 #'
 #' @return A list with: \itemize{
 #'   \item \code{d}: The lower bound of the DTW distance.
@@ -69,20 +71,24 @@
 #' @export
 #'
 
-lb_keogh <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, upper.env = NULL) {
+lb_keogh <- function(x, y, window.size = NULL, norm = "L1",
+                     lower.env = NULL, upper.env = NULL, force.symmetry = FALSE) {
 
      norm <- match.arg(norm, c("L1", "L2"))
 
      consistency_check(x, "ts")
-     consistency_check(y, "ts")
 
-     if (length(x) != length(y))
-          stop("The series must have the same length")
+     if (is.null(lower.env) || is.null(upper.env)) {
+          consistency_check(y, "ts")
 
-     window.size <- consistency_check(window.size, "window")
+          if (length(x) != length(y))
+               stop("The series must have the same length")
 
-     if (window.size > length(x))
-          stop("The width of the window should not exceed the length of the series")
+          window.size <- consistency_check(window.size, "window")
+
+          if (window.size > length(x))
+               stop("The width of the window should not exceed the length of the series")
+     }
 
      ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
      if (is.null(lower.env) && is.null(upper.env)) {
@@ -97,11 +103,11 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, up
           upper.env <- caTools::runmax(y, window.size*2L + 1L)
      }
 
-     if (length(lower.env) != length(y))
-          stop("Length mismatch between 'y' and its lower envelope")
+     if (length(lower.env) != length(x))
+          stop("Length mismatch between 'x' and the lower envelope")
 
-     if (length(upper.env) != length(y))
-          stop("Length mismatch between 'y' and its upper envelope")
+     if (length(upper.env) != length(x))
+          stop("Length mismatch between 'x' and the upper envelope")
 
      D <- rep(0, length(x))
 
@@ -114,6 +120,17 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, up
                  L1 = sum(D),
                  L2 = sqrt(sum(D^2)))
 
+     if (force.symmetry) {
+          d2 <- lb_keogh(x = y, y = x, window.size = window.size, norm = norm)
+
+          if (d2$d > d) {
+               d <- d2$d
+               lower.env = d2$lower.env
+               upper.env = d2$upper.env
+          }
+     }
+
+     ## Finish
      list(d = d,
           upper.env = upper.env,
           lower.env = lower.env)
@@ -123,8 +140,8 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1", lower.env = NULL, up
 # Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
 # ========================================================================================================
 
-lb_keogh_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE,
-                          force.symmetry = FALSE, norm = "L1", force.pairwise = FALSE) {
+lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
+                           force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE) {
 
      norm <- match.arg(norm, c("L1", "L2"))
 
@@ -162,30 +179,21 @@ lb_keogh_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE,
 
      x <- split_parallel(x)
 
-     if (force.pairwise) {
+     if (pairwise) {
           lower.env <- split_parallel(lower.env)
           upper.env <- split_parallel(upper.env)
      }
 
-     if (force.pairwise) {
+     if (pairwise) {
           D <- foreach(x = x, lower.env = lower.env, upper.env = upper.env,
                        .combine = c,
                        .multicombine = TRUE) %dopar% {
                             mapply(upper.env, lower.env, x,
                                    FUN = function(u, l, x) {
-
-                                        D <- rep(0, length(x))
-
-                                        ind1 <- x > u
-                                        D[ind1] <- x[ind1] - u[ind1]
-                                        ind2 <- x < l
-                                        D[ind2] <- l[ind2] - x[ind2]
-
-                                        d <- switch(EXPR = norm,
-                                                    L1 = sum(D),
-                                                    L2 = sqrt(sum(D^2)))
-
-                                        d
+                                        lb_keogh(x,
+                                                 norm = norm,
+                                                 lower.env = l,
+                                                 upper.env = u)$d
                                    })
                        }
 
@@ -193,37 +201,29 @@ lb_keogh_loop <- function(x, y = NULL, window.size = NULL, error.check = TRUE,
 
      } else {
           D <- foreach(x = x,
-                       .combine = cbind,
+                       .combine = rbind,
                        .multicombine = TRUE) %dopar% {
-                            sapply(X=x, U=upper.env, L=lower.env,
-                                   FUN = function(x, U, L) {
+                            ret <- lapply(X = x, U = upper.env, L = lower.env,
+                                          FUN = function(x, U, L) {
+                                               ## This will return one row of the distance matrix
+                                               D <- mapply(U, L,
+                                                           MoreArgs = list(x = x),
+                                                           FUN = function(u, l, x) {
+                                                                lb_keogh(x,
+                                                                         norm = norm,
+                                                                         lower.env = l,
+                                                                         upper.env = u)$d
+                                                           })
+                                               D
+                                          })
 
-                                        ## This will return one column of the distance matrix
-                                        D <- mapply(U, L, MoreArgs=list(x=x),
-                                                    FUN = function(u, l, x) {
-
-                                                         D <- rep(0, length(x))
-
-                                                         ind1 <- x > u
-                                                         D[ind1] <- x[ind1] - u[ind1]
-                                                         ind2 <- x < l
-                                                         D[ind2] <- l[ind2] - x[ind2]
-
-                                                         d <- switch(EXPR = norm,
-                                                                     L1 = sum(D),
-                                                                     L2 = sqrt(sum(D^2)))
-
-                                                         d
-                                                    })
-                                        D
-                                   })
+                            do.call(rbind, ret)
                        }
 
           attr(D, "class") <- "crossdist"
-          D <- t(D)
      }
 
-     if (force.symmetry && !force.pairwise) {
+     if (force.symmetry && !pairwise) {
           if (nrow(D) != ncol(D)) {
                warning("Unable to force symmetry. Resulting distance matrix is not square.")
 

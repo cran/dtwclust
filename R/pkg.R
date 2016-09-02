@@ -23,19 +23,14 @@
 #'
 #' Other packages that are particularly leveraged here are the \code{proxy} package for distance
 #' matrix calculations, and the \code{dtw} package for the core DTW calculations. The main clustering
-#' function and entry point for this package is \code{\link{dtwclust}}. There are a couple of things
-#' to bear in mind while using this package:
+#' function and entry point for this package is \code{\link{dtwclust}}.
 #'
-#' Most distance calculations make use of the \code{\link[proxy]{dist}} function in the \code{proxy}
-#' package, which accepts one or two arguments for data objects (\code{x} and \code{y}). Users should
-#' use the two-input \strong{list} version, even if there is just one dataset (i.e.
-#' \code{proxy::dist(x = dataset, y = dataset, ...)}), because otherwise it sometimes fails to
-#' detect a whole time series as a single object and, instead, calculates distances between each observation
-#' of each time series.
-#'
-#' Additionally, please note the random number generator is set to L'Ecuyer-CMRG when \code{dtwclust}
+#' Please note the random number generator is set to L'Ecuyer-CMRG when \code{dtwclust}
 #' is attached in an attempt to preserve reproducibility. You are free to change this afterwards if
 #' you wish. See \code{\link[base]{RNGkind}}.
+#'
+#' For more information, please read the included package vignette, which can be accessed by typing
+#' \code{vignette("dtwclust")}.
 #'
 #' @docType package
 #' @name dtwclust-package
@@ -43,6 +38,9 @@
 #' @author Alexis Sarda-Espinosa
 #'
 #' @references
+#'
+#' Arbelaitz, O., Gurrutxaga, I., Muguerza, J., Perez, J. M., & Perona, I. (2013). An extensive
+#' comparative study of cluster validity indices. Pattern Recognition, 46(1), 243-256.
 #'
 #' Begum N, Ulanova L, Wang J and Keogh E (2015). ``Accelerating Dynamic Time Warping Clustering with
 #' a Novel Admissible Pruning Strategy.'' In \emph{Conference on Knowledge Discovery and Data Mining},
@@ -121,6 +119,7 @@
 #' @importFrom stats runif
 #' @importFrom flexclust randIndex
 #' @importFrom flexclust clusterSim
+#' @importFrom flexclust comPart
 #' @importFrom graphics plot
 #' @importFrom rngtools RNGseq
 #' @importFrom rngtools setRNG
@@ -130,6 +129,7 @@
 NULL
 
 .onAttach <- function(lib, pkg) {
+     ## proxy_prefun is in utils.R
 
      ## Register DTW2
      if (!consistency_check("DTW2", "dist", silent = TRUE))
@@ -140,36 +140,38 @@ NULL
 
      ## Register LB_Keogh with the 'proxy' package for distance matrix calculation
      if (!consistency_check("LB_Keogh", "dist", silent = TRUE))
-          proxy::pr_DB$set_entry(FUN = lb_keogh_loop, names=c("LBK", "LB_Keogh", "lbk"),
+          proxy::pr_DB$set_entry(FUN = lb_keogh_proxy, names=c("LBK", "LB_Keogh", "lbk"),
                                  loop = FALSE, type = "metric", distance = TRUE,
                                  description = "Keogh's DTW lower bound for the Sakoe-Chiba band",
-                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
+                                 PACKAGE = "dtwclust", PREFUN = proxy_prefun)
 
 
      ## Register LB_Improved with the 'proxy' package for distance matrix calculation
      if (!consistency_check("LB_Improved", "dist", silent = TRUE))
-          proxy::pr_DB$set_entry(FUN = lb_improved_loop, names=c("LBI", "LB_Improved", "lbi"),
+          proxy::pr_DB$set_entry(FUN = lb_improved_proxy, names=c("LBI", "LB_Improved", "lbi"),
                                  loop = FALSE, type = "metric", distance = TRUE,
                                  description = "Lemire's improved DTW lower bound for the Sakoe-Chiba band",
-                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
+                                 PACKAGE = "dtwclust", PREFUN = proxy_prefun)
 
      ## Register SBD
      if (!consistency_check("SBD", "dist", silent = TRUE))
           proxy::pr_DB$set_entry(FUN = SBD.proxy, names=c("SBD", "sbd"),
                                  loop = FALSE, type = "metric", distance = TRUE,
                                  description = "Paparrizos and Gravanos' shape-based distance for time series",
-                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
+                                 PACKAGE = "dtwclust", PREFUN = proxy_prefun)
 
      ## Register DTW_LB
      if (!consistency_check("DTW_LB", "dist", silent = TRUE))
           proxy::pr_DB$set_entry(FUN = dtw_lb, names=c("DTW_LB", "dtw_lb"),
                                  loop = FALSE, type = "metric", distance = TRUE,
                                  description = "DTW distance aided with Lemire's lower bound",
-                                 PACKAGE = "dtwclust") #, PREFUN = proxy_prefun)
+                                 PACKAGE = "dtwclust", PREFUN = proxy_prefun)
 
      RNGkind("L'Ecuyer")
 
-     packageStartupMessage("Setting random number generator to L'Ecuyer-CMRG")
+     packageStartupMessage("\ndtwclust: Setting random number generator to L'Ecuyer-CMRG.\n",
+                           "To read the included vignette, type vignette(",
+                           dQuote("dtwclust"), ").\n")
 }
 
 .onUnload <- function(libpath) {

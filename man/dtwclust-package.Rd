@@ -29,24 +29,22 @@ may be used, or series could be reinterpolated to a matching length (Ratanamahat
 
 Other packages that are particularly leveraged here are the \code{proxy} package for distance
 matrix calculations, and the \code{dtw} package for the core DTW calculations. The main clustering
-function and entry point for this package is \code{\link{dtwclust}}. There are a couple of things
-to bear in mind while using this package:
+function and entry point for this package is \code{\link{dtwclust}}.
 
-Most distance calculations make use of the \code{\link[proxy]{dist}} function in the \code{proxy}
-package, which accepts one or two arguments for data objects (\code{x} and \code{y}). Users should
-use the two-input \strong{list} version, even if there is just one dataset (i.e.
-\code{proxy::dist(x = dataset, y = dataset, ...)}), because otherwise it sometimes fails to
-detect a whole time series as a single object and, instead, calculates distances between each observation
-of each time series.
-
-Additionally, please note the random number generator is set to L'Ecuyer-CMRG when \code{dtwclust}
+Please note the random number generator is set to L'Ecuyer-CMRG when \code{dtwclust}
 is attached in an attempt to preserve reproducibility. You are free to change this afterwards if
 you wish. See \code{\link[base]{RNGkind}}.
+
+For more information, please read the included package vignette, which can be accessed by typing
+\code{vignette("dtwclust")}.
 }
 \author{
 Alexis Sarda-Espinosa
 }
 \references{
+Arbelaitz, O., Gurrutxaga, I., Muguerza, J., Perez, J. M., & Perona, I. (2013). An extensive
+comparative study of cluster validity indices. Pattern Recognition, 46(1), 243-256.
+
 Begum N, Ulanova L, Wang J and Keogh E (2015). ``Accelerating Dynamic Time Warping Clustering with
 a Novel Admissible Pruning Strategy.'' In \emph{Conference on Knowledge Discovery and Data Mining},
 series KDD '15. ISBN 978-1-4503-3664-2/15/08, \url{http://dx.doi.org/10.1145/2783258.2783286}.

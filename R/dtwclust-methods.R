@@ -11,7 +11,8 @@
 #' @rdname dtwclust-methods
 #' @include dtwclust-classes.R
 #'
-#' @seealso \code{\link{dtwclust-class}}, \code{\link{dtwclust}}, \code{\link[ggplot2]{ggplot}}
+#' @seealso \code{\link{dtwclust-class}}, \code{\link{dtwclust}}, \code{\link[ggplot2]{ggplot}},
+#' \code{\link{cvi}}
 #'
 NULL
 
@@ -24,7 +25,7 @@ setMethod("initialize", "dtwclust",
           function(.Object, ..., call) {
                .Object <- callNextMethod(.Object = .Object, ...)
 
-               if(!missing(call))
+               if (!missing(call))
                     .Object@call <- call
 
                .Object
@@ -127,6 +128,8 @@ setMethod("update", "dtwclust",
 #' @aliases predict,dtwclust-method
 #'
 #' @param newdata New data to be evaluated. It can take any of the supported formats of \code{\link{dtwclust}}.
+#' Note that for multivariate series, this means that it \strong{must} be a list of matrices, even if the list
+#' has only one element.
 #'
 #' @exportMethod predict
 #'
@@ -140,10 +143,16 @@ setMethod("predict", "dtwclust",
 
                } else {
                     newdata <- consistency_check(newdata, "tsmat")
-                    nm <- names(newdata)
                     consistency_check(newdata, "vltslist")
+                    nm <- names(newdata)
+
                     newdata <- object@family@preproc(newdata)
-                    distmat <- object@family@dist(newdata, object@centers, ...)
+
+                    distmat <- do.call(object@family@dist,
+                                       args = c(list(x = newdata,
+                                                     centers = object@centers),
+                                                object@dots))
+
                     ret <- object@family@cluster(distmat = distmat, m = object@control@fuzziness)
 
                     if (object@type != "fuzzy")
@@ -224,7 +233,7 @@ setMethod("plot", signature(x = "dtwclust", y = "missing"),
                     type <- "sc"
 
                ## plot dendrogram?
-               if(x@type == "hierarchical" && type == "dendrogram") {
+               if (x@type == "hierarchical" && type == "dendrogram") {
                     x <- S3Part(x, strictS3 = TRUE)
                     if (plot) plot(x, ...)
                     return(invisible(NULL))
@@ -275,9 +284,9 @@ setMethod("plot", signature(x = "dtwclust", y = "missing"),
 
                ## Check if data was z-normalized
                if (x@preproc == "zscore")
-                    titleStr <- "Clusters members (z-normalized)"
+                    titleStr <- "Clusters' members (z-normalized)"
                else
-                    titleStr <- "Clusters members"
+                    titleStr <- "Clusters' members"
 
                ## transform data
 
@@ -322,7 +331,7 @@ setMethod("plot", signature(x = "dtwclust", y = "missing"),
                                        group = "variable"))
 
                if (type %in% c("sc", "centroids")) {
-                    if(length(list(...)) == 0L)
+                    if (length(list(...)) == 0L)
                          gg <- gg + geom_line(data = cenm[cenm$cl %in% clus, ],
                                               linetype = "dashed",
                                               size = 1.5,
@@ -354,6 +363,207 @@ setMethod("plot", signature(x = "dtwclust", y = "missing"),
           })
 
 # ========================================================================================================
+# Cluster validity indices
+# ========================================================================================================
+
+#' @rdname cvi
+#' @aliases cvi,dtwclust-method
+#'
+setMethod("cvi", signature(a = "dtwclust"),
+          function(a, b = NULL, type = "valid", ...) {
+               if (a@type == "fuzzy")
+                    stop("Only CVIs for crisp partitions are currently implemented.")
+
+               type <- match.arg(type, several.ok = TRUE,
+                                 c("RI", "ARI", "J", "FM", "VI",
+                                   "Sil", "SF", "CH", "DB", "DBstar", "D", "COP",
+                                   "valid", "internal", "external"))
+
+               dots <- list(...)
+
+               internal <- c("Sil", "SF", "CH", "DB", "DBstar", "D", "COP")
+               external <- c("RI", "ARI", "J", "FM", "VI")
+
+               if (any(type == "valid")) {
+                    type <- if (is.null(b)) internal else c(internal, external)
+
+               } else if (any(type == "internal")) {
+                    type <- internal
+
+               } else if (any(type == "external")) {
+                    type <- external
+               }
+
+               which_internal <- type %in% internal
+               which_external <- type %in% external
+
+               if (any(which_external))
+                    CVIs <- cvi(a@cluster, b = b, type = type[which_external], ...)
+               else
+                    CVIs <- numeric()
+
+               if (any(which_internal)) {
+                    if ((!a@control@save.data || length(a@datalist) == 0L) &&
+                        any(type[which_internal] %in% c("SF", "CH"))) {
+                         warning("Internal CVIs: the original data must be in object to calculate ",
+                                 "the following indices:",
+                                 "\n\tSF\tCH")
+
+                         type <- setdiff(type, c("SF", "CH"))
+                         which_internal <- type %in% internal
+                    }
+
+                    ## calculate distmat if needed
+                    if (any(type[which_internal] %in% c("Sil", "D", "COP"))) {
+                         if (is.null(a@distmat)) {
+                              if (length(a@datalist) == 0L) {
+                                   warning("Internal CVIs: need distmat OR original data for indices:",
+                                           "\n\tSil\tD\tCOP\n",
+                                           "Please re-run the algorithm with save.data = TRUE, ",
+                                           "or save the datalist in the corresponding object slot.")
+
+                                   type <- setdiff(type, c("Sil", "D", "COP"))
+                                   which_internal <- type %in% internal
+
+                              } else {
+                                   distmat <- do.call(a@family@dist,
+                                                      args = c(list(x = a@datalist, centers = NULL),
+                                                               a@dots))
+                              }
+                         } else {
+                              distmat <- a@distmat
+                         }
+                    }
+
+                    ## are valid indices still left?
+                    if (length(type) == 0L)
+                         return(CVIs)
+
+                    ## calculate some values that both Davies-Bouldin indices use
+                    if (any(type[which_internal] %in% c("DB", "DBstar"))) {
+                         S <- tapply(a@cldist[ , 1L], list(a@cluster), mean)
+
+                         ## distance between centroids
+                         distcent <- do.call(a@family@dist,
+                                             args = c(list(x = a@centers, centers = NULL),
+                                                      a@dots))
+                    }
+
+                    ## calculate global centroids if needed
+                    if (any(type[which_internal] %in% c("SF", "CH"))) {
+                         N <- length(a@datalist)
+
+                         if (a@type == "partitional") {
+                              global_cent <- do.call(a@family@allcent,
+                                                     args = c(list(x = a@datalist,
+                                                                   cl_id = rep(1L, N),
+                                                                   k = 1L,
+                                                                   cent = a@datalist[sample(N, 1L)],
+                                                                   cl_old = rep(0L, N)),
+                                                              a@dots))
+                         } else {
+                              global_cent <- a@family@allcent(a@datalist)
+                         }
+
+                         dist_global_cent <- do.call(a@family@dist,
+                                                     args = c(list(x = a@centers, centers = global_cent),
+                                                              a@dots))
+
+                         dim(dist_global_cent) <- NULL
+                    }
+
+                    CVIs <- c(CVIs, sapply(type[which_internal], function(CVI) {
+                         switch(EXPR = CVI,
+                                ## Silhouette
+                                Sil = {
+                                     c_k <- as.numeric(table(a@cluster)[a@cluster])
+
+                                     ab <- lapply(unique(a@cluster), function(k) {
+                                          idx <- a@cluster == k
+
+                                          this_a <- rowSums(distmat[idx, idx, drop = FALSE]) / c_k[idx]
+
+                                          this_b <- apply(distmat[idx, !idx, drop = FALSE], 1L, function(row) {
+                                               ret <- row / c_k[!idx]
+                                               ret <- min(tapply(ret, a@cluster[!idx], sum))
+                                               ret
+                                          })
+
+                                          data.frame(a = this_a, b = this_b)
+                                     })
+
+                                     ab <- do.call(rbind, ab)
+
+                                     sum((ab$b - ab$a) / apply(ab, 1L, max)) / nrow(distmat)
+                                },
+
+                                ## Dunn
+                                D = {
+                                     pairs <- call_pairs(a@k)
+
+                                     deltas <- mapply(pairs[ , 1L], pairs[ , 2L],
+                                                      USE.NAMES = FALSE, SIMPLIFY = TRUE,
+                                                      FUN = function(i, j) {
+                                                           min(distmat[a@cluster == i,
+                                                                       a@cluster == j,
+                                                                       drop = TRUE])
+                                                      })
+
+                                     Deltas <- sapply(1L:a@k, function(k) {
+                                          max(distmat[a@cluster == k, a@cluster == k, drop = TRUE])
+                                     })
+
+                                     min(deltas) / max(Deltas)
+                                },
+
+                                ## Davies-Bouldin
+                                DB = {
+                                     mean(sapply(1L:a@k, function(k) {
+                                          max(sapply(setdiff(1L:a@k, k), function(l) {
+                                               (S[k] + S[l]) / distcent[k, l]
+                                          }))
+                                     }))
+                                },
+
+                                ## Modified DB -> DB*
+                                DBstar = {
+                                     mean(sapply(1L:a@k, function(k) {
+                                          max(S[k] + S[-k]) / min(distcent[k, -k, drop = TRUE])
+                                     }))
+                                },
+
+                                ## Calinski-Harabasz
+                                CH = {
+                                     (N - a@k) /
+                                          (a@k - 1) *
+                                          sum(tabulate(a@cluster) * dist_global_cent) /
+                                          sum(a@cldist[ , 1L, drop = TRUE])
+                                },
+
+                                ## Score function
+                                SF = {
+                                     bcd <- sum(tabulate(a@cluster) * dist_global_cent) / (N * a@k)
+                                     wcd <- sum(tapply(a@cldist[ , 1L, drop = TRUE], list(a@cluster), mean))
+                                     1 - 1 / exp(exp(bcd - wcd))
+                                },
+
+                                ## COP
+                                COP = {
+                                     1 / nrow(distmat) * sum(sapply(1L:a@k, function(k) {
+                                          sum(a@cldist[a@cluster == k, 1L]) / min(apply(distmat[a@cluster != k,
+                                                                                                a@cluster == k,
+                                                                                                drop = FALSE],
+                                                                                        2L,
+                                                                                        max))
+                                     }))
+                                })
+                    }))
+               }
+
+               CVIs
+          })
+
+# ========================================================================================================
 # Rand Index from flexclust package
 # ========================================================================================================
 
@@ -382,6 +592,7 @@ NULL
 #'
 setMethod("randIndex", signature(x="dtwclust", y="ANY"),
           function(x, y, correct = TRUE, original = !correct) {
+               message("Consider using the 'cvi' function for more options.")
                randIndex(x@cluster, y, correct = correct, original = original)
           })
 
@@ -390,6 +601,7 @@ setMethod("randIndex", signature(x="dtwclust", y="ANY"),
 #'
 setMethod("randIndex", signature(x="ANY", y="dtwclust"),
           function(x, y, correct = TRUE, original = !correct) {
+               message("Consider using the 'cvi' function for more options.")
                randIndex(x, y@cluster, correct = correct, original = original)
           })
 
@@ -398,6 +610,7 @@ setMethod("randIndex", signature(x="ANY", y="dtwclust"),
 #'
 setMethod("randIndex", signature(x="dtwclust", y="dtwclust"),
           function(x, y, correct = TRUE, original = !correct) {
+               message("Consider using the 'cvi' function for more options.")
                randIndex(x@cluster, y@cluster, correct = correct, original = original)
           })
 
@@ -438,12 +651,20 @@ setMethod("clusterSim", "dtwclust",
                     return(matrix(1))
 
                if (method == "shadow") {
-                    if (is.null(data))
-                         data <- object@datalist
-                    else
-                         data <- consistency_check(data, "tsmat")
+                    if (is.null(data)) {
+                         if (!object@control@save.data)
+                              stop("No data provided nor found in the dtwclust object.")
 
-                    distmat <- object@family@dist(data, object@centers)
+                         data <- object@datalist
+
+                    } else {
+                         data <- consistency_check(data, "tsmat")
+                    }
+
+                    distmat <- do.call(object@family@dist,
+                                       args = c(list(x = data,
+                                                     centers = object@centers),
+                                                object@dots))
 
                     r <- t(matrix(apply(distmat, 1, rank, ties.method = "first"),
                                   nrow = ncol(distmat)))
@@ -474,39 +695,16 @@ setMethod("clusterSim", "dtwclust",
                          z <- (z + t(z))/2
 
                } else {
-                    z <- object@family@dist(object@centers, object@centers)
+                    z <- do.call(object@family@dist,
+                                 args = c(list(x = object@centers,
+                                               centers = object@centers),
+                                          object@dots))
+
                     z <- 1 - z/max(z)
                }
 
                z
           })
-
-# ========================================================================================================
-# info from modeltools (perhaps for internal support of some flexclust functions)
-# ========================================================================================================
-
-# setMethod("info", "dtwclust",
-#           function(object, which, ...) {
-#                ret <- switch(EXPR = which,
-#                              help = c("distsum", "size", "av_dist"),
-#                              distsum = sum(object@cldist[, 1]),
-#                              size = {
-#                                   var <- object@clusinfo$size
-#                                   names(var) <- rownames(object@clusinfo)
-#
-#                                   var
-#                              },
-#                              av_dist = {
-#                                   var <- object@clusinfo$av_dist
-#                                   names(var) <- rownames(object@clusinfo)
-#
-#                                   var
-#                              },
-#
-#                              stop("Requested info not available. Use which = 'help'."))
-#
-#                ret
-#           })
 
 # ========================================================================================================
 # Validity and coercion methods for control
@@ -562,3 +760,25 @@ setAs("NULL", "dtwclustControl",
       function(from, to) {
            new(to)
       })
+
+# ========================================================================================================
+# Coercion methods for cross/pair-dist
+# ========================================================================================================
+
+as.matrix.crossdist <- function(x, ...) {
+     class(x) <- NULL
+     as.matrix(x, ...)
+}
+
+as.matrix.pairdist <- function(x, ...) {
+     class(x) <- NULL
+     as.matrix(x, ...)
+}
+
+as.data.frame.crossdist <- function(x, ...) {
+     as.data.frame(as.matrix(x, ...), ...)
+}
+
+as.data.frame.pairdist <- function(x, ...) {
+     as.data.frame(as.matrix(x, ...), ...)
+}

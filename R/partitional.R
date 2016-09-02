@@ -1,5 +1,5 @@
 # ========================================================================================================
-# Modified version of kcca to use lists of time series (to support different lengths)
+# Modified version of flexclust::kcca to use lists of time series
 # ========================================================================================================
 
 kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
@@ -16,7 +16,7 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
      if (fuzzy) {
           cluster <- matrix(0, N, k)
           cluster[ , -1L] <- stats::runif(N *(k - 1L)) / (k - 1)
-          cluster[ , 1L] <- 1 - apply(cluster[ , -1L], 1L, sum)
+          cluster[ , 1L] <- 1 - apply(cluster[ , -1L, drop = FALSE], 1L, sum)
           centers <- family@allcent(x, cluster, k, ...)
 
      } else {
@@ -39,7 +39,7 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
           centers <- family@allcent(x, cluster, k, centers, clustold, ...)
 
           if (fuzzy) {
-               # utils.R
+               # fuzzy.R
                objective <- fuzzy_objective(cluster, distmat = distmat, m = control@fuzziness)
 
                if (control@trace) {

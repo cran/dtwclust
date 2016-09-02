@@ -1,7 +1,7 @@
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 [![CRAN\_Status\_Badge](http://www.r-pkg.org/badges/version/dtwclust)](https://cran.r-project.org/package=dtwclust) [![Downloads](http://cranlogs.r-pkg.org/badges/dtwclust)](https://cran.r-project.org/package=dtwclust)
 
-Time Series Clustering Along with Optimizations for the Dynamic Time Warping Distance (DTW)
+Time Series Clustering Along with Optimizations for the Dynamic Time Warping (DTW) Distance
 ===========================================================================================
 
 Time series clustering with a wide variety of strategies and a series of optimizations specific to the Dynamic Time Warping (DTW) distance and its corresponding lower bounds (LBs). There are implementations of both traditional clustering algorithms, and more recent procedures such as k-Shape and TADPole clustering. Functionality can be easily extended with custom distance measures and centroid definitions.
@@ -10,16 +10,23 @@ Many of the algorithms implemented in this package are specifically tailored to 
 
 DTW is a dynamic programming algorithm that tries to find the optimum warping path between two series. Over the years, several variations have appeared in order to make the procedure faster or more efficient. Please refer to the included references for more information, especially Giorgino (2009), which is a good practical introduction.
 
-Most optimizations require equal dimensionality, which means time series should have equal lengths. DTW itself does not require this, but it is relatively expensive to compute. Other distance definitions may be used, or series could be reinterpolated to a matching length (Ratanamahatana and Keogh, 2004).
+Most optimizations require equal dimensionality, which means time series should have equal length. DTW itself does not require this, but it is relatively expensive to compute. Other distance definitions may be used, or series could be reinterpolated to a matching length (Ratanamahatana and Keogh, 2004).
 
 Implementations
 ---------------
 
 -   Partitional, hierarchical and fuzzy clustering
--   Keogh's and Lemire's lower bounds
--   DTW Barycenter Averaging
 -   k-Shape clustering
 -   TADPole clustering
+-   DTW Barycenter Averaging
+-   Keogh's and Lemire's DTW lower bounds
+
+Installation
+------------
+
+The latest version from CRAN can be installed with `install.packages("dtwclust")`.
+
+If you want to test the latest version from github, first install the [prerequisites for R package development](https://support.rstudio.com/hc/en-us/articles/200486498-Package-Development-Prerequisites) and then type `devtools::install_github("asardaes/dtwclust")`. If you want the vignette to be installed, set the `build_vignettes` parameter to `TRUE`, it will take a couple of minutes.
 
 Examples
 --------
@@ -52,12 +59,12 @@ kc.dtwlb <- dtwclust(data = data, k = 20, distance = "dtw_lb",
 #> Iteration 4: Changes / Distsum = 2 / 1311.201
 #> Iteration 5: Changes / Distsum = 0 / 1311.201
 #> 
-#>  Elapsed time is 12.026 seconds.
+#>  Elapsed time is 10.037 seconds.
 
 plot(kc.dtwlb)
 ```
 
-![](README-partitional-1.png)<!-- -->
+![](README-partitional-1.png)
 
 ``` r
 ## =============================================================================================
@@ -73,24 +80,81 @@ hc.sbd <- dtwclust(datalist, type = "hierarchical",
 #> 
 #>  Performing hierarchical clustering...
 #> 
-#>  Elapsed time is 0.657 seconds.
+#>  Elapsed time is 0.695 seconds.
 
-cat("Rand index for HC+SBD:\n")
-#> Rand index for HC+SBD:
-print(ri <- sapply(hc.sbd, randIndex, y = CharTrajLabels))
-#>       ARI       ARI       ARI       ARI       ARI       ARI       ARI 
-#> 0.7497894 0.6880051 0.3099641 0.5202854 0.4496453 0.5472890 0.3737120 
-#>       ARI       ARI       ARI       ARI       ARI       ARI       ARI 
-#> 0.4252906 0.7405012 0.7034438 0.3428238 0.5302644 0.5125830 0.5746408 
-#>       ARI       ARI       ARI       ARI       ARI       ARI       ARI 
-#> 0.4182468 0.4196458 0.7442112 0.7050215 0.3501627 0.5223116 0.5073598 
-#>       ARI       ARI       ARI 
-#> 0.5698466 0.4517139 0.4462202
+cat("CVIs for HC+SBD:\n")
+#> CVIs for HC+SBD:
+print(cvis <- sapply(hc.sbd, cvi, b = CharTrajLabels))
+#>               [,1]        [,2]       [,3]        [,4]        [,5]
+#> ARI     0.74978939  0.68800515  0.3099641  0.52028537  0.44964526
+#> RI      0.97818182  0.97030303  0.8824242  0.94525253  0.92686869
+#> J       0.61428571  0.54205607  0.2145749  0.37557604  0.31698113
+#> FM      0.76614889  0.71634666  0.4249454  0.57846535  0.53232837
+#> VI      0.19822365  0.22966355  0.5661339  0.35605205  0.39562319
+#> Sil     0.57988078  0.60407120  0.3888051  0.55712005  0.54459348
+#> SF      0.36643161  0.38281683  0.4701455  0.41542295  0.44875986
+#> CH     27.05423386 26.54335013 16.9670382 24.03940574 22.49842911
+#> DB      0.63583376  0.64043681  0.5217145  0.61107493  0.49464680
+#> DBstar  1.61936383  1.11335876  0.9097630  0.78382455  0.69307237
+#> D       0.13801520  0.21341626  0.1308229  0.18439480  0.17588348
+#> COP     0.06956278  0.07242208  0.1244863  0.08522869  0.09168347
+#>               [,6]       [,7]        [,8]        [,9]       [,10]
+#> ARI     0.54728896  0.3737120  0.42529063  0.74050121  0.70344375
+#> RI      0.94909091  0.9074747  0.92181818  0.97838384  0.97232323
+#> J       0.40000000  0.2588997  0.29764065  0.60223048  0.55948553
+#> FM      0.60308485  0.4705882  0.51100510  0.75369221  0.72880580
+#> VI      0.34983127  0.4936223  0.43496098  0.22265488  0.21511035
+#> Sil     0.55292775  0.4498256  0.50365682  0.58811104  0.61748556
+#> SF      0.42993257  0.4555955  0.45353987  0.36348668  0.38500224
+#> CH     22.43963739 18.1705294 19.68318121 27.29320621 25.53616172
+#> DB      0.62649917  0.5316269  0.46641999  0.65336293  0.61402700
+#> DBstar  0.77189375  0.7499572  0.65255819  1.68466461  1.09582372
+#> D       0.16176333  0.1747119  0.19373597  0.13801520  0.22382404
+#> COP     0.08582413  0.1085514  0.09651714  0.06595574  0.06893191
+#>             [,11]       [,12]       [,13]       [,14]      [,15]
+#> ARI     0.3428238  0.53026441  0.51258299  0.57464085  0.4182468
+#> RI      0.8965657  0.94848485  0.94202020  0.95414141  0.9216162
+#> J       0.2369598  0.38405797  0.36923077  0.42531646  0.2919708
+#> FM      0.4479318  0.58214036  0.57759590  0.62350648  0.5019646
+#> VI      0.5185772  0.34855573  0.34677938  0.31972827  0.4460655
+#> Sil     0.4094015  0.53663563  0.56617496  0.57151588  0.4741491
+#> SF      0.4659191  0.40333496  0.44479800  0.43608567  0.4518092
+#> CH     17.1076283 23.50969213 23.28285129 23.03569943 19.6161099
+#> DB      0.5085174  0.72846310  0.46973394  0.55074053  0.5464752
+#> DBstar  0.9083771  0.95600061  0.61732267  0.64117537  0.7977064
+#> D       0.1308103  0.17967703  0.23163554  0.16176333  0.1747119
+#> COP     0.1154545  0.08337437  0.08273567  0.07841355  0.1000334
+#>              [,16]       [,17]       [,18]      [,19]       [,20]
+#> ARI     0.41964584  0.74421123  0.70502147  0.3501627  0.52231158
+#> RI      0.92202020  0.97878788  0.97252525  0.9030303  0.94787879
+#> J       0.29304029  0.60674157  0.56129032  0.2417062  0.37681159
+#> FM      0.50295569  0.75697629  0.73008778  0.4469178  0.57346741
+#> VI      0.44257501  0.21436184  0.20908975  0.5179086  0.35832449
+#> Sil     0.50197422  0.59978230  0.62335691  0.4332002  0.53741732
+#> SF      0.45568653  0.37749889  0.41900332  0.4622818  0.40959973
+#> CH     18.93844087 27.17714225 25.39711110 15.8362781 22.56431559
+#> DB      0.45639546  0.61387828  0.55601385  0.4538754  0.69863982
+#> DBstar  0.66318416  1.22942083  0.70446747  0.8258729  0.93239293
+#> D       0.19373597  0.15250536  0.24447014  0.1516362  0.18010010
+#> COP     0.09445372  0.06193398  0.06600764  0.1102822  0.08171361
+#>              [,21]       [,22]       [,23]       [,24]
+#> ARI     0.50735985  0.56984658  0.45171395  0.44622023
+#> RI      0.94222222  0.95434343  0.93070707  0.92929293
+#> J       0.36444444  0.42051282  0.31809145  0.31372549
+#> FM      0.56993940  0.61634974  0.52579262  0.52186246
+#> VI      0.35439340  0.32734230  0.40643794  0.40772660
+#> Sil     0.56463229  0.56980939  0.51550447  0.52593013
+#> SF      0.44692615  0.43820045  0.45165102  0.45082644
+#> CH     22.54062825 22.33204629 19.53887943 19.38570054
+#> DB      0.46193786  0.53595538  0.49555667  0.46748541
+#> DBstar  0.62239300  0.62757437  0.78276218  0.68310239
+#> D       0.23163554  0.16176333  0.17471193  0.24428149
+#> COP     0.08067224  0.07635012  0.09213935  0.08780314
 
-plot(hc.sbd[[which.max(ri)]])
+plot(hc.sbd[[which.min(cvis["VI", ])]])
 ```
 
-![](README-hierarchical-1.png)<!-- -->
+![](README-hierarchical-1.png)
 
 ``` r
 ## =============================================================================================
@@ -104,12 +168,12 @@ kc.tadp <- dtwclust(data, type = "tadpole", k = 20,
 #> 
 #> TADPole completed, pruning percentage = 86.7%
 #> 
-#>  Elapsed time is 4.213 seconds.
+#>  Elapsed time is 3.42 seconds.
 
 plot(kc.tadp, clus = 1:4)
 ```
 
-![](README-tadpole-1.png)<!-- -->
+![](README-tadpole-1.png)
 
 ``` r
 ## =============================================================================================
@@ -135,16 +199,16 @@ proxy::pr_DB$set_entry(FUN = ndtw, names=c("nDTW"),
                        loop = TRUE, type = "metric", distance = TRUE,
                        description = "Normalized DTW with L1 norm")
 
-## Data with different lengths
+## Data with different length
 kc.ndtw <- dtwclust(datalist, k = 20,
                     distance = "nDTW", centroid = "pam",
                     seed = 159, control = new("dtwclustControl", nrep = 8L))
 
-sapply(kc.ndtw, randIndex, y = CharTrajLabels)
-#>       ARI       ARI       ARI       ARI       ARI       ARI       ARI 
-#> 0.6441685 0.5214422 0.4195909 0.4817210 0.5203554 0.5008337 0.5191187 
-#>       ARI 
-#> 0.5285412
+sapply(kc.ndtw, cvi, b = CharTrajLabels, type = "VI")
+#>        VI        VI        VI        VI        VI        VI        VI 
+#> 0.2755874 0.4448495 0.5736902 0.5047190 0.4465854 0.3929220 0.3808492 
+#>        VI 
+#> 0.4439003
 
 ## DBA centroids
 kc <- dtwclust(datalist, k = 20,
@@ -156,13 +220,13 @@ kc <- dtwclust(datalist, k = 20,
 #> Iteration 3: Changes / Distsum = 1 / 3.550964
 #> Iteration 4: Changes / Distsum = 0 / 3.531171
 #> 
-#>  Elapsed time is 20.657 seconds.
+#>  Elapsed time is 18.137 seconds.
 
 ## Modifying some plot parameters
 plot(kc, labs.arg = list(title = "DBA Centroids", x = "time", y = "series"))
 ```
 
-![](README-parallel-1.png)<!-- -->
+![](README-parallel-1.png)
 
 ``` r
 
@@ -196,7 +260,7 @@ fc
 #> 
 #> Time required for analysis:
 #>    user  system elapsed 
-#>   0.160   0.000   0.161 
+#>   0.176   0.000   0.175 
 #> 
 #> Head of fuzzy memberships:
 #> 
@@ -218,4 +282,3 @@ Dependencies
 -   The core DTW calculations are done by the `dtw` package.
 -   Plotting is done with the `ggplot2` package.
 -   Parallel computation depends on the `foreach` package.
--   Random streams for repetitions of partitional procedures use the `rngtools` package.

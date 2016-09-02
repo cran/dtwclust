@@ -50,7 +50,8 @@ hierarchical procedures are used, or \code{length(k)} \code{>} \code{1}, a list 
 }
 \description{
 This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy,
-k-Shape and TADPole clustering. See the details and the examples for more information.
+k-Shape and TADPole clustering. See the details and the examples for more information, as well as the
+included package vignette (which can be loaded by typing \code{vignette("dtwclust")}).
 }
 \details{
 Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering is done
@@ -59,9 +60,17 @@ with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPol
 equivalent to the k-Shape algorithm (Paparrizos and Gravano, 2015).
 
 The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to a list,
-the former row-wise and the latter column-wise. Only lists can have series with different lengths. Most of
-the optimizations require series to have the same length, so consider reinterpolating them to save some
-time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}). No missing values are allowed.
+the former row-wise and the latter column-wise. Only lists can have series with different lengths or
+multiple dimensions. Most of the optimizations require series to have the same length, so consider
+reinterpolating them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}).
+No missing values are allowed.
+
+In the case of multivariate time series, they should be provided as a list of matrices, where time spans
+the rows of each matrix and the dimensions span the columns. At the moment, only \code{DTW} and \code{DTW2}
+suppport such series, which means only partitional and hierarchical procedures using those distances will
+work. You can of course create your own custom distances. All included centroid functions should work with
+the aforementioned format, although \code{shape} is \strong{not} recommended. Note that the \code{plot}
+method will simply append all dimensions (columns) one after the other.
 
 Several parameters can be adjusted with the \code{control} argument. See \code{\link{dtwclustControl}}. In
 the following sections, elements marked with an asterisk (*) are those that can be adjutsed with this
@@ -143,15 +152,15 @@ every iteration. In this case, the centers are themselves time series. Fuzzy clu
 fuzzy c-means centroid by default.
 
 In either case, a custom function can be provided. If one is provided, it will receive the following
-inputs in the shown order (examples for partitional clustering are shown in parenthesis):
+parameters with the shown names (examples for partitional clustering are shown in parenthesis):
 
 \itemize{
-  \item The \emph{whole} data list (\code{list(ts1, ts2, ts3)})
-  \item A numeric vector with length equal to the number of series in \code{data}, indicating which
-  cluster a series belongs to (\code{c(1L, 2L, 2L)})
-  \item The desired number of total clusters (\code{2L})
-  \item The current centers in order, in a list (\code{list(center1, center2)})
-  \item The membership vector of the \emph{previous} iteration (\code{c(1L, 1L, 2L)})
+  \item \code{"x"}: The \emph{whole} data list (\code{list(ts1, ts2, ts3)})
+  \item \code{"cl_id"}: A numeric vector with length equal to the number of series in \code{data},
+  indicating which cluster a series belongs to (\code{c(1L, 2L, 2L)})
+  \item \code{"k"}: The desired number of total clusters (\code{2L})
+  \item \code{"cent"}: The current centers in order, in a list (\code{list(center1, center2)})
+  \item \code{"cl_old"}: The membership vector of the \emph{previous} iteration (\code{c(1L, 1L, 2L)})
   \item The elements of \code{...}
 }
 
@@ -366,8 +375,8 @@ hc.l2 <- update(kc.l2[[3L]], k = 4L,
                 type = "hierarchical", method = "all",
                 distmat = kc.l2[[3L]]@distmat)
 
-cat("Rand indices for L2+HC:\\n")
-sapply(hc.l2, randIndex, y = labels)
+cat("VI for L2+HC:\\n")
+sapply(hc.l2, cvi, b = labels, type = "VI")
 
 # ====================================================================================
 # Registering a custom distance with the 'proxy' package and using it
@@ -404,10 +413,6 @@ hc.sbd <- dtwclust(CharTraj, type = "hierarchical",
 
 # Plot dendrogram
 plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]])
-
-# Plot subset of crisp partition with k = 20
-plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]],
-     clus = 1, type = "sc")
 
 # ====================================================================================
 # Autocorrelation-based fuzzy clustering (see D'Urso and Maharaj 2009)
@@ -474,6 +479,20 @@ hc <- dtwclust(CharTraj, type = "hierarchical",
 plot(hc, type = "sc")
 
 # ====================================================================================
+# Multivariate time series
+# ====================================================================================
+
+# Dummy multivariate series
+mv <- lapply(seq(1L, 100L, 5L), function(x) cbind(CharTraj[[x]], CharTraj[[x+1L]]))
+
+# "dist.method" is for the dtw function, and it affects the values of the local
+# cost matrix in the case of multivariate series
+mvc <- dtwclust(mv, k = 4L, dist.method = "L1", seed = 390)
+
+# Note how the "dimensions" of each series are appended one after the other in the plot
+plot(mvc)
+
+# ====================================================================================
 # Using parallel computation to optimize several random repetitions
 # and distance matrix calculation
 # ====================================================================================
@@ -496,8 +515,8 @@ kc.ndtw.reps <- dtwclust(CharTraj, k = 20, distance = "nDTW", centroid = "dba",
                          preproc = zscore, seed = 8319,
                          control = list(window.size = 10L, nrep = 8L))
 
-# See Rand index for each repetition
-sapply(kc.ndtw.reps, randIndex, y = CharTrajLabels)
+# See VI index for each repetition
+sapply(kc.ndtw.reps, cvi, b = CharTrajLabels, type = "VI")
 
 # Stop parallel workers
 stopCluster(cl)

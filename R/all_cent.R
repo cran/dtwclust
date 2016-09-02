@@ -36,10 +36,11 @@ all_cent <- function(case = NULL, distmat, distfun, control, fuzzy = FALSE) {
                })
           }
 
+          ## return
           new_cent
      }
 
-     shape_cent <- function(x_split, cent, id_changed, cl_id, cl_old, ...) {
+     shape_cent <- function(x_split, cent, ...) {
 
           check_parallel()
 
@@ -56,14 +57,16 @@ all_cent <- function(case = NULL, distmat, distfun, control, fuzzy = FALSE) {
                                           FUN = function(x, c) {
                                                new_c <- shape_extraction(x, c)
 
+                                               ## return
                                                new_c
                                           })
                               }
 
+          ## return
           new_cent
      }
 
-     dba_cent <- function(x_split, cent, id_changed, cl_id, cl_old, ...) {
+     dba_cent <- function(x_split, cent, ...) {
 
           check_parallel()
 
@@ -86,26 +89,66 @@ all_cent <- function(case = NULL, distmat, distfun, control, fuzzy = FALSE) {
                                                             delta = control@delta,
                                                             error.check = FALSE)
 
+                                               ## return
                                                new_c
                                           })
                               }
 
+          ## return
           new_cent
      }
 
      mean_cent <- function(x_split, ...) {
-          x_split <- lapply(x_split, function(xx) do.call(rbind, xx))
+          new_cent <- lapply(x_split, function(xx) {
+               dims <- sapply(xx, function(x) is.null(dim(x)))
 
-          new_cent <- lapply(x_split, colMeans)
+               if (length(unique(dims)) != 1L)
+                    stop("Inconsistent dimensions across series.")
 
+               if (any(dims)) {
+                    ## univariate
+                    xx <- do.call(rbind, xx)
+                    colMeans(xx)
+
+               } else {
+                    ## multivariate
+                    ncols <- ncol(xx[[1L]]) # number of dimensions should be equal
+                    ncols <- rep(1L:ncols, length(xx))
+
+                    xx <- do.call(cbind, xx)
+                    xx <- split.data.frame(t(xx), ncols)
+                    do.call(cbind, lapply(xx, colMeans))
+               }
+          })
+
+          ## return
           new_cent
      }
 
      median_cent <- function(x_split, ...) {
-          x_split <- lapply(x_split, function(xx) do.call(rbind, xx))
+          new_cent <- lapply(x_split, function(xx) {
+               dims <- sapply(xx, function(x) is.null(dim(x)))
 
-          new_cent <- lapply(x_split, colMedians)
+               if (length(unique(dims)) != 1L)
+                    stop("Inconsistent dimensions across series.")
 
+               if (any(dims)) {
+                    ## univariate
+                    xx <- do.call(rbind, xx)
+                    colMedians(xx)
+
+               } else {
+                    ## multivariate
+                    ncols <- ncol(xx[[1L]]) # number of dimensions should be equal
+                    ncols <- rep(1L:ncols, length(xx))
+
+                    xx <- do.call(cbind, xx)
+                    xx <- split.data.frame(t(xx), ncols)
+                    do.call(cbind, lapply(xx, colMedians))
+               }
+          })
+
+          ## return
           new_cent
      }
 
@@ -147,8 +190,7 @@ all_cent <- function(case = NULL, distmat, distfun, control, fuzzy = FALSE) {
                                           x_split = x_split[id_changed],
                                           cent = cent[id_changed],
                                           id_changed = id_changed,
-                                          cl_id = cl_id,
-                                          cl_old = cl_old),
+                                          cl_id = cl_id),
                                      list(...)))
 
                cent[id_changed] <- new_cent

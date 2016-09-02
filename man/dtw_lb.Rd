@@ -2,33 +2,34 @@
 % Please edit documentation in R/dtw-lb.R
 \name{dtw_lb}
 \alias{dtw_lb}
-\title{DTW calculation guided by Lemire's lower bounds}
+\title{DTW distance matrix guided by Lemire's improved lower bound}
 \usage{
 dtw_lb(x, y = NULL, window.size = NULL, norm = "L1", error.check = TRUE,
-  force.pairwise = FALSE)
+  pairwise = FALSE)
 }
 \arguments{
 \item{x, y}{A matrix where rows are time series, or a list of time series.}
 
 \item{window.size}{Window size to use with the LB and DTW calculation. See details.}
 
-\item{norm}{Pointwise distance. Either \code{L1} for Manhattan distance or \code{L2} for Euclidean.}
+\item{norm}{Pointwise distance. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.}
 
 \item{error.check}{Should inconsistencies in the data be checked?}
 
-\item{force.pairwise}{Calculate pairwise distances. See the notes.}
+\item{pairwise}{Calculate pairwise distances?}
 }
 \value{
 The distance matrix with class \code{crossdist}.
 }
 \description{
-Calculation of a distance matrix with the Dynamic Time Warping (DTW) distance guided Lemire's
+Calculation of a distance matrix with the Dynamic Time Warping (DTW) distance guided by Lemire's
 improved lower bound (LB_Improved).
 }
 \details{
 This function first calculates an initial estimate of a distance matrix between two sets of time series
 using LB_Improved. Afterwards, it uses the estimate to calculate the corresponding true DTW distance
-between \emph{only} the nearest neighbors of each series in \code{x} found in \code{y}.
+between \emph{only} the nearest neighbors of each series in \code{x} found in \code{y}, and it continues
+iteratively until no changes in the nearest neighbors occur.
 
 If only \code{x} is provided, the distance matrix is calculated between all its time series.
 
@@ -43,10 +44,6 @@ the window.
 }
 \note{
 This function uses a lower bound that is only defined for time series of equal length.
-
-If you use the version registered with \code{proxy}, and because of how \code{\link[proxy]{dist}}
-works, the latter's \code{pairwise} argument will not work with this distance. You can use the custom argument
-\code{force.pairwise} to get the correct result (which is, effectively, calculating only DTW distances).
 }
 \section{Parallel Computing}{
 
@@ -110,9 +107,10 @@ cbind(names(data[1:50]), names(data[51:100][NN]))
 Alexis Sarda-Espinosa
 }
 \references{
-Lemire D (2009). ``Faster retrieval with a two-pass dynamic-time-warping lower bound .'' \emph{Pattern Recognition}, \strong{42}(9), pp.
-2169 - 2180. ISSN 0031-3203, \url{http://dx.doi.org/10.1016/j.patcog.2008.11.030}, \url{
-http://www.sciencedirect.com/science/article/pii/S0031320308004925}.
+Lemire D (2009). ``Faster retrieval with a two-pass dynamic-time-warping lower bound .''
+\emph{Pattern Recognition}, \strong{42}(9), pp. 2169 - 2180. ISSN 0031-3203,
+\url{http://dx.doi.org/10.1016/j.patcog.2008.11.030},
+\url{http://www.sciencedirect.com/science/article/pii/S0031320308004925}.
 }
 \seealso{
 \code{\link{lb_keogh}}, \code{\link{lb_improved}}
