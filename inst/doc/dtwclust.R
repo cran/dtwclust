@@ -65,7 +65,7 @@ proxy::dist(CharTraj[3:8], method = "ACFD", upper = TRUE)
 data <- lapply(CharTraj, reinterpolate, newLength = 180L)
 
 # Calculate the DTW distances between all elements
-system.time(D1 <- proxy::dist(data[1L:5L], data[6L:100L],
+system.time(D1 <- proxy::dist(data[1L:5L], data[6L:50L],
                               method = "DTW",
                               window.type = "sakoechiba",
                               window.size = 20L))
@@ -74,7 +74,7 @@ system.time(D1 <- proxy::dist(data[1L:5L], data[6L:100L],
 NN1 <- apply(D1, 1L, which.min)
 
 # Calculate the distance matrix with dtw_lb
-system.time(D2 <- dtw_lb(data[1L:5L], data[6L:100L],
+system.time(D2 <- dtw_lb(data[1L:5L], data[6L:50L],
                          window.size = 20L))
 
 # Nearest neighbors
@@ -109,31 +109,31 @@ data <- lapply(CharTraj, reinterpolate,
                newLength = max(lengths(CharTraj)))
 
 # z-normalization
-data <- zscore(data)
+data <- zscore(data[60L:100L])
 
-pc_dtw <- dtwclust(data, k = 20L,
+pc_dtw <- dtwclust(data, k = 4L,
                    distance = "dtw2", centroid = "dba",
                    seed = 8, control = list(window.size = 20L,
                                             norm = "L2",
                                             trace = TRUE))
 
-pc_dtwlb <- dtwclust(data, k = 20L,
+pc_dtwlb <- dtwclust(data, k = 4L,
                      distance = "dtw_lb", centroid = "dba",
                      seed = 8, control = list(window.size = 20L,
                                               norm = "L2",
                                               trace = TRUE))
 
-pc_ks <- dtwclust(data, k = 20L,
+pc_ks <- dtwclust(data, k = 4L,
                   distance = "sbd", centroid = "shape",
                   seed = 8, control = list(trace = TRUE))
 
-pc_tp <-dtwclust(data, k = 20L,
+pc_tp <-dtwclust(data, k = 4L,
                  type = "tadpole", dc = 1.5,
                  seed = 8, control = list(window.size = 20L,
                                           trace = TRUE))
 
 sapply(list(DTW = pc_dtw, DTW_LB = pc_dtwlb, kShape = pc_ks, TADPole = pc_tp),
-       cvi, b = CharTrajLabels, type = "VI")
+       cvi, b = CharTrajLabels[60L:100L], type = "VI")
 
 ## ----example-fuzzy, echo = TRUE, fig.cap = "Visualization of the clusters that would result from changing the fuzzy partition to a crisp one. Note that the original time-series are used, so the centroids are not shown, since the centroids are made of autocorrelation coefficients."----
 # Calculate autocorrelation up to 50th lag
@@ -170,7 +170,7 @@ invisible(clusterEvalQ(workers, library(dtwclust)))
 registerDoParallel(workers)
 
 # Calling dtwclust
-pc_par <- dtwclust(CharTraj, k = 20L,
+pc_par <- dtwclust(CharTraj[1L:20L], k = 4L,
                    distance = "dtw", centroid = "dba",
                    seed = 938, control = list(trace = TRUE,
                                               window.size = 15L))

@@ -1,4 +1,4 @@
-3b18cc5e465c45f2793d8caf2cff45ad *DESCRIPTION
+c2ee060f3ed7a59d01eb1f14efd2225a *DESCRIPTION
 945c56b27b1245931d6f4c2adfd536b5 *NAMESPACE
 866a4298bcbd99bcf67f398b71b5af7b *R/DBA.R
 2ae53d8170fecb5bd5efd80e8e95cc8f *R/NCCc.R
@@ -25,10 +25,10 @@ e6346d62e6f6bfaf5f71b62712e2a890 *R/shape-extraction.R
 405d8cada83939f67d4549fab117ad58 *README.md
 d7eff20b78b9b07c9148d58d5f2f2c30 *build/vignette.rds
 bd9b92e2fa9985b28ae03780fa7d7d82 *data/uciCT.rda
-1b3f6aca5f717980b35f3d29627421c2 *inst/NEWS.Rd
-37067901431c1fdb0ec5bfcecf35b3d7 *inst/doc/dtwclust.R
-50f79b83730348664e7f65c6d4e95c65 *inst/doc/dtwclust.Rnw
-818e39450e7c932f027248b72b2a83ed *inst/doc/dtwclust.pdf
+eacf87e94911aa8b2e41b777d5d16cfd *inst/NEWS.Rd
+13ec515093d0a02b33bd16dbb718a7c4 *inst/doc/dtwclust.R
+fb7fec3cb40eb2bb0653da988d13760b *inst/doc/dtwclust.Rnw
+0c6da2c67689be82c88a1651048bb6b0 *inst/doc/dtwclust.pdf
 9dfb5de4b02329964ebd4169faec53ad *inst/dtwclust-examples.R
 475c5349cf7bffbac3eb0f165052a1f2 *man/DBA.Rd
 3010c3c7c39b48d41d68fded7b42fc03 *man/NCCc.Rd
@@ -68,5 +68,5 @@ d53f2853c75c454cb506f2bda8863740 *tests/testthat/test_tadpole.R
 fda49bd7c2429f99c808f0860d688e88 *tests/testthat/test_types.R
 e04f85f60eb3372548867dfb8911cc0d *tests/testthat/test_zparallel.R
 00b6523fe02a664d360106d990ffdcf8 *vignettes/REFERENCES.bib
-255e89f93be5a17b3522bb2805499851 *vignettes/dtwclust-concordance.tex
-50f79b83730348664e7f65c6d4e95c65 *vignettes/dtwclust.Rnw
+981c60e0442d4513670c85be30992daa *vignettes/dtwclust-concordance.tex
+fb7fec3cb40eb2bb0653da988d13760b *vignettes/dtwclust.Rnw
