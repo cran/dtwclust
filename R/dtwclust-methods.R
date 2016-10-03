@@ -31,6 +31,42 @@ setMethod("initialize", "dtwclust",
                .Object
           })
 
+# for dtwclustFamily to call in tests
+
+setMethod("initialize", "dtwclustFamily",
+          function(.Object, dist, allcent, ..., distmat = NULL, control = NULL, fuzzy = FALSE) {
+               dots <- list(...)
+               dots$.Object <- .Object
+
+               if (is.null(control))
+                    control <- new("dtwclustControl")
+
+               if (!missing(dist)) {
+                    if (is.character(dist))
+                         dots$dist <- ddist(dist, control, distmat)
+                    else
+                         dots$dist <- dist
+               }
+
+               if (fuzzy) {
+                    dots$cluster <- fcm_cluster # fuzzy.R
+                    allcent <- "fcm"
+               }
+
+               if (!missing(allcent)) {
+                    if (is.character(allcent))
+                         dots$allcent <- all_cent(allcent,
+                                                  distmat = distmat,
+                                                  distfun = dots$dist,
+                                                  control = control,
+                                                  fuzzy = fuzzy)
+                    else
+                         dots$allcent <- allcent
+               }
+
+               do.call(callNextMethod, dots)
+          })
+
 # ========================================================================================================
 # Show
 # ========================================================================================================
@@ -65,12 +101,14 @@ setMethod("show", "dtwclust",
 
                if (object@type == "fuzzy") {
                     cat("\nHead of fuzzy memberships:\n\n")
-                    print(utils::head(object@fcluster))
+                    print(object@fcluster[1L:6L, , drop = FALSE])
 
                } else {
                     cat("\nCluster sizes with average intra-cluster distance:\n\n")
                     print(object@clusinfo)
                }
+
+               invisible(NULL)
           })
 
 # ========================================================================================================
@@ -146,19 +184,19 @@ setMethod("predict", "dtwclust",
                     consistency_check(newdata, "vltslist")
                     nm <- names(newdata)
 
-                    newdata <- object@family@preproc(newdata)
+                    newdata <- object@family@preproc(newdata, ... = object@dots)
 
                     distmat <- do.call(object@family@dist,
-                                       args = c(list(x = newdata,
-                                                     centers = object@centers),
-                                                object@dots))
+                                       args = enlist(x = newdata,
+                                                     centroids = object@centroids,
+                                                     dots = object@dots))
 
                     ret <- object@family@cluster(distmat = distmat, m = object@control@fuzziness)
 
                     if (object@type != "fuzzy")
                          names(ret) <- nm
                     else
-                         dimnames(ret) <- list(nm, paste0("cluster_", 1:ncol(ret)))
+                         dimnames(ret) <- list(nm, paste0("cluster_", 1L:ncol(ret)))
                }
 
                ret
@@ -194,8 +232,9 @@ setMethod("predict", "dtwclust",
 #' liking. You might want to look at \code{\link[ggplot2]{ggplot_build}} if that's the case.
 #'
 #' @param y Ignored.
-#' @param ... Further arguments to pass to \code{\link[ggplot2]{geom_line}} for the plotting of the
-#' \emph{cluster centers}, or to \code{\link[stats]{plot.hclust}}. See details.
+#' @param ... For \code{plot}, further arguments to pass to \code{\link[ggplot2]{geom_line}} for the plotting
+#' of the \emph{cluster centroids}, or to \code{\link[stats]{plot.hclust}}. See details. For \code{update}, any
+#' supported argument. Otherwise, currently ignored.
 #' @param clus A numeric vector indicating which clusters to plot.
 #' @param labs.arg Arguments to change the title and/or axis labels. See \code{\link[ggplot2]{labs}} for more
 #' information
@@ -205,7 +244,6 @@ setMethod("predict", "dtwclust",
 #' @param plot Logical flag. You can set this to \code{FALSE} in case you want to save the ggplot object without
 #' printing anything to screen
 #' @param type What to plot. \code{NULL} means default. See details.
-#' @param show.centroids Deprecated.
 #'
 #' @return The plot method returns a \code{gg} object (or \code{NULL} for dendrogram plot) invisibly.
 #'
@@ -218,10 +256,9 @@ setMethod("plot", signature(x = "dtwclust", y = "missing"),
           function(x, y, ...,
                    clus = seq_len(x@k), labs.arg = NULL,
                    data = NULL, time = NULL,
-                   plot = TRUE, type = NULL,
-                   show.centroids = TRUE) {
+                   plot = TRUE, type = NULL) {
 
-               if (!missing(show.centroids))
+               if (!is.null(list(...)$show.centroids))
                     warning("The 'show.centroids' argument has been deprecated. Use 'type' instead.")
 
                ## set default type if none was provided
@@ -270,11 +307,11 @@ setMethod("plot", signature(x = "dtwclust", y = "missing"),
                          or provide the data manually.")
                }
 
-               ## Obtain centers (which can be matrix or lists of series)
-               Lengths <- lengths(x@centers)
+               ## Obtain centroids (which can be matrix or lists of series)
+               Lengths <- lengths(x@centroids)
                trail <- L - Lengths
 
-               cen <- mapply(x@centers, trail, SIMPLIFY = FALSE,
+               cen <- mapply(x@centroids, trail, SIMPLIFY = FALSE,
                              FUN = function(series, trail) {
                                   c(series, rep(NA, trail))
                              })
@@ -306,14 +343,17 @@ setMethod("plot", signature(x = "dtwclust", y = "missing"),
                dfm <- reshape2::melt(df, id.vars = "t")
 
                cl <- rep(x@cluster, each = L)
-               color <- lapply(tabulate(x@cluster), function(i) {
-                    rep(1L:i, each = L)
+               color <- lapply(x@clusinfo$size, function(i) {
+                    if (i > 0L)
+                         rep(1L:i, each = L)
+                    else
+                         numeric()
                })
                color <- factor(unlist(color))
 
                dfm <- data.frame(dfm, cl = cl, color = color)
 
-               ## transform centers
+               ## transform centroids
 
                cen <- data.frame(t = t, cen)
                cenm <- reshape2::melt(cen, id.vars = "t")
@@ -427,8 +467,9 @@ setMethod("cvi", signature(a = "dtwclust"),
 
                               } else {
                                    distmat <- do.call(a@family@dist,
-                                                      args = c(list(x = a@datalist, centers = NULL),
-                                                               a@dots))
+                                                      args = enlist(x = a@datalist,
+                                                                    centroids = NULL,
+                                                                    dots = a@dots))
                               }
                          } else {
                               distmat <- a@distmat
@@ -441,12 +482,13 @@ setMethod("cvi", signature(a = "dtwclust"),
 
                     ## calculate some values that both Davies-Bouldin indices use
                     if (any(type[which_internal] %in% c("DB", "DBstar"))) {
-                         S <- tapply(a@cldist[ , 1L], list(a@cluster), mean)
+                         S <- a@clusinfo$av_dist
 
                          ## distance between centroids
                          distcent <- do.call(a@family@dist,
-                                             args = c(list(x = a@centers, centers = NULL),
-                                                      a@dots))
+                                             args = enlist(x = a@centroids,
+                                                           centroids = NULL,
+                                                           dots = a@dots))
                     }
 
                     ## calculate global centroids if needed
@@ -455,19 +497,20 @@ setMethod("cvi", signature(a = "dtwclust"),
 
                          if (a@type == "partitional") {
                               global_cent <- do.call(a@family@allcent,
-                                                     args = c(list(x = a@datalist,
+                                                     args = enlist(x = a@datalist,
                                                                    cl_id = rep(1L, N),
                                                                    k = 1L,
                                                                    cent = a@datalist[sample(N, 1L)],
-                                                                   cl_old = rep(0L, N)),
-                                                              a@dots))
+                                                                   cl_old = rep(0L, N),
+                                                                   dots = a@dots))
                          } else {
                               global_cent <- a@family@allcent(a@datalist)
                          }
 
                          dist_global_cent <- do.call(a@family@dist,
-                                                     args = c(list(x = a@centers, centers = global_cent),
-                                                              a@dots))
+                                                     args = enlist(x = a@centroids,
+                                                                   centroids = global_cent,
+                                                                   dots = a@dots))
 
                          dim(dist_global_cent) <- NULL
                     }
@@ -519,9 +562,7 @@ setMethod("cvi", signature(a = "dtwclust"),
                                 ## Davies-Bouldin
                                 DB = {
                                      mean(sapply(1L:a@k, function(k) {
-                                          max(sapply(setdiff(1L:a@k, k), function(l) {
-                                               (S[k] + S[l]) / distcent[k, l]
-                                          }))
+                                          max((S[k] + S[-k]) / distcent[k, -k])
                                      }))
                                 },
 
@@ -536,14 +577,14 @@ setMethod("cvi", signature(a = "dtwclust"),
                                 CH = {
                                      (N - a@k) /
                                           (a@k - 1) *
-                                          sum(tabulate(a@cluster) * dist_global_cent) /
+                                          sum(a@clusinfo$size * dist_global_cent) /
                                           sum(a@cldist[ , 1L, drop = TRUE])
                                 },
 
                                 ## Score function
                                 SF = {
-                                     bcd <- sum(tabulate(a@cluster) * dist_global_cent) / (N * a@k)
-                                     wcd <- sum(tapply(a@cldist[ , 1L, drop = TRUE], list(a@cluster), mean))
+                                     bcd <- sum(a@clusinfo$size * dist_global_cent) / (N * a@k)
+                                     wcd <- sum(a@clusinfo$av_dist)
                                      1 - 1 / exp(exp(bcd - wcd))
                                 },
 
@@ -662,9 +703,9 @@ setMethod("clusterSim", "dtwclust",
                     }
 
                     distmat <- do.call(object@family@dist,
-                                       args = c(list(x = data,
-                                                     centers = object@centers),
-                                                object@dots))
+                                       args = enlist(x = data,
+                                                     centroids = object@centroids,
+                                                     dots = object@dots))
 
                     r <- t(matrix(apply(distmat, 1, rank, ties.method = "first"),
                                   nrow = ncol(distmat)))
@@ -696,9 +737,9 @@ setMethod("clusterSim", "dtwclust",
 
                } else {
                     z <- do.call(object@family@dist,
-                                 args = c(list(x = object@centers,
-                                               centers = object@centers),
-                                          object@dots))
+                                 args = enlist(x = object@centroids,
+                                               centroids = object@centroids,
+                                               dots = object@dots))
 
                     z <- 1 - z/max(z)
                }
@@ -760,25 +801,3 @@ setAs("NULL", "dtwclustControl",
       function(from, to) {
            new(to)
       })
-
-# ========================================================================================================
-# Coercion methods for cross/pair-dist
-# ========================================================================================================
-
-as.matrix.crossdist <- function(x, ...) {
-     class(x) <- NULL
-     as.matrix(x, ...)
-}
-
-as.matrix.pairdist <- function(x, ...) {
-     class(x) <- NULL
-     as.matrix(x, ...)
-}
-
-as.data.frame.crossdist <- function(x, ...) {
-     as.data.frame(as.matrix(x, ...), ...)
-}
-
-as.data.frame.pairdist <- function(x, ...) {
-     as.data.frame(as.matrix(x, ...), ...)
-}

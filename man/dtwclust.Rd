@@ -5,12 +5,11 @@
 \title{Time series clustering}
 \usage{
 dtwclust(data = NULL, type = "partitional", k = 2L, method = "average",
-  distance = "dtw", centroid = "pam", preproc = NULL, dc = NULL,
+  distance = "dtw_basic", centroid = "pam", preproc = NULL, dc = NULL,
   control = NULL, seed = NULL, distmat = NULL, ...)
 }
 \arguments{
-\item{data}{A list of series, a numeric matrix or a data frame. Matrices are coerced row-wise and data frames
-column-wise.}
+\item{data}{A list of series, a numeric matrix or a data frame. Matrices and data frames are coerced row-wise.}
 
 \item{type}{What type of clustering method to use: \code{"partitional"}, \code{"hierarchical"}, \code{"tadpole"}
 or \code{"fuzzy"}.}
@@ -27,7 +26,7 @@ Ignored for \code{type} = \code{"tadpole"}.}
 \item{centroid}{Either a supported string or an appropriate function to calculate centroids
 when using partitional or prototypes for hierarchical/tadpole methods. See Centroid section.}
 
-\item{preproc}{Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
+\item{preproc}{Function to preprocess data. Defaults to \code{\link{zscore}} \emph{only} if \code{centroid}
 \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.}
 
 \item{dc}{Cutoff distance for the \code{\link{TADPole}} algorithm.}
@@ -35,7 +34,7 @@ when using partitional or prototypes for hierarchical/tadpole methods. See Centr
 \item{control}{Named list of parameters or \code{dtwclustControl} object for clustering algorithms. See
 \code{\link{dtwclustControl}}. \code{NULL} means defaults.}
 
-\item{seed}{Random seed for reproducibility of partitional and fuzzy algorithms.}
+\item{seed}{Random seed for reproducibility.}
 
 \item{distmat}{If a cross-distance matrix is already available, it can be provided here so it's re-used.
 Only relevant if \code{centroid} = "pam" or \code{type} = "hierarchical". See examples.}
@@ -60,7 +59,7 @@ with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPol
 equivalent to the k-Shape algorithm (Paparrizos and Gravano, 2015).
 
 The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to a list,
-the former row-wise and the latter column-wise. Only lists can have series with different lengths or
+both row-wise. Only lists can have series with different lengths or
 multiple dimensions. Most of the optimizations require series to have the same length, so consider
 reinterpolating them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}).
 No missing values are allowed.
@@ -80,7 +79,7 @@ argument.
 
 
 Stochastic algorithm that creates a hard partition of the data into \code{k} clusters, where each cluster
-has a center/centroid. In case of time series clustering, the centroids are also time series.
+has a centroid. In case of time series clustering, the centroids are also time series.
 
 The cluster centroids are first randomly initialized by selecting some of the series in the data. The
 distance between each series and each centroid is calculated, and the series are assigned to the cluster
@@ -135,7 +134,7 @@ clusters are created.
 
 TADPole clustering adopts a relatively new clustering framework and adapts it to time series clustering
 with DTW. Because of the way it works, it can be considered a kind of Partitioning Around Medoids (PAM).
-This means that the cluster centers are always elements of the data. However, this algorithm is
+This means that the cluster centroids are always elements of the data. However, this algorithm is
 deterministic, depending on the value of the cutoff distance \code{dc}, which can be controlled with the
 corresponding parameter of this function.
 
@@ -147,8 +146,8 @@ Unlike the other algorithms, TADPole always uses DTW2 as distance (with a symmet
 \section{Centroid Calculation}{
 
 
-In the case of partitional/fuzzy algorithms, a suitable function should calculate the cluster centers at
-every iteration. In this case, the centers are themselves time series. Fuzzy clustering uses the standard
+In the case of partitional/fuzzy algorithms, a suitable function should calculate the cluster centroids at
+every iteration. In this case, the centroids are themselves time series. Fuzzy clustering uses the standard
 fuzzy c-means centroid by default.
 
 In either case, a custom function can be provided. If one is provided, it will receive the following
@@ -159,13 +158,13 @@ parameters with the shown names (examples for partitional clustering are shown i
   \item \code{"cl_id"}: A numeric vector with length equal to the number of series in \code{data},
   indicating which cluster a series belongs to (\code{c(1L, 2L, 2L)})
   \item \code{"k"}: The desired number of total clusters (\code{2L})
-  \item \code{"cent"}: The current centers in order, in a list (\code{list(center1, center2)})
+  \item \code{"cent"}: The current centroids in order, in a list (\code{list(centroid1, centroid2)})
   \item \code{"cl_old"}: The membership vector of the \emph{previous} iteration (\code{c(1L, 1L, 2L)})
   \item The elements of \code{...}
 }
 
-Therefore, the function should \emph{always} include the ellipsis \code{...} in its definition. In case of
-fuzzy clustering, the membership vectors (2nd and 5th elements above) are matrices with number of rows
+Therefore, the function should \emph{always} include the ellipsis (\code{...}) in its definition. In case
+of fuzzy clustering, the membership vectors (2nd and 5th elements above) are matrices with number of rows
 equal to amount of elements in the data, and number of columns equal to the number of desired clusters.
 Each row must sum to 1.
 
@@ -179,7 +178,7 @@ are available:
   \item "shape": Shape averaging. By default, all series are z-normalized in this case, since the resulting
   centroids will also have this normalization. See \code{\link{shape_extraction}} for more details.
   \item "dba": DTW Barycenter Averaging. See \code{\link{DBA}} for more details.
-  \item "pam": Partition around medoids (PAM). This basically means that the cluster centers are always
+  \item "pam": Partition around medoids (PAM). This basically means that the cluster centroids are always
   one of the time series in the data. In this case, the distance matrix can be pre-computed once using all
   time series in the data and then re-used at each iteration. It usually saves overhead overall.
   \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and always used for that type of clustering
@@ -195,7 +194,7 @@ two series with length of 10, the final centroids will have this same length.
 
 As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid function that
 takes a list of series as only input and returns a single centroid series. These centroids are returned in
-the \code{centers} slot. By default, a type of PAM centroid function is used.
+the \code{centroids} slot. By default, a type of PAM centroid function is used.
 }
 
 \section{Distance Measures}{
@@ -213,6 +212,8 @@ one of the following custom implementations (all registered with \code{proxy}):
   \item \code{"dtw"}: DTW, optionally with a Sakoe-Chiba/Slanted-band constraint*.
   \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*. Read
   details below.
+  \item \code{"dtw_basic"}: A custom version of DTW with less functionality, but slightly faster.
+  See \code{\link{dtw_basic}}.
   \item \code{"dtw_lb"}: DTW with L1 or L2 norm* and optionally a Sakoe-Chiba constraint*. Some
   computations are avoided by first estimating the distance matrix with Lemire's lower bound and then
   iteratively refining with DTW. See \code{\link{dtw_lb}}. Not suitable for \code{pam.precompute}* =
@@ -226,7 +227,7 @@ DTW2 is done with \code{\link[dtw]{dtw}}, but it differs from the result you wou
 \code{L2} as \code{dist.method}: with \code{DTW2}, pointwise distances (the local cost matrix) are
 calculated with \code{L1} norm, \emph{each} element of the matrix is squared and the result is fed into
 \code{\link[dtw]{dtw}}, which finds the optimum warping path. The square root of the resulting
-distance is \emph{then} computed.
+distance is \emph{then} computed. See \code{\link{dtw2}}.
 
 Only \code{dtw}, \code{dtw2} and \code{sbd} support series of different length. The lower bounds
 are probably unsuitable for direct clustering unless series are very easily distinguishable.
@@ -276,7 +277,8 @@ default in this case. The user can, however, specify a custom function that perf
 on the data, but the user must make sure that the format stays consistent, i.e. a list of time series.
 
 Setting to \code{NULL} means no preprocessing (except for \code{centroid = "shape"}). A provided function
-will receive the data as first and only argument.
+will receive the data as first argument, followed by the contents of \code{...}. Therefore, the preprocessing
+function should have \code{...} in its arguments, even if it is not used.
 
 It is convenient to provide this function if you're planning on using the \code{\link[stats]{predict}}
 generic.
@@ -333,8 +335,7 @@ workers available.
 The lower bounds are defined only for time series of equal length. \code{DTW} and \code{DTW2}
 don't require this, but they are much slower to compute.
 
-The lower bounds are \strong{not} symmetric, and \code{DTW} is only symmetric if series have equal
-lengths.
+The lower bounds are \strong{not} symmetric, and \code{DTW} is not symmetric in general.
 }
 \examples{
 ## NOTE: All examples should work, some are simply set to not run automatically
@@ -349,11 +350,11 @@ ctrl <- new("dtwclustControl", trace = TRUE)
 # Simple partitional clustering with Euclidean distance and PAM centroids
 # ====================================================================================
 
-# Reinterpolate to same length and coerce as matrix
-data <- t(sapply(CharTraj, reinterpolate, newLength = 180))
+# Reinterpolate to same length
+data <- reinterpolate(CharTraj, new.length = max(lengths(CharTraj)))
 
 # Subset for speed
-data <- data[1:20, ]
+data <- data[1:20]
 labels <- CharTrajLabels[1:20]
 
 # Testing several values of k
@@ -419,7 +420,7 @@ plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]])
 # ====================================================================================
 
 # Calculate autocorrelation up to 50th lag, considering a list of time series as input
-acf_fun <- function(dat) {
+acf_fun <- function(dat, ...) {
      lapply(dat, function(x) as.numeric(acf(x, lag.max = 50, plot = FALSE)$acf))
 }
 
@@ -489,7 +490,7 @@ mv <- lapply(seq(1L, 100L, 5L), function(x) cbind(CharTraj[[x]], CharTraj[[x+1L]
 # cost matrix in the case of multivariate series
 mvc <- dtwclust(mv, k = 4L, dist.method = "L1", seed = 390)
 
-# Note how the "dimensions" of each series are appended one after the other in the plot
+# Note how the variables of each series are appended one after the other in the plot
 plot(mvc)
 
 # ====================================================================================
@@ -529,22 +530,7 @@ registerDoSEQ()
 Alexis Sarda-Espinosa
 }
 \references{
-Sakoe H and Chiba S (1978). ``Dynamic programming algorithm optimization for spoken word
-recognition.'' \emph{Acoustics, Speech and Signal Processing, IEEE Transactions on},
-\strong{26}(1), pp. 43-49. ISSN 0096-3518, \url{http://doi.org/10.1109/TASSP.1978.1163055}.
-
-Ratanamahatana A and Keogh E (2004). ``Everything you know about dynamic time warping is wrong.''
-In \emph{3rd Workshop on Mining Temporal and Sequential Data, in conjunction with 10th ACM SIGKDD
-Int. Conf. Knowledge Discovery and Data Mining (KDD-2004), Seattle, WA}.
-
-Bedzek, J.C. (1981). Pattern recognition with fuzzy objective function algorithms.
-
-D'Urso, P., & Maharaj, E. A. (2009). Autocorrelation-based fuzzy clustering of time series.
-Fuzzy Sets and Systems, 160(24), 3565-3589.
-
-Paparrizos J and Gravano L (2015). ``k-Shape: Efficient and Accurate Clustering of Time Series.''
-In \emph{Proceedings of the 2015 ACM SIGMOD International Conference on Management of Data},
-series SIGMOD '15, pp. 1855-1870. ISBN 978-1-4503-2758-9, \url{http://doi.org/10.1145/2723372.2737793}.
+Please refer to the package vignette references.
 }
 \seealso{
 \code{\link{dtwclust-methods}}, \code{\link{dtwclust-class}}, \code{\link{dtwclustControl}},

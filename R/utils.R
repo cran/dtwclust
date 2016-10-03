@@ -1,9 +1,8 @@
 # ========================================================================================================
-# Check consistency, used by other functions
+# Miscellaneous
 # ========================================================================================================
 
 consistency_check <- function(obj, case, ...) {
-
      case <- match.arg(case, c("ts", "tslist", "vltslist",
                                "window", "tsmat",
                                "dist", "cent"))
@@ -20,45 +19,26 @@ consistency_check <- function(obj, case, ...) {
           }
 
      } else if (case == "tslist") {
-          Lengths <- lengths(obj)
-
-          if (class(obj) != "list")
-               stop("Series must be provided in a list")
+          if (!is.list(obj))
+               stop("Whoops, data should already be a list by this point...")
 
           if (length(obj) < 1L)
                stop("Data is empty")
 
-          if (any(!sapply(obj, is.numeric)))
-               stop("Each element of the list must be a numeric vector")
-
-          if (length(unique(Lengths)) > 1L)
+          if (length(unique(lengths(obj))) > 1L)
                stop("All series must have the same length")
 
-          if (any(Lengths < 1L))
-               stop("All series must have at least one element")
-
-          if (any( sapply(obj, function(ts) {any(is.na(ts))}) ))
-               stop("Time series cannot have missing elements")
+          sapply(obj, consistency_check, case = "ts", ...)
 
      } else if (case == "vltslist") {
-          Lengths <- lengths(obj)
-
           ## list of variable-length time series
-
           if (class(obj) != "list")
-               stop("Series must be provided in a list")
+               stop("Whoops, data should already be a list by this point...")
 
           if (length(obj) < 1L)
                stop("Data is empty")
 
-          if (any(!sapply(obj, is.numeric)))
-               stop("Each element of the list must be a numeric vector")
-
-          if (any(Lengths < 1L))
-               stop("All series must have at least one element")
-
-          if (any( sapply(obj, function(ts) {any(is.na(ts))}) ))
-               stop("Time series cannot have missing elements")
+          sapply(obj, consistency_check, case = "ts", ...)
 
      } else if (case == "window") {
           if (is.null(obj))
@@ -70,7 +50,6 @@ consistency_check <- function(obj, case, ...) {
           return(as.integer(obj))
 
      } else if (case == "tsmat") {
-
           if (is.matrix(obj)) {
                Names <- rownames(obj)
                obj <- lapply(seq_len(nrow(obj)), function(i) obj[i, ])
@@ -80,51 +59,69 @@ consistency_check <- function(obj, case, ...) {
                obj <- list(obj)
 
           } else if (is.data.frame(obj)) {
-               obj <- as.list(obj)
+               message("Please note that as of this version of 'dtwclust', data frames are parsed ",
+                       "row-wise, like matrices, to maintain consistency with the 'proxy' package. ",
+                       "Use suppressMessages() or as.matrix() with your data to avoid this message.")
+
+               obj <- consistency_check(as.matrix(obj), "tsmat")
 
           } else if (!is.list(obj))
-               stop("Unsupported type for data")
+               stop("Unsupported data type.")
 
           return(obj)
 
      } else if (case == "dist") {
-          .local <- function(obj, trace = FALSE, Lengths = FALSE, silent = TRUE, ...) {
-               included <- c("dtw", "dtw2", "dtw_lb", "lbk", "lbi", "sbd")
-               valid <- c("dtw", "dtw2", "sbd")
+          dots <- list(...)
 
-               if (!is.character(obj) || !pr_DB$entry_exists(obj)) {
-                    if (silent)
-                         return(FALSE)
-                    else
-                         stop("Please provide a valid distance function registered with the proxy package.")
-               }
+          trace <- if (is.null(dots$trace)) FALSE else dots$trace
+          Lengths <- if (is.null(dots$Lengths)) FALSE else dots$Lengths
+          silent <- if (is.null(dots$silent)) TRUE else dots$silent
 
-               if (Lengths) {
-                    if ((obj %in% included) && !(obj %in% valid))
-                         stop("Only the following distances are supported for series with different length:\n\tdtw\tdtw2\tsbd")
-                    else if(!(obj %in% included) && trace)
-                         message("Series have different length. Please confirm that the provided distance function supports this.")
-               }
+          included <- c("dtw", "dtw2", "dtw_lb", "lbk", "lbi", "sbd", "dtw_basic")
+          valid <- c("dtw", "dtw2", "sbd", "dtw_basic")
 
-               TRUE # valid registered distance
+          if (!is.character(obj) || !pr_DB$entry_exists(obj)) {
+               if (silent)
+                    return(FALSE)
+               else
+                    stop("Please provide a valid distance function registered with the proxy package.")
           }
 
-          return(.local(obj, ...))
+          if (Lengths) {
+               if ((obj %in% included) && !(obj %in% valid))
+                    stop("Only the following distances are supported for series with different length:\n\tdtw\tdtw2\tsbd\tdtw_basic")
+               else if(!(obj %in% included) && trace)
+                    message("Series have different length. Please confirm that the provided distance function ",
+                            "supports this.")
+          }
+
+          ## valid registered distance
+          return(TRUE)
 
      } else if (case == "cent") {
           included <- c("mean", "median", "shape", "dba", "pam", "fcm")
           valid <- c("dba", "pam", "shape")
 
           if (is.character(obj) && (obj %in% included) && !(obj %in% valid))
-               stop("Only the following centroids are supported for series with different length:\n\tdba\tpam\tshape")
-          else if(is.character(obj) && !(obj %in% included) && list(...)$trace)
-               message("Series have different length. Please confirm that the provided centroid function supports this.")
+               stop("Only the following centroids are supported for series with different length:",
+                    "\n\tdba\tpam\tshape")
 
      } else {
-          stop("Possibly a typo in function consistency_check")
+          stop("Possibly a typo in function consistency_check.")
      }
 
      invisible(NULL)
+}
+
+# Check if series have different length
+check_lengths <- function(x) { any(diff(lengths(x)) != 0L) }
+
+# Enlist parameters for do.calls
+enlist <- function(..., dots = NULL) {
+     if (is.null(dots))
+          list(...)
+     else
+          c(list(...), dots)
 }
 
 # ========================================================================================================
@@ -133,8 +130,6 @@ consistency_check <- function(obj, case, ...) {
 
 # Envelop calculation
 call_envelop <- function(series, window) {
-     series <- as.numeric(series)
-
      consistency_check(series, "ts")
      window <- consistency_check(window, "window")
 
@@ -200,6 +195,14 @@ split_parallel <- function(obj, margin = NULL) {
 # column-wise medians
 colMedians <- function(mat) { apply(mat, 2L, stats::median) }
 
+# l-norm, I think I'll only use L2
+lnorm <- function(x, n = 2) {
+     if (n %% 2 == 0L)
+          sum(x ^ n) ^ (1 / n)
+     else
+          sum(abs(x) ^ n) ^ (1 / n)
+}
+
 # PREFUN for some of my proxy distances so that they support 'pairwise' direclty
 proxy_prefun <- function(x, y, pairwise, params, reg_entry) {
      if (!is.null(params$force.pairwise)) {
@@ -215,4 +218,39 @@ proxy_prefun <- function(x, y, pairwise, params, reg_entry) {
           pairwise = pairwise,
           p = params,
           reg_entry = reg_entry)
+}
+
+# ========================================================================================================
+# Multviariate helpers
+# ========================================================================================================
+
+check_multivariate <- function(x) {
+     dims <- sapply(x, function(x) {
+          if (is.null(dim(x)))
+               0L
+          else
+               ncol(x)
+     })
+
+     if (length(unique(dims)) != 1L)
+          stop("Inconsistent dimensions across series.")
+
+     any(dims > 0L)
+}
+
+reshape_multviariate <- function(series, cent) {
+     ncols <- ncol(series[[1L]])
+
+     series <- lapply(1L:ncols, function(idc) {
+          lapply(series, function(s) { s[ , idc, drop = TRUE] })
+     })
+
+     cent <- lapply(1L:ncols, function(idc) {
+          if (is.null(cent))
+               NULL
+          else
+               cent[ , idc, drop = TRUE]
+     })
+
+     list(series = series, cent = cent)
 }

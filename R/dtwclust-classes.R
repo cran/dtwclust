@@ -11,7 +11,7 @@
 #' pass-through \code{preproc} function.
 #'
 #' @slot dist The function to calculate the distance matrices.
-#' @slot allcent The function to calculate centroids at each iteration.
+#' @slot allcent The function to calculate centroids on each iteration.
 #' @slot cluster The function used to assign a series to a cluster.
 #' @slot preproc The function used to preprocess the data (relevant for \code{\link[stats]{predict}}).
 #'
@@ -28,7 +28,7 @@ setClass("dtwclustFamily",
                    cluster = "function",
                    preproc = "function"),
 
-         prototype = prototype(preproc = function(x) x,
+         prototype = prototype(preproc = function(x, ...) x,
                                cluster = function(distmat = NULL, ...) {
                                     if (is.null(distmat))
                                          stop("Something is wrong, couldn't calculate distances.")
@@ -76,7 +76,7 @@ setClass("dtwclustFamily",
 #' }
 #'
 #' @slot dba.iter Integer. Maximum number of iterations for \code{\link{DBA}} centroids.
-#' @slot pam.precompute Logical flag. Precompute the whole distance matrix once and reuse it at each iteration
+#' @slot pam.precompute Logical flag. Precompute the whole distance matrix once and reuse it on each iteration
 #' if using PAM centroids. Otherwise calculate distances at every iteration.
 #'
 #' @section Only for fuzzy clustering:
@@ -159,8 +159,10 @@ setClass("dtwclustControl",
 #' @slot iter The number of iterations used.
 #' @slot converged A logical indicating whether the function converged.
 #' @slot clusinfo A data frame with two columns: \code{size} indicates the number of series each cluster has,
-#' and \code{av_dist} indicates the average distance between series of each cluster (crisp partition).
-#' @slot centers A list with the centroid time series.
+#' and \code{av_dist} indicates, for each cluster, the average distance between series and their respective
+#' centroids (crisp partition).
+#' @slot centers Deprecated, please use \code{centroids} instead.
+#' @slot centroids A list with the centroid time series.
 #' @slot cldist A column vector with the distance between each series in the data and its corresponding
 #' centroid (crisp partition).
 #' @slot type A string indicating one of the supported clustering types of \code{\link{dtwclust}}.
@@ -201,6 +203,7 @@ setClass("dtwclust", contains = c("hclust"),
                    clusinfo = "data.frame",
 
                    centers = "list",
+                   centroids = "list",
                    cldist = "matrix",
 
                    type = "character",

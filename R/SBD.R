@@ -109,15 +109,15 @@ SBD <- function(x, y, znorm = FALSE) {
 # Wrapper for proxy::dist
 # ========================================================================================================
 
-SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise = FALSE) {
-
+SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise = FALSE, ...) {
      x <- consistency_check(x, "tsmat")
 
      if (error.check)
           consistency_check(x, "vltslist")
 
+     if(znorm) x <- zscore(x)
+
      if (is.null(y)) {
-          if(znorm) x <- zscore(x)
           y <- x
 
      } else {
@@ -126,19 +126,18 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise =
           if (error.check)
                consistency_check(y, "vltslist")
 
-          if(znorm) {
-               x <- zscore(x)
-               y <- zscore(y)
-          }
+          if(znorm) y <- zscore(y)
      }
+
+     retclass <- "crossdist"
 
      ## Precompute FFTs, padding with zeros as necessary, which will be compensated later
      L <- max(lengths(x)) + max(lengths(y)) - 1L
      fftlen <- stats::nextn(L, 2L)
 
-     fftx <- lapply(x, function(u) { stats::fft(c(u, rep(0, fftlen-length(u)))) })
+     fftx <- lapply(x, function(u) { stats::fft(c(u, rep(0, fftlen - length(u)))) })
 
-     ffty <- lapply(y, function(v) { stats::fft(c(v, rep(0, fftlen-length(v)))) })
+     ffty <- lapply(y, function(v) { stats::fft(c(v, rep(0, fftlen - length(v)))) })
 
      ## Register doSEQ if necessary
      check_parallel()
@@ -146,16 +145,18 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise =
      x <- split_parallel(x)
      fftx <- split_parallel(fftx)
 
+     ## Calculate distance matrix
      if (pairwise) {
           y <- split_parallel(y)
           ffty <- split_parallel(ffty)
-     }
 
-     ## Calculate distance matrix
-     if (pairwise) {
+          if (length(lengths(x)) != length(lengths(y)) || lengths(x) != lengths(y))
+               stop("Pairwise distances require the same amount of series in 'x' and 'y'")
+
           D <- foreach(x = x, fftx = fftx, y = y, ffty = ffty,
                        .combine = c,
                        .multicombine = TRUE,
+                       .export = "lnorm",
                        .packages = "stats") %dopar% {
                             mapply(y, ffty, x, fftx,
                                    FUN = function(y, ffty, x, fftx) {
@@ -167,7 +168,7 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise =
                                         CCseq <- c(CCseq[(length(ffty) - length(y) + 2L):length(CCseq)],
                                                    CCseq[1L:length(x)])
 
-                                        CCseq <- CCseq / (sqrt(crossprod(x)) * sqrt(crossprod(y)))
+                                        CCseq <- CCseq / (lnorm(x, 2) * lnorm(y, 2))
 
                                         dd <- 1 - max(CCseq)
 
@@ -175,12 +176,13 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise =
                                    })
                        }
 
-          attr(D, "class") <- "pairdist"
+          retclass <- "pairdist"
 
      } else {
           D <- foreach(x = x, fftx = fftx,
                        .combine = rbind,
                        .multicombine = TRUE,
+                       .export = "lnorm",
                        .packages = "stats") %dopar% {
                             ret <- mapply(x, fftx,
                                           MoreArgs = list(Y = y, FFTY = ffty),
@@ -197,7 +199,7 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise =
                                                            CCseq <- c(CCseq[(length(ffty) - length(y) + 2L):length(CCseq)],
                                                                       CCseq[1L:length(x)])
 
-                                                           CCseq <- CCseq / (sqrt(crossprod(x)) * sqrt(crossprod(y)))
+                                                           CCseq <- CCseq / (lnorm(x, 2) * lnorm(y, 2))
 
                                                            dd <- 1 - max(CCseq)
 
@@ -207,10 +209,9 @@ SBD.proxy <- function(x, y = NULL, znorm = FALSE, error.check = TRUE, pairwise =
 
                             do.call(rbind, ret)
                        }
-
-          attr(D, "class") <- "crossdist"
      }
 
+     class(D) <- retclass
      attr(D, "method") <- "SBD"
 
      D

@@ -2,11 +2,11 @@ Package: dtwclust
 Type: Package
 Title: Time Series Clustering Along with Optimizations for the Dynamic
         Time Warping Distance
-Version: 2.2.1
-Date: 2016-09-03
+Version: 2.3.0
+Date: 2016-10-03
 Depends: R (>= 3.2.0), proxy (>= 0.4-16), dtw, ggplot2
-Imports: stats, utils, methods, parallel, rngtools, flexclust, caTools,
-        reshape2, foreach, Rcpp
+Imports: methods, parallel, stats, utils, caTools, flexclust, foreach,
+        Rcpp, reshape2, rngtools
 Suggests: TSdist, TSclust, doParallel, testthat, knitr
 LinkingTo: Rcpp
 Author: Alexis Sarda-Espinosa
@@ -22,12 +22,13 @@ License: GPL-3
 LazyData: TRUE
 NeedsCompilation: yes
 RoxygenNote: 5.0.1
-Collate: 'DBA.R' 'NCCc.R' 'SBD.R' 'TADPole.R' 'all_cent.R' 'cvi.R'
-        'ddist.R' 'dtw-lb.R' 'dtw2.R' 'dtwclust-classes.R'
-        'dtwclust-methods.R' 'dtwclust.R' 'fuzzy.R' 'lb-improved.R'
-        'lb-keogh.R' 'partitional.R' 'utils.R' 'pkg.R'
-        'reinterpolate.R' 'shape-extraction.R' 'uciCT.R' 'zscore.R'
+Collate: 'DBA.R' 'NCCc.R' 'SBD.R' 'TADPole.R' 'all-cent.R' 'cvi.R'
+        'ddist.R' 'dtw-basic.R' 'dtw-lb.R' 'dtw2.R'
+        'dtwclust-classes.R' 'dtwclust-methods.R' 'dtwclust.R'
+        'fuzzy.R' 'lb-improved.R' 'lb-keogh.R' 'partitional.R'
+        'utils.R' 'pkg.R' 'reinterpolate.R' 'shape-extraction.R'
+        'uciCT.R' 'zscore.R'
 VignetteBuilder: knitr
-Packaged: 2016-09-02 22:21:03 UTC; oso
+Packaged: 2016-10-03 11:32:51 UTC; oso
 Repository: CRAN
-Date/Publication: 2016-09-04 09:36:25
+Date/Publication: 2016-10-03 23:12:17

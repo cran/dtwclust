@@ -48,7 +48,7 @@
 #' data(uciCT)
 #'
 #' # Reinterpolate to same length
-#' data <- lapply(CharTraj, reinterpolate, newLength = 180)
+#' data <- reinterpolate(CharTraj, new.length = max(lengths(CharTraj)))
 #'
 #' # Calculate the DTW distance between a certain subset aided with the lower bound
 #' system.time(d <- dtw_lb(data[1:5], data[6:50], window.size = 20))
@@ -97,21 +97,34 @@
 #' @param norm Pointwise distance. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.
 #' @param error.check Should inconsistencies in the data be checked?
 #' @param pairwise Calculate pairwise distances?
+#' @param dtw.func Which function to use for core DTW the calculations, either "dtw" or "dtw_basic". See
+#' \code{\link[dtw]{dtw}} and \code{\link{dtw_basic}}.
+#' @param ... Further arguments for \code{dtw.func} or \code{\link{lb_improved}}.
 #'
 #' @return The distance matrix with class \code{crossdist}.
 #'
 #' @export
 
 dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
-                   error.check = TRUE, pairwise = FALSE) {
-
+                   error.check = TRUE, pairwise = FALSE,
+                   dtw.func = "dtw_basic", ...) {
      norm <- match.arg(norm, c("L1", "L2"))
+     dtw.func <- match.arg(dtw.func, c("dtw", "dtw_basic"))
 
-     method <- ifelse(norm == "L1", "DTW", "DTW2")
+     if (dtw.func == "dtw")
+          method <- ifelse(norm == "L1", "DTW", "DTW2")
+     else
+          method <- toupper(dtw.func)
 
      X <- consistency_check(x, "tsmat")
 
      check_parallel()
+
+     dots <- list(...)
+     dots$dist.method <- norm
+     dots$norm <- norm
+     dots$window.size <- window.size
+     dots$pairwise <- TRUE
 
      if (pairwise) {
           if (is.null(y))
@@ -123,9 +136,9 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
                stop("Pairwise distances require the same amount of series in 'x' and 'y'")
 
           if (is.null(window.size))
-               window.type <- "none"
+               dots$window.type <- "none"
           else
-               window.type <- "slantedband"
+               dots$window.type <- "slantedband"
 
           X <- split_parallel(X)
           Y <- split_parallel(Y)
@@ -133,40 +146,35 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
           D <- foreach(X = X, Y = Y,
                        .combine = c,
                        .multicombine = TRUE,
-                       .packages = "dtwclust") %dopar% {
-                            proxy::dist(X, Y,
-                                        pairwise = TRUE,
-                                        method = method,
-                                        dist.method = norm,
-                                        window.type = window.type,
-                                        window.size = window.size)
+                       .packages = "dtwclust",
+                       .export = "enlist") %dopar% {
+                            do.call(proxy::dist,
+                                    enlist(x = X, y = Y,
+                                           method = method,
+                                           dots = dots))
                        }
 
           return(D)
      }
 
      window.size <- consistency_check(window.size, "window")
+     dots$window.size <- window.size
+     dots$window.type <- "slantedband"
 
      ## NOTE: I tried starting with LBK estimate, refining with LBI and then DTW but, overall,
      ## it was usually slower, almost the whole matrix had to be recomputed for LBI
 
-     if (!is.null(y)) {
+     if (!is.null(y))
           Y <- consistency_check(y, "tsmat")
-
-          force.symmetry <- FALSE
-
-     } else {
+     else
           Y <- X
-
-          force.symmetry <- TRUE
-     }
 
      ## Initial estimate
      D <- proxy::dist(X, Y, method = "LBI",
                       window.size = window.size,
                       norm = norm,
                       error.check = error.check,
-                      force.symmetry = force.symmetry)
+                      ...)
 
      ## Update with DTW
      new.indNN <- apply(D, 1L, which.min) # index of nearest neighbors
@@ -178,19 +186,19 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
 
           indNew <- split_parallel(indNew)
 
-          exclude <- setdiff(ls(), c("X", "Y", "norm", "indNN", "window.size", "method"))
+          exclude <- setdiff(ls(), c("X", "Y", "method", "dots", "indNew", "indNN"))
 
           dSub <- foreach(indNew = indNew,
                           .combine = c,
                           .multicombine = TRUE,
                           .packages = "dtwclust",
-                          .noexport = exclude) %dopar% {
-                               proxy::dist(X[indNew], Y[indNN[indNew]],
-                                           pairwise = TRUE,
-                                           method = method,
-                                           dist.method = norm,
-                                           window.type = "slantedband",
-                                           window.size = window.size)
+                          .noexport = exclude,
+                          .export = "enlist") %dopar% {
+                               do.call(proxy::dist,
+                                       enlist(x = X[indNew],
+                                              y = Y[indNN[indNew]],
+                                              method = method,
+                                              dots = dots))
                           }
 
           D[cbind(1L:length(X), indNN)[unlist(indNew), , drop = FALSE]] <- dSub
@@ -198,6 +206,7 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
           new.indNN <- apply(D, 1L, which.min)
      }
 
+     class(D) <- "crossdist"
      attr(D, "method") <- "DTW_LB"
 
      D

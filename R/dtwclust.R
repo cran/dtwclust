@@ -10,7 +10,7 @@
 #' equivalent to the k-Shape algorithm (Paparrizos and Gravano, 2015).
 #'
 #' The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to a list,
-#' the former row-wise and the latter column-wise. Only lists can have series with different lengths or
+#' both row-wise. Only lists can have series with different lengths or
 #' multiple dimensions. Most of the optimizations require series to have the same length, so consider
 #' reinterpolating them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}).
 #' No missing values are allowed.
@@ -29,7 +29,7 @@
 #' @section Partitional Clustering:
 #'
 #' Stochastic algorithm that creates a hard partition of the data into \code{k} clusters, where each cluster
-#' has a center/centroid. In case of time series clustering, the centroids are also time series.
+#' has a centroid. In case of time series clustering, the centroids are also time series.
 #'
 #' The cluster centroids are first randomly initialized by selecting some of the series in the data. The
 #' distance between each series and each centroid is calculated, and the series are assigned to the cluster
@@ -78,7 +78,7 @@
 #'
 #' TADPole clustering adopts a relatively new clustering framework and adapts it to time series clustering
 #' with DTW. Because of the way it works, it can be considered a kind of Partitioning Around Medoids (PAM).
-#' This means that the cluster centers are always elements of the data. However, this algorithm is
+#' This means that the cluster centroids are always elements of the data. However, this algorithm is
 #' deterministic, depending on the value of the cutoff distance \code{dc}, which can be controlled with the
 #' corresponding parameter of this function.
 #'
@@ -88,8 +88,8 @@
 #'
 #' @section Centroid Calculation:
 #'
-#' In the case of partitional/fuzzy algorithms, a suitable function should calculate the cluster centers at
-#' every iteration. In this case, the centers are themselves time series. Fuzzy clustering uses the standard
+#' In the case of partitional/fuzzy algorithms, a suitable function should calculate the cluster centroids at
+#' every iteration. In this case, the centroids are themselves time series. Fuzzy clustering uses the standard
 #' fuzzy c-means centroid by default.
 #'
 #' In either case, a custom function can be provided. If one is provided, it will receive the following
@@ -100,13 +100,13 @@
 #'   \item \code{"cl_id"}: A numeric vector with length equal to the number of series in \code{data},
 #'   indicating which cluster a series belongs to (\code{c(1L, 2L, 2L)})
 #'   \item \code{"k"}: The desired number of total clusters (\code{2L})
-#'   \item \code{"cent"}: The current centers in order, in a list (\code{list(center1, center2)})
+#'   \item \code{"cent"}: The current centroids in order, in a list (\code{list(centroid1, centroid2)})
 #'   \item \code{"cl_old"}: The membership vector of the \emph{previous} iteration (\code{c(1L, 1L, 2L)})
 #'   \item The elements of \code{...}
 #' }
 #'
-#' Therefore, the function should \emph{always} include the ellipsis \code{...} in its definition. In case of
-#' fuzzy clustering, the membership vectors (2nd and 5th elements above) are matrices with number of rows
+#' Therefore, the function should \emph{always} include the ellipsis (\code{...}) in its definition. In case
+#' of fuzzy clustering, the membership vectors (2nd and 5th elements above) are matrices with number of rows
 #' equal to amount of elements in the data, and number of columns equal to the number of desired clusters.
 #' Each row must sum to 1.
 #'
@@ -120,7 +120,7 @@
 #'   \item "shape": Shape averaging. By default, all series are z-normalized in this case, since the resulting
 #'   centroids will also have this normalization. See \code{\link{shape_extraction}} for more details.
 #'   \item "dba": DTW Barycenter Averaging. See \code{\link{DBA}} for more details.
-#'   \item "pam": Partition around medoids (PAM). This basically means that the cluster centers are always
+#'   \item "pam": Partition around medoids (PAM). This basically means that the cluster centroids are always
 #'   one of the time series in the data. In this case, the distance matrix can be pre-computed once using all
 #'   time series in the data and then re-used at each iteration. It usually saves overhead overall.
 #'   \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and always used for that type of clustering
@@ -136,7 +136,7 @@
 #'
 #' As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid function that
 #' takes a list of series as only input and returns a single centroid series. These centroids are returned in
-#' the \code{centers} slot. By default, a type of PAM centroid function is used.
+#' the \code{centroids} slot. By default, a type of PAM centroid function is used.
 #'
 #' @section Distance Measures:
 #'
@@ -152,6 +152,8 @@
 #'   \item \code{"dtw"}: DTW, optionally with a Sakoe-Chiba/Slanted-band constraint*.
 #'   \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*. Read
 #'   details below.
+#'   \item \code{"dtw_basic"}: A custom version of DTW with less functionality, but slightly faster.
+#'   See \code{\link{dtw_basic}}.
 #'   \item \code{"dtw_lb"}: DTW with L1 or L2 norm* and optionally a Sakoe-Chiba constraint*. Some
 #'   computations are avoided by first estimating the distance matrix with Lemire's lower bound and then
 #'   iteratively refining with DTW. See \code{\link{dtw_lb}}. Not suitable for \code{pam.precompute}* =
@@ -165,7 +167,7 @@
 #' \code{L2} as \code{dist.method}: with \code{DTW2}, pointwise distances (the local cost matrix) are
 #' calculated with \code{L1} norm, \emph{each} element of the matrix is squared and the result is fed into
 #' \code{\link[dtw]{dtw}}, which finds the optimum warping path. The square root of the resulting
-#' distance is \emph{then} computed.
+#' distance is \emph{then} computed. See \code{\link{dtw2}}.
 #'
 #' Only \code{dtw}, \code{dtw2} and \code{sbd} support series of different length. The lower bounds
 #' are probably unsuitable for direct clustering unless series are very easily distinguishable.
@@ -211,7 +213,8 @@
 #' on the data, but the user must make sure that the format stays consistent, i.e. a list of time series.
 #'
 #' Setting to \code{NULL} means no preprocessing (except for \code{centroid = "shape"}). A provided function
-#' will receive the data as first and only argument.
+#' will receive the data as first argument, followed by the contents of \code{...}. Therefore, the preprocessing
+#' function should have \code{...} in its arguments, even if it is not used.
 #'
 #' It is convenient to provide this function if you're planning on using the \code{\link[stats]{predict}}
 #' generic.
@@ -262,27 +265,11 @@
 #' The lower bounds are defined only for time series of equal length. \code{DTW} and \code{DTW2}
 #' don't require this, but they are much slower to compute.
 #'
-#' The lower bounds are \strong{not} symmetric, and \code{DTW} is only symmetric if series have equal
-#' lengths.
+#' The lower bounds are \strong{not} symmetric, and \code{DTW} is not symmetric in general.
 #'
 #' @references
 #'
-#' Sakoe H and Chiba S (1978). ``Dynamic programming algorithm optimization for spoken word
-#' recognition.'' \emph{Acoustics, Speech and Signal Processing, IEEE Transactions on},
-#' \strong{26}(1), pp. 43-49. ISSN 0096-3518, \url{http://doi.org/10.1109/TASSP.1978.1163055}.
-#'
-#' Ratanamahatana A and Keogh E (2004). ``Everything you know about dynamic time warping is wrong.''
-#' In \emph{3rd Workshop on Mining Temporal and Sequential Data, in conjunction with 10th ACM SIGKDD
-#' Int. Conf. Knowledge Discovery and Data Mining (KDD-2004), Seattle, WA}.
-#'
-#' Bedzek, J.C. (1981). Pattern recognition with fuzzy objective function algorithms.
-#'
-#' D'Urso, P., & Maharaj, E. A. (2009). Autocorrelation-based fuzzy clustering of time series.
-#' Fuzzy Sets and Systems, 160(24), 3565-3589.
-#'
-#' Paparrizos J and Gravano L (2015). ``k-Shape: Efficient and Accurate Clustering of Time Series.''
-#' In \emph{Proceedings of the 2015 ACM SIGMOD International Conference on Management of Data},
-#' series SIGMOD '15, pp. 1855-1870. ISBN 978-1-4503-2758-9, \url{http://doi.org/10.1145/2723372.2737793}.
+#' Please refer to the package vignette references.
 #'
 #' @example inst/dtwclust-examples.R
 #'
@@ -293,8 +280,7 @@
 #'
 #' @author Alexis Sarda-Espinosa
 #'
-#' @param data A list of series, a numeric matrix or a data frame. Matrices are coerced row-wise and data frames
-#' column-wise.
+#' @param data A list of series, a numeric matrix or a data frame. Matrices and data frames are coerced row-wise.
 #' @param type What type of clustering method to use: \code{"partitional"}, \code{"hierarchical"}, \code{"tadpole"}
 #' or \code{"fuzzy"}.
 #' @param k Number of desired clusters. It may be a numeric vector with different values.
@@ -305,12 +291,12 @@
 #' Ignored for \code{type} = \code{"tadpole"}.
 #' @param centroid Either a supported string or an appropriate function to calculate centroids
 #' when using partitional or prototypes for hierarchical/tadpole methods. See Centroid section.
-#' @param preproc Function to preprocess data. Defaults to \code{zscore} \emph{only} if \code{centroid}
+#' @param preproc Function to preprocess data. Defaults to \code{\link{zscore}} \emph{only} if \code{centroid}
 #' \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.
 #' @param dc Cutoff distance for the \code{\link{TADPole}} algorithm.
 #' @param control Named list of parameters or \code{dtwclustControl} object for clustering algorithms. See
 #' \code{\link{dtwclustControl}}. \code{NULL} means defaults.
-#' @param seed Random seed for reproducibility of partitional and fuzzy algorithms.
+#' @param seed Random seed for reproducibility.
 #' @param distmat If a cross-distance matrix is already available, it can be provided here so it's re-used.
 #' Only relevant if \code{centroid} = "pam" or \code{type} = "hierarchical". See examples.
 #' @param ... Additional arguments to pass to \code{\link[proxy]{dist}} or a custom function.
@@ -324,7 +310,7 @@
 #'
 
 dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "average",
-                     distance = "dtw", centroid = "pam", preproc = NULL,
+                     distance = "dtw_basic", centroid = "pam", preproc = NULL,
                      dc = NULL, control = NULL, seed = NULL, distmat = NULL,
                      ...)
 {
@@ -344,6 +330,11 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
      MYCALL <- match.call(expand.dots = TRUE)
 
+     if (type == "fuzzy" && !missing(centroid) && is.character(centroid) && centroid != "fcm") {
+          warning("The 'centroid' argument was provided but was different than 'fcm', so it was ignored.")
+          centroid <- "fcm"
+     }
+
      ## ----------------------------------------------------------------------------------------------------------
      ## Control parameters
      ## ----------------------------------------------------------------------------------------------------------
@@ -355,42 +346,27 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
           stop("Invalid control argument") # validObject should generate an error anyway
      }
 
-     ## ----------------------------------------------------------------------------------------------------------
-     ## Prevent duplicate matching
-     ## ----------------------------------------------------------------------------------------------------------
-
      dots <- list(...)
-
-     args <- names(MYCALL[-1L])
-     id_oldargs <- which(args %in% slotNames("dtwclustControl"))
-     if (length(id_oldargs) > 0L) {
-          message("Control arguments should not be provided in ... to prevent duplicate matches.")
-          message("Please type ?dtwclustControl for more information.\n")
-
-          for (i in id_oldargs) {
-               var <- MYCALL[-1L][[args[i]]]
-               slot(control, args[i]) <- var
-
-               ## remove from dots to avoid duplicate matches
-               dots[[args[i]]] <- NULL
-          }
-     }
 
      ## ----------------------------------------------------------------------------------------------------------
      ## Preprocess
      ## ----------------------------------------------------------------------------------------------------------
 
      if (!is.null(preproc) && is.function(preproc)) {
-          data <- preproc(data)
-          preproc_char <- as.character(substitute(preproc))[[1]]
+          if (is.null(formals(preproc)$...))
+               stop("The preprocessing function should have '...' in its formal arguments, ",
+                    "even if it is not used.")
+
+          data <- preproc(data, ...)
+          preproc_char <- as.character(substitute(preproc))[1L]
 
      } else if (type == "partitional" && is.character(centroid) && centroid == "shape") {
           preproc <- zscore
           preproc_char <- "zscore"
-          data <- zscore(data)
+          data <- zscore(data, ...)
 
      } else if (is.null(preproc)) {
-          preproc <- function(x) x
+          preproc <- function(x, ...) x
           preproc_char <- "none"
 
      } else stop("Invalid preprocessing")
@@ -404,12 +380,14 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
      else
           datalist <- list()
 
-     Lengths <- lengths(data)
-     diff_lengths <- length(unique(Lengths)) > 1L
+     diff_lengths <- check_lengths(data)
 
      consistency_check(distance, "dist", trace = control@trace, Lengths = diff_lengths, silent = FALSE)
 
      if(type %in% c("partitional", "fuzzy")) {
+          if (diff_lengths && type == "fuzzy")
+               stop("Fuzzy clustering does not support series with different length.")
+
           if (is.character(centroid)) {
                if (type == "fuzzy")
                     centroid <- "fcm"
@@ -421,12 +399,26 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                consistency_check(centroid, "cent", trace = control@trace)
      }
 
-     if (diff_lengths && distance %in% c("dtw", "dtw2"))
+     ## symmetric versions of dtw that I know of
+     ## unconstrained and with symmetric1/symmetric2 is always symmetric, regardless of diff_lengths
+     symmetric_pattern <- !is.null(dots$step.pattern) &&
+          (identical(dots$step.pattern, symmetric1) ||
+                identical(dots$step.pattern, symmetric2))
+
+     if (distance %in% c("dtw", "dtw2", "dtw_basic")) {
+          if (!symmetric_pattern)
+               control@symmetric <- FALSE
+          else if (!is.null(control@window.size) && diff_lengths)
+               control@symmetric <- FALSE
+          else
+               control@symmetric <- TRUE
+
+     } else if (distance %in% c("lbk", "lbi")) {
           control@symmetric <- FALSE
-     else if (distance %in% c("lbk", "lbi"))
-          control@symmetric <- FALSE
-     else if (distance %in% c("sbd", "dtw", "dtw2"))
+
+     } else if (distance %in% c("sbd")) {
           control@symmetric <- TRUE
+     }
 
      ## For parallel computation
      control@packages <- c("dtwclust", control@packages)
@@ -480,7 +472,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                     if (control@trace)
                          cat("\n\tPrecomputing distance matrix...\n\n")
 
-                    distmat <- do.call("distfun", c(list(data), dots))
+                    distmat <- do.call("distfun", enlist(x = data, centroids = NULL, dots = dots))
 
                     ## Redefine new distmat
                     assign("distmat", distmat, envir = environment(distfun))
@@ -497,7 +489,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
           ## Centroid function
           ## ----------------------------------------------------------------------------------------------------------
 
-          ## Closures, all_cent.R
+          ## Closures, all-cent.R
           allcent <- all_cent(case = centroid,
                               distmat = distmat,
                               distfun = distfun,
@@ -530,18 +522,18 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
                ## Just one repetition
                kc.list <- list(do.call("kcca.list",
-                                       c(dots,
-                                         list(x = data,
+                                       enlist(x = data,
                                               k = k,
                                               family = family,
                                               control = control,
-                                              fuzzy = isTRUE(type == "fuzzy")))))
+                                              fuzzy = isTRUE(type == "fuzzy"),
+                                              dots = dots)))
 
           } else {
                ## I need to re-register any custom distances in each parallel worker
                dist_entry <- proxy::pr_DB$get_entry(distance)
 
-               export <- c("kcca.list", "consistency_check")
+               export <- c("kcca.list", "consistency_check", "enlist")
 
                rng <- rngtools::RNGseq(length(k) * control@nrep, seed = seed, simplify = FALSE)
                rng <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) rng[i])
@@ -550,6 +542,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
                k0 <- k
                rng0 <- rng
+               i <- integer() # CHECK complains now?
 
                kc.list <- foreach(k = k0, rng = rng0, .combine = comb0, .multicombine = TRUE,
                                   .packages = control@packages, .export = export) %:%
@@ -561,12 +554,12 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                                       do.call(proxy::pr_DB$set_entry, dist_entry)
 
                                  kc <- do.call("kcca.list",
-                                               c(dots,
-                                                 list(x = data,
+                                               enlist(x = data,
                                                       k = k,
                                                       family = family,
                                                       control = control,
-                                                      fuzzy = isTRUE(type == "fuzzy"))))
+                                                      fuzzy = isTRUE(type == "fuzzy"),
+                                                      dots = dots))
 
                                  gc(FALSE)
 
@@ -603,7 +596,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                    centroid = centroid,
                    preproc = preproc_char,
 
-                   centers = kc$centers,
+                   centers = kc$centroids,
+                   centroids = kc$centroids,
                    k = kc$k,
                    cluster = kc$cluster,
                    fcluster = kc$fcluster,
@@ -662,7 +656,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                     cat("\n\tCalculating distance matrix...\n")
 
                ## single argument is to calculate whole distance matrix
-               D <- do.call("distfun", c(list(data), dots))
+               D <- do.call("distfun", enlist(x = data, dots = dots))
           }
 
           ## Required form for 'hclust'
@@ -686,42 +680,42 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
           RET <- lapply(k, function(k) {
                lapply(hc, function(hc) {
-                    ## cutree and corresponding centers
+                    ## cutree and corresponding centroids
                     cluster <- stats::cutree(hc, k)
 
                     if (is.function(centroid)) {
                          allcent <- centroid
 
-                         centers <- lapply(1L:k, function(kcent) centroid(data[cluster == kcent]))
+                         centroids <- lapply(1L:k, function(kcent) centroid(data[cluster == kcent]))
 
-                         cldist <- do.call("distfun", c(list(x = data,
-                                                             centers = centers[cluster],
-                                                             pairwise = TRUE),
-                                                        dots))
+                         cldist <- do.call("distfun", enlist(x = data,
+                                                             centroids = centroids[cluster],
+                                                             pairwise = TRUE,
+                                                             dots = dots))
 
                          cldist <- as.matrix(cldist)
 
                     } else {
                          allcent <- function(dummy) { data[which.min(apply(D, 1L, sum))] }
 
-                         centers <- sapply(1L:k, function(kcent) {
+                         centroids <- sapply(1L:k, function(kcent) {
                               id_k <- cluster == kcent
 
                               d_sub <- D[id_k, id_k, drop = FALSE]
 
-                              id_center <- which.min(apply(d_sub, 1L, sum))
+                              id_centroid <- which.min(apply(d_sub, 1L, sum))
 
-                              which(id_k)[id_center]
+                              which(id_k)[id_centroid]
                          })
 
-                         cldist <- as.matrix(D[,centers][cbind(1L:length(data), cluster)])
-                         centers <- data[centers]
+                         cldist <- as.matrix(D[,centroids][cbind(1L:length(data), cluster)])
+                         centroids <- data[centroids]
                     }
 
                     ## Some additional cluster information (taken from flexclust)
                     size <- as.vector(table(cluster))
-                    clusinfo <- data.frame(size = size,
-                                           av_dist = as.vector(tapply(cldist[,1], cluster, sum))/size)
+                    clusinfo <- data.frame(size = size, av_dist = 0)
+                    clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], cluster, mean))
 
                     new("dtwclust", hc,
                         call = MYCALL,
@@ -738,7 +732,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                         centroid = as.character(substitute(centroid)),
                         preproc = preproc_char,
 
-                        centers = centers,
+                        centers = centroids,
+                        centroids = centroids,
                         k = as.integer(k),
                         cluster = cluster,
                         fcluster = matrix(NA_real_),
@@ -795,8 +790,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
           else
                centchar <- "PAM (TADPole)"
 
-          RET <- foreach(k = k, .combine = list, .multicombine = TRUE, .packages = "dtwclust") %dopar% {
-               R <- TADPole(data, window.size = control@window.size, k = k, dc = dc, error.check = FALSE)
+          RET <- foreach(k = k, .combine = list, .multicombine = TRUE, .packages = "dtwclust", .export = "enlist") %dopar% {
+               R <- TADPole(data, k = k, dc = dc, window.size = control@window.size, error.check = FALSE)
 
                if (control@trace) {
                     cat("TADPole completed, pruning percentage = ",
@@ -811,22 +806,24 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
                if (is.function(centroid)) {
                     allcent <- centroid
-                    centers <- lapply(1L:k, function(kcent) centroid(data[R$cl == kcent]))
+                    centroids <- lapply(1L:k, function(kcent) centroid(data[R$cl == kcent]))
+
                } else {
-                    allcent <- function(dummy) { data[R$centers[1L]] }
-                    centers <- data[R$centers]
+                    ## this is important for cvi function
+                    allcent <- function(dummy) { data[R$centroids[1L]] }
+                    centroids <- data[R$centroids]
                }
 
                ## Some additional cluster information (taken from flexclust)
-               cldist <- do.call("distfun", c(list(x = data,
-                                                   centers = centers[R$cl],
-                                                   pairwise = TRUE),
-                                              dots))
+               cldist <- do.call("distfun", enlist(x = data,
+                                                   centroids = centroids[R$cl],
+                                                   pairwise = TRUE,
+                                                   dots = dots))
 
                cldist <- as.matrix(cldist)
                size <- as.vector(table(R$cl))
-               clusinfo <- data.frame(size = size,
-                                      av_dist = as.vector(tapply(cldist[ , 1L], R$cl, sum))/size)
+               clusinfo <- data.frame(size = size, av_dist = 0)
+               clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], R$cl, mean))
 
                new("dtwclust",
                    call = MYCALL,
@@ -842,7 +839,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                    centroid = centchar,
                    preproc = preproc_char,
 
-                   centers = centers,
+                   centers = centroids,
+                   centroids = centroids,
                    k = as.integer(k),
                    cluster = as.integer(R$cl),
                    fcluster = matrix(NA_real_),
@@ -874,8 +872,9 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
      if (type %in% c("partitional", "fuzzy") && (control@nrep > 1L || length(k) > 1L))
           attr(RET, "rng") <- unlist(rng0, recursive = FALSE, use.names = FALSE)
 
-     if (control@trace)
+     if (control@trace) {
           cat("\tElapsed time is", toc["elapsed"], "seconds.\n\n")
+     }
 
      RET
 }

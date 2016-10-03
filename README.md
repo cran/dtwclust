@@ -28,6 +28,8 @@ The latest version from CRAN can be installed with `install.packages("dtwclust")
 
 If you want to test the latest version from github, first install the [prerequisites for R package development](https://support.rstudio.com/hc/en-us/articles/200486498-Package-Development-Prerequisites) and then type `devtools::install_github("asardaes/dtwclust")`. If you want the vignette to be installed, set the `build_vignettes` parameter to `TRUE`, it will take a couple of minutes.
 
+If you're wondering about which version to install, take a look at the [NEWS](NEWS.md) file, it contains the changelog and I try to keep it updated.
+
 Examples
 --------
 
@@ -37,11 +39,13 @@ data(uciCT)
 
 ## Reinterpolate data to equal length
 datalist <- zscore(CharTraj)
-data <- lapply(CharTraj, reinterpolate, newLength = 180)
+data <- reinterpolate(CharTraj, new.length = max(lengths(CharTraj)))
 
 ## Common controls
 ctrl <- new("dtwclustControl", window.size = 20L, trace = TRUE)
 ```
+
+### Partitional
 
 ``` r
 ## =============================================================================================
@@ -53,18 +57,21 @@ ctrl@pam.precompute <- FALSE
 kc.dtwlb <- dtwclust(data = data, k = 20, distance = "dtw_lb",
                      centroid = "pam", seed = 3247, 
                      control = ctrl)
-#> Iteration 1: Changes / Distsum = 100 / 1747.417
-#> Iteration 2: Changes / Distsum = 18 / 1417.733
-#> Iteration 3: Changes / Distsum = 13 / 1349.521
-#> Iteration 4: Changes / Distsum = 2 / 1311.201
-#> Iteration 5: Changes / Distsum = 0 / 1311.201
+#> Iteration 1: Changes / Distsum = 100 / 2055.902
+#> Iteration 2: Changes / Distsum = 11 / 1743.629
+#> Iteration 3: Changes / Distsum = 5 / 1702.148
+#> Iteration 4: Changes / Distsum = 3 / 1702.929
+#> Iteration 5: Changes / Distsum = 2 / 1690.314
+#> Iteration 6: Changes / Distsum = 0 / 1690.314
 #> 
-#>  Elapsed time is 10.037 seconds.
+#>  Elapsed time is 5.698 seconds.
 
 plot(kc.dtwlb)
 ```
 
 ![](README-partitional-1.png)
+
+### Hierarchical
 
 ``` r
 ## =============================================================================================
@@ -80,7 +87,7 @@ hc.sbd <- dtwclust(datalist, type = "hierarchical",
 #> 
 #>  Performing hierarchical clustering...
 #> 
-#>  Elapsed time is 0.695 seconds.
+#>  Elapsed time is 0.807 seconds.
 
 cat("CVIs for HC+SBD:\n")
 #> CVIs for HC+SBD:
@@ -156,6 +163,8 @@ plot(hc.sbd[[which.min(cvis["VI", ])]])
 
 ![](README-hierarchical-1.png)
 
+### TADPole
+
 ``` r
 ## =============================================================================================
 ## TADPole clustering
@@ -166,14 +175,16 @@ kc.tadp <- dtwclust(data, type = "tadpole", k = 20,
 #> 
 #> Entering TADPole...
 #> 
-#> TADPole completed, pruning percentage = 86.7%
+#> TADPole completed, pruning percentage = 86.5%
 #> 
-#>  Elapsed time is 3.42 seconds.
+#>  Elapsed time is 1.584 seconds.
 
 plot(kc.tadp, clus = 1:4)
 ```
 
 ![](README-tadpole-1.png)
+
+### Parallel support
 
 ``` r
 ## =============================================================================================
@@ -185,7 +196,6 @@ require(doParallel)
 #> Loading required package: foreach
 #> Loading required package: iterators
 cl <- makeCluster(detectCores(), "FORK")
-invisible(clusterEvalQ(cl, library(dtwclust)))
 registerDoParallel(cl)
 
 ## Creating a custom distance (normalized DTW)
@@ -212,15 +222,14 @@ sapply(kc.ndtw, cvi, b = CharTrajLabels, type = "VI")
 
 ## DBA centroids
 kc <- dtwclust(datalist, k = 20,
-               distance = "nDTW", centroid = "dba",
-               seed = 9421, control = list(trace = TRUE))
-#> Series have different length. Please confirm that the provided distance function supports this.
-#> Iteration 1: Changes / Distsum = 100 / 5.057696
-#> Iteration 2: Changes / Distsum = 2 / 3.594286
-#> Iteration 3: Changes / Distsum = 1 / 3.550964
-#> Iteration 4: Changes / Distsum = 0 / 3.531171
+               distance = "dtw_basic", centroid = "dba",
+               seed = 9421, control = list(trace = TRUE, window.size = 20L),
+               normalize = TRUE)
+#> Iteration 1: Changes / Distsum = 100 / 6.749242
+#> Iteration 2: Changes / Distsum = 2 / 4.229023
+#> Iteration 3: Changes / Distsum = 0 / 4.180198
 #> 
-#>  Elapsed time is 18.137 seconds.
+#>  Elapsed time is 5.417 seconds.
 
 ## Modifying some plot parameters
 plot(kc, labs.arg = list(title = "DBA Centroids", x = "time", y = "series"))
@@ -235,13 +244,15 @@ stopCluster(cl)
 registerDoSEQ()
 ```
 
+### Fuzzy
+
 ``` r
 ## =============================================================================================
 ## Fuzzy clustering (autocorrelation-based)
 ## =============================================================================================
 
 # Calculate autocorrelation up to 50th lag, considering a list of time series as input
-acf_fun <- function(dat) {
+acf_fun <- function(dat, ...) {
      lapply(dat, function(x) as.numeric(acf(x, lag.max = 50, plot = FALSE)$acf))
 }
 
@@ -260,7 +271,7 @@ fc
 #> 
 #> Time required for analysis:
 #>    user  system elapsed 
-#>   0.176   0.000   0.175 
+#>   0.156   0.000   0.157 
 #> 
 #> Head of fuzzy memberships:
 #> 

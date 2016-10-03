@@ -19,6 +19,10 @@
 #' registered with the \code{proxy} package, since it includes some small optimizations. The convention
 #' mentioned above for references and queries still holds. See the examples.
 #'
+#' The proxy version has an extra parameter \code{force.symmetry} that should only be used when only \code{x}
+#' is provided or both \code{x} and \code{y} are equal. It compares the lower and upper triangular of the
+#' resulting distance matrix and forces symmetry in such a way that the tightest lower bound is obtained.
+#'
 #' @references
 #'
 #' Keogh E and Ratanamahatana CA (2005). ``Exact indexing of dynamic time warping.'' \emph{Knowledge
@@ -141,7 +145,7 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1",
 # ========================================================================================================
 
 lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
-                           force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE) {
+                           force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE, ...) {
 
      norm <- match.arg(norm, c("L1", "L2"))
 
@@ -169,6 +173,8 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
                stop("Window size should not exceed length of the time series")
      }
 
+     retclass <- "crossdist"
+
      ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
      envelops <- lapply(y, function(s) { call_envelop(s, window.size*2L + 1L) })
 
@@ -182,9 +188,10 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
      if (pairwise) {
           lower.env <- split_parallel(lower.env)
           upper.env <- split_parallel(upper.env)
-     }
 
-     if (pairwise) {
+          if (length(lengths(x)) != length(lengths(lower.env)) || any(lengths(x) != lengths(lower.env)))
+               stop("Pairwise distances require the same amount of series in 'x' and 'y'")
+
           D <- foreach(x = x, lower.env = lower.env, upper.env = upper.env,
                        .combine = c,
                        .multicombine = TRUE) %dopar% {
@@ -197,7 +204,7 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
                                    })
                        }
 
-          attr(D, "class") <- "pairdist"
+          retclass <- "pairdist"
 
      } else {
           D <- foreach(x = x,
@@ -219,8 +226,6 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
 
                             do.call(rbind, ret)
                        }
-
-          attr(D, "class") <- "crossdist"
      }
 
      if (force.symmetry && !pairwise) {
@@ -240,6 +245,7 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
           }
      }
 
+     class(D) <- retclass
      attr(D, "method") <- "LB_Keogh"
 
      D

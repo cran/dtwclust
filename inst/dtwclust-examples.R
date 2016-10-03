@@ -10,11 +10,11 @@ ctrl <- new("dtwclustControl", trace = TRUE)
 # Simple partitional clustering with Euclidean distance and PAM centroids
 # ====================================================================================
 
-# Reinterpolate to same length and coerce as matrix
-data <- t(sapply(CharTraj, reinterpolate, newLength = 180))
+# Reinterpolate to same length
+data <- reinterpolate(CharTraj, new.length = max(lengths(CharTraj)))
 
 # Subset for speed
-data <- data[1:20, ]
+data <- data[1:20]
 labels <- CharTrajLabels[1:20]
 
 # Testing several values of k
@@ -80,7 +80,7 @@ plot(hc.sbd[[ which.max(sapply(hc.sbd, randIndex, y = CharTrajLabels)) ]])
 # ====================================================================================
 
 # Calculate autocorrelation up to 50th lag, considering a list of time series as input
-acf_fun <- function(dat) {
+acf_fun <- function(dat, ...) {
      lapply(dat, function(x) as.numeric(acf(x, lag.max = 50, plot = FALSE)$acf))
 }
 
@@ -150,7 +150,7 @@ mv <- lapply(seq(1L, 100L, 5L), function(x) cbind(CharTraj[[x]], CharTraj[[x+1L]
 # cost matrix in the case of multivariate series
 mvc <- dtwclust(mv, k = 4L, dist.method = "L1", seed = 390)
 
-# Note how the "dimensions" of each series are appended one after the other in the plot
+# Note how the variables of each series are appended one after the other in the plot
 plot(mvc)
 
 # ====================================================================================

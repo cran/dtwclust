@@ -1,5 +1,5 @@
 # ========================================================================================================
-# Modified version of flexclust::kcca to use lists of time series
+# Modified version of flexclust::kcca to use lists of time series and/or support fuzzy clustering
 # ========================================================================================================
 
 kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
@@ -11,18 +11,18 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
           stop("Number of clusters cannot be greater than number of observations in the data")
 
      if (is.null(names(x)))
-          names(x) <- paste0("series_", 1:N) # used by custom PAM centers
+          names(x) <- paste0("series_", 1:N) # used by custom PAM centroids
 
      if (fuzzy) {
           cluster <- matrix(0, N, k)
-          cluster[ , -1L] <- stats::runif(N *(k - 1L)) / (k - 1)
+          cluster[ , -1L] <- stats::runif(N *(k - 1)) / (k - 1)
           cluster[ , 1L] <- 1 - apply(cluster[ , -1L, drop = FALSE], 1L, sum)
-          centers <- family@allcent(x, cluster, k, ...)
+          centroids <- family@allcent(x = x, cl_id = cluster, k = k, ...)
 
      } else {
           id_cent <- sample(N, k)
-          centers <- x[id_cent]
-          attr(centers, "id_cent") <- id_cent
+          centroids <- x[id_cent]
+          attr(centroids, "id_cent") <- id_cent
           cluster <- integer(N)
      }
 
@@ -32,11 +32,16 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
      while (iter <= control@iter.max) {
           clustold <- cluster
 
-          distmat <- family@dist(x, centers, ...)
+          distmat <- family@dist(x, centroids, ...)
 
           cluster <- family@cluster(distmat = distmat, m = control@fuzziness)
 
-          centers <- family@allcent(x, cluster, k, centers, clustold, ...)
+          centroids <- family@allcent(x = x,
+                                      cl_id = cluster,
+                                      k = k,
+                                      cent = centroids,
+                                      cl_old = clustold,
+                                      ...)
 
           if (fuzzy) {
                # fuzzy.R
@@ -86,7 +91,7 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
           converged <- TRUE
      }
 
-     distmat <- family@dist(x, centers, ...)
+     distmat <- family@dist(x, centroids, ...)
      cluster <- family@cluster(distmat = distmat, m = control@fuzziness)
 
      if (fuzzy) {
@@ -101,18 +106,20 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
      }
 
      cldist <- as.matrix(distmat[cbind(1L:N, cluster)])
-     size <- as.vector(table(cluster))
-     clusinfo <- data.frame(size = size,
-                            av_dist = as.vector(tapply(cldist[ , 1L], cluster, sum))/size)
+     size <- tabulate(cluster)
 
-     names(centers) <- NULL
-     attr(centers, "id_cent") <- NULL
-     centers <- lapply(centers, "attr<-", which = "id_cent", value = NULL)
+     ## if some clusters are empty, tapply() would not return enough rows
+     clusinfo <- data.frame(size = size, av_dist = 0)
+     clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], cluster, mean))
+
+     names(centroids) <- NULL
+     attr(centroids, "id_cent") <- NULL
+     centroids <- lapply(centroids, "attr<-", which = "id_cent", value = NULL)
 
      list(k = k,
           cluster = cluster,
           fcluster = fcluster,
-          centers = centers,
+          centroids = centroids,
           clusinfo = clusinfo,
           cldist = cldist,
           iter = iter,

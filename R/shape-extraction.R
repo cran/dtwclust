@@ -5,7 +5,7 @@
 #'
 #' This works only if the series are \emph{z-normalized}, since the output will also have this normalization.
 #'
-#' The resulting centroid will have the same length as \code{center} if provided. Otherwise, there are two
+#' The resulting centroid will have the same length as \code{centroid} if provided. Otherwise, there are two
 #' possibilities: if all series from \code{X} have the same length, all of them
 #' will be used as-is, and the output will have the same length as the series; if series have different
 #' lengths, a series will be chosen at random and used as reference. The output series will then have the
@@ -43,49 +43,34 @@
 #' @param X A data matrix where each row is a time series, or a list where each element is a time series.
 #' Multivariate series should be provided as a list of matrices where time spans the rows and the variables
 #' span the columns.
-#' @param center Optionally, a time series to use as reference. Defaults to a random series of \code{X} if
+#' @param centroid Optionally, a time series to use as reference. Defaults to a random series of \code{X} if
 #' \code{NULL}. For multivariate series, this should be a matrix with the same characteristics as the
 #' matrices in \code{X}. \emph{It will be z-normalized}.
+#' @param center Deprecated, please use \code{centroid} instead.
 #' @param znorm Logical flag. Should z-scores be calculated for \code{X} before processing?
 #'
 #' @return Centroid time series (z-normalized).
 #'
 #' @export
 #'
+shape_extraction <- function(X, centroid = NULL, center = NULL, znorm = FALSE) {
+     if (!missing(center)) {
+          warning("The 'center' argument has been deprecated and will be removed in the next version. ",
+                  "Please use 'centroid' instead.")
 
-shape_extraction <- function(X, center = NULL, znorm = FALSE) {
+          if (is.null(centroid)) centroid <- center
+     }
 
      X <- consistency_check(X, "tsmat")
 
      consistency_check(X, "vltslist")
 
-     ## check for multivariate case
-     dims <- sapply(X, function(x) {
-          if (is.null(dim(x)))
-               0L
-          else
-               ncol(x)
-     })
-
-     if (length(unique(dims)) != 1L)
-          stop("Inconsistent dimensions across series.")
-
-     if (any(dims > 0L)) {
+     ## utils.R
+     if (check_multivariate(X)) {
           ## multivariate
-          ncols <- ncol(X[[1L]])
-          ncols <- rep(1L:ncols, length(X))
+          mv <- reshape_multviariate(X, centroid) # utils.R
 
-          x <- do.call(cbind, x)
-          x <- split.data.frame(t(x), ncols)
-
-          c <- lapply(1L:ncol(X[[1L]]), function(idc) {
-               if (is.null(center))
-                    NULL
-               else
-                    center[ , idc, drop = TRUE]
-          })
-
-          new_c <- mapply(x, c, SIMPLIFY = FALSE,
+          new_c <- mapply(mv$series, mv$cent, SIMPLIFY = FALSE,
                           FUN = function(xx, cc) {
                                new_c <- shape_extraction(xx, cc, znorm = znorm)
                           })
@@ -100,31 +85,32 @@ shape_extraction <- function(X, center = NULL, znorm = FALSE) {
 
      ## make sure at least one series is not just a flat line at zero
      if (all(sapply(Xz, sum) == 0)) {
-          if (is.null(center)) {
-               return(rep(0, sample(lengths(Xz), 1)))
+          if (is.null(centroid)) {
+               return(rep(0, sample(lengths(Xz), 1L)))
 
           } else {
-               return(center)
+               return(centroid)
           }
      }
 
-     if (is.null(center)) {
-          if (length(unique(lengths(Xz))) == 1L)
+     if (is.null(centroid)) {
+          if (!check_lengths(Xz)) {
                A <- do.call(rbind, Xz) # use all
-          else {
-               center <- Xz[[sample(length(Xz), 1L)]] # random choice as reference
 
-               A <- lapply(Xz, function(a) { SBD(center, a)$yshift })
+          } else {
+               centroid <- Xz[[sample(length(Xz), 1L)]] # random choice as reference
+
+               A <- lapply(Xz, function(a) { SBD(centroid, a)$yshift })
 
                A <- do.call(rbind, A)
           }
 
      } else {
-          consistency_check(center, "ts")
+          consistency_check(centroid, "ts")
 
-          center <- zscore(center) # use given reference
+          centroid <- zscore(centroid) # use given reference
 
-          A <- lapply(Xz, function(a) { SBD(center, a)$yshift })
+          A <- lapply(Xz, function(a) { SBD(centroid, a)$yshift })
 
           A <- do.call(rbind, A)
      }
@@ -140,10 +126,10 @@ shape_extraction <- function(X, center = NULL, znorm = FALSE) {
      P <- diag(nc) - 1 / nc * matrix(1, nc, nc)
      M <- P %*% S %*% P
 
-     ksc <- eigen(M)$vectors[ , 1L]
+     ksc <- eigen(M)$vectors[ , 1L, drop = TRUE]
 
-     d1 <- sqrt(crossprod(A[1L, ] - ksc))
-     d2 <- sqrt(crossprod(A[1L, ] + ksc))
+     d1 <- lnorm(A[1L, , drop = TRUE] - ksc, 2)
+     d2 <- lnorm(A[1L, , drop = TRUE] + ksc, 2)
 
      if (d1 >= d2)
           ksc <- -ksc
