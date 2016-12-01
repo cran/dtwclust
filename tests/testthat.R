@@ -1,8 +1,8 @@
-library(testthat) # testthat has its own definition of "proc_time"...
 library(dtwclust)
+library(testthat)
 
 #' To test in a local machine:
-#' Sys.setenv(NOT_CRAN = "true"); suppressMessages(test_dir("tests/testthat/"))
+#' Sys.setenv(NOT_CRAN = "true"); test_dir("tests/testthat/")
 #' OR
 #' devtools::test()
 #'
@@ -10,4 +10,4 @@ library(dtwclust)
 #'
 #' options(skip_par_tests = TRUE)
 #'
-test_check("dtwclust")
+testthat::test_check("dtwclust")

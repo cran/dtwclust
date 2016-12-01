@@ -3,58 +3,53 @@
 #' Wrapper for function \code{\link[base]{scale}} that returns zeros instead of \code{NaN}. It also
 #' supports a list of vectors and a matrix input.
 #'
-#' @param x Data to normalize. Either a vector, a matrix/data.frame where each row is to be normalized, or a list of
-#' vectors.
+#' @export
+#'
+#' @param x Data to normalize. Either a vector, a matrix/data.frame where each row is to be
+#'   normalized, or a list of vectors.
 #' @param ... Further arguments to pass to \code{\link[base]{scale}}.
-#' @param multivariate Is \code{x} a multivariate time series? It will be detected automatically if a list is provided in
-#' \code{x}.
-#' @param keep.attributes Should the mean and standard deviation returned by \code{\link[base]{scale}}
-#' be preserved?
-#' @param na.rm Deprecated
+#' @param multivariate Is \code{x} a multivariate time series? It will be detected automatically if
+#'   a list is provided in \code{x}.
+#' @param keep.attributes Should the mean and standard deviation returned by
+#'   \code{\link[base]{scale}} be preserved?
 #'
 #' @return Normalized data in the same format as provided.
 #'
-#' @export
-#'
+zscore <- function(x, ..., multivariate = FALSE, keep.attributes = FALSE) {
+    if (is.list(x)) {
+        x <- lapply(x, zscore, ...,
+                    multivariate = is_multivariate(x),
+                    keep.attributes = keep.attributes)
 
-zscore <- function(x, ..., na.rm, multivariate = FALSE, keep.attributes = FALSE) {
-     if (!missing(na.rm))
-          warning("The 'na.rm' argument has been deprecated.")
+    } else if (!multivariate && (is.matrix(x) || is.data.frame(x))) {
+        check_consistency(x, "ts")
 
-     if (is.list(x)) {
-          x <- lapply(x, zscore, ...,
-                      multivariate = !is.null(dim(x[[1L]])),
-                      keep.attributes = keep.attributes)
+        dots <- list(...)
+        center <- if (is.null(dots$center)) formals(scale)$center else dots$center
+        scale <- if (is.null(dots$scale)) formals(scale)$scale else dots$scale
 
-     } else if (!multivariate && (is.matrix(x) || is.data.frame(x))) {
-          consistency_check(x, "ts")
+        x <- t(scale(t(x), center = center, scale = scale))
+        x[is.nan(x)] <- 0
 
-          dots <- list(...)
-          center <- if(is.null(dots$center)) formals(scale)$center else dots$center
-          scale <- if(is.null(dots$scale)) formals(scale)$scale else dots$scale
+        if (!keep.attributes)
+            attr(x, "scaled:center") <- attr(x, "scaled:scale") <- NULL
 
-          x <- t(scale(t(x), center = center, scale = scale))
-          x[is.nan(x)] <- 0
+    } else {
+        check_consistency(x, "ts")
 
-          if (!keep.attributes)
-               attr(x, "scaled:center") <- attr(x, "scaled:scale") <- NULL
+        dots <- list(...)
+        center <- if (is.null(dots$center)) formals(scale)$center else dots$center
+        scale <- if (is.null(dots$scale)) formals(scale)$scale else dots$scale
 
-     } else {
-          consistency_check(x, "ts")
+        x <- scale(x, center = center, scale = scale)
+        x[is.nan(x)] <- 0
 
-          dots <- list(...)
-          center <- if(is.null(dots$center)) formals(scale)$center else dots$center
-          scale <- if(is.null(dots$scale)) formals(scale)$scale else dots$scale
+        if (!multivariate)
+            dim(x) <- NULL
 
-          x <- scale(x, center = center, scale = scale)
-          x[is.nan(x)] <- 0
+        if (!keep.attributes)
+            attr(x, "scaled:center") <- attr(x, "scaled:scale") <- NULL
+    }
 
-          if (!multivariate)
-               dim(x) <- NULL
-
-          if (!keep.attributes)
-               attr(x, "scaled:center") <- attr(x, "scaled:scale") <- NULL
-     }
-
-     x
+    x
 }

@@ -2,126 +2,136 @@
 # Modified version of flexclust::kcca to use lists of time series and/or support fuzzy clustering
 # ========================================================================================================
 
-kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...)
-{
-     N <- length(x)
-     k <- as.integer(k)
+kcca.list <- function (x, k, family, control, fuzzy = FALSE, ...) {
+    N <- length(x)
+    k <- as.integer(k)
+    dots <- list(...)
 
-     if (N < k)
-          stop("Number of clusters cannot be greater than number of observations in the data")
+    if (N < k)
+        stop("Number of clusters cannot be greater than number of observations in the data")
 
-     if (is.null(names(x)))
-          names(x) <- paste0("series_", 1:N) # used by custom PAM centroids
+    if (is.null(names(x)))
+        names(x) <- paste0("series_", 1:N) # used by custom PAM centroids
 
-     if (fuzzy) {
-          cluster <- matrix(0, N, k)
-          cluster[ , -1L] <- stats::runif(N *(k - 1)) / (k - 1)
-          cluster[ , 1L] <- 1 - apply(cluster[ , -1L, drop = FALSE], 1L, sum)
-          centroids <- family@allcent(x = x, cl_id = cluster, k = k, ...)
+    if (fuzzy) {
+        cluster <- matrix(0, N, k)
+        cluster[ , -1L] <- stats::runif(N *(k - 1)) / (k - 1)
+        cluster[ , 1L] <- 1 - apply(cluster[ , -1L, drop = FALSE], 1L, sum)
 
-     } else {
-          id_cent <- sample(N, k)
-          centroids <- x[id_cent]
-          attr(centroids, "id_cent") <- id_cent
-          cluster <- integer(N)
-     }
+        if (has_dots(family@allcent))
+            centroids <- family@allcent(x = x, cl_id = cluster, k = k, cl_old = cluster, ...)
+        else
+            centroids <- do.call(family@allcent,
+                                 enlist(x = x,
+                                        cl_id = cluster,
+                                        k = k,
+                                        cl_old = cluster,
+                                        dots = subset_dots(dots, family@allcent)))
 
-     iter <- 1L
-     objective_old <- Inf
+    } else {
+        id_cent <- sample(N, k)
+        centroids <- x[id_cent]
+        attr(centroids, "id_cent") <- id_cent
+        cluster <- integer(N)
+    }
 
-     while (iter <= control@iter.max) {
-          clustold <- cluster
+    iter <- 1L
+    objective_old <- Inf
 
-          distmat <- family@dist(x, centroids, ...)
+    while (iter <= control@iter.max) {
+        clustold <- cluster
 
-          cluster <- family@cluster(distmat = distmat, m = control@fuzziness)
+        distmat <- family@dist(x, centroids, ...)
 
-          centroids <- family@allcent(x = x,
-                                      cl_id = cluster,
-                                      k = k,
-                                      cent = centroids,
-                                      cl_old = clustold,
-                                      ...)
+        cluster <- family@cluster(distmat = distmat, m = control@fuzziness)
 
-          if (fuzzy) {
-               # fuzzy.R
-               objective <- fuzzy_objective(cluster, distmat = distmat, m = control@fuzziness)
+        centroids <- family@allcent(x = x,
+                                    cl_id = cluster,
+                                    k = k,
+                                    cent = centroids,
+                                    cl_old = clustold,
+                                    ...)
 
-               if (control@trace) {
-                    cat("Iteration ", iter, ": ",
-                        "Objective = ",
-                        formatC(objective, width = 6, format = "f"),
-                        "\n", sep = "")
-               }
+        if (fuzzy) {
+            # fuzzy.R
+            objective <- fuzzy_objective(cluster, distmat = distmat, m = control@fuzziness)
 
-               if (abs(objective - objective_old) < control@delta) {
-                    if (control@trace) cat("\n")
-                    break
-               }
+            if (control@trace) {
+                cat("Iteration ", iter, ": ",
+                    "Objective = ",
+                    formatC(objective, width = 6, format = "f"),
+                    "\n", sep = "")
+            }
 
-               objective_old <- objective
+            if (abs(objective - objective_old) < control@delta) {
+                if (control@trace) cat("\n")
+                break
+            }
 
-          } else {
-               changes <- sum(cluster != clustold)
+            objective_old <- objective
 
-               if (control@trace) {
-                    td <- sum(distmat[cbind(1L:N, cluster)])
-                    txt <- paste(changes, format(td), sep = " / ")
-                    cat("Iteration ", iter, ": ",
-                        "Changes / Distsum = ",
-                        formatC(txt, width = 12, format = "f"),
-                        "\n", sep = "")
-               }
+        } else {
+            changes <- sum(cluster != clustold)
 
-               if (changes == 0L) {
-                    if (control@trace) cat("\n")
-                    break
-               }
-          }
+            if (control@trace) {
+                td <- sum(distmat[cbind(1L:N, cluster)])
+                txt <- paste(changes, format(td), sep = " / ")
+                cat("Iteration ", iter, ": ",
+                    "Changes / Distsum = ",
+                    formatC(txt, width = 12, format = "f"),
+                    "\n", sep = "")
+            }
 
-          iter <- iter + 1L
-     }
+            if (changes == 0L) {
+                if (control@trace) cat("\n")
+                break
+            }
+        }
 
-     if (iter > control@iter.max) {
-          warning("Clustering did not converge within the allowed iterations.")
-          converged <- FALSE
-          iter <- control@iter.max
+        iter <- iter + 1L
+    }
 
-     } else {
-          converged <- TRUE
-     }
+    if (iter > control@iter.max) {
+        if (control@trace) cat("\n")
+        warning("Clustering did not converge within the allowed iterations.")
+        converged <- FALSE
+        iter <- control@iter.max
 
-     distmat <- family@dist(x, centroids, ...)
-     cluster <- family@cluster(distmat = distmat, m = control@fuzziness)
+    } else {
+        converged <- TRUE
+    }
 
-     if (fuzzy) {
-          fcluster <- cluster
-          rownames(fcluster) <- names(x)
-          colnames(fcluster) <- paste0("cluster_", 1:k)
+    distmat <- family@dist(x, centroids, ...)
+    cluster <- family@cluster(distmat = distmat, m = control@fuzziness)
 
-          cluster <- max.col(-distmat, "first")
+    if (fuzzy) {
+        fcluster <- cluster
+        rownames(fcluster) <- names(x)
+        colnames(fcluster) <- paste0("cluster_", 1:k)
 
-     } else {
-          fcluster <- matrix(NA_real_)
-     }
+        cluster <- max.col(-distmat, "first")
 
-     cldist <- as.matrix(distmat[cbind(1L:N, cluster)])
-     size <- tabulate(cluster)
+    } else {
+        fcluster <- matrix(NA_real_)
+    }
 
-     ## if some clusters are empty, tapply() would not return enough rows
-     clusinfo <- data.frame(size = size, av_dist = 0)
-     clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], cluster, mean))
+    cldist <- as.matrix(distmat[cbind(1L:N, cluster)])
+    size <- tabulate(cluster)
 
-     names(centroids) <- NULL
-     attr(centroids, "id_cent") <- NULL
-     centroids <- lapply(centroids, "attr<-", which = "id_cent", value = NULL)
+    ## if some clusters are empty, tapply() would not return enough rows
+    clusinfo <- data.frame(size = size, av_dist = 0)
+    clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], cluster, mean))
 
-     list(k = k,
-          cluster = cluster,
-          fcluster = fcluster,
-          centroids = centroids,
-          clusinfo = clusinfo,
-          cldist = cldist,
-          iter = iter,
-          converged = converged)
+    names(centroids) <- NULL
+    attr(centroids, "id_cent") <- NULL
+    centroids <- lapply(centroids, "attr<-", which = "id_cent", value = NULL)
+
+    list(k = k,
+         cluster = cluster,
+         fcluster = fcluster,
+         centroids = centroids,
+         clusinfo = clusinfo,
+         cldist = cldist,
+         iter = iter,
+         converged = converged)
 }

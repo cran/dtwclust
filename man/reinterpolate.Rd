@@ -4,24 +4,36 @@
 \alias{reinterpolate}
 \title{Wrapper for simple linear reinterpolation}
 \usage{
-reinterpolate(x, new.length, multivariate = FALSE, newLength)
+reinterpolate(x, new.length, multivariate = FALSE)
 }
 \arguments{
-\item{x}{Data to reinterpolate. Either a vector, a matrix/data.frame where each row is to be reinterpolated, or a list of
-vectors.}
+\item{x}{Data to reinterpolate. Either a vector, a matrix/data.frame where each row is to be
+reinterpolated, or a list of vectors.}
 
 \item{new.length}{Desired length of the output series.}
 
-\item{multivariate}{Is \code{x} a multivariate time series? It will be detected automatically if a list is provided in
-\code{x}.}
-
-\item{newLength}{Deprecated.}
+\item{multivariate}{Is \code{x} a multivariate time series? It will be detected automatically if
+a list is provided in \code{x}.}
 }
 \value{
 Reinterpolated time series
 }
 \description{
-This function is just a wrapper for the native function \code{\link[stats]{approx}} to do simple linear
-reinterpolation.
+This function is just a wrapper for the native function \code{\link[stats]{approx}} to do simple
+linear reinterpolation.
+}
+\examples{
+
+data(uciCT)
+
+# list of univariate series
+series <- reinterpolate(CharTraj, 205L)
+
+# list of multivariate series
+series <- reinterpolate(CharTrajMV, 205L)
+
+# single multivariate series
+series <- reinterpolate(CharTrajMV[[1L]], 205L, TRUE)
+
 }
 

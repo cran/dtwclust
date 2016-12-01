@@ -1,880 +1,890 @@
 #' Time series clustering
 #'
-#' This is the main function to perform time series clustering. It supports partitional, hierarchical, fuzzy,
-#' k-Shape and TADPole clustering. See the details and the examples for more information, as well as the
-#' included package vignette (which can be loaded by typing \code{vignette("dtwclust")}).
+#' This is the main function to perform time series clustering. It supports partitional,
+#' hierarchical, fuzzy, k-Shape and TADPole clustering. See the details and the examples for more
+#' information, as well as the included package vignette (which can be loaded by typing
+#' \code{vignette("dtwclust")}).
 #'
-#' Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering is done
-#' with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPole}} function. Specifying
-#' \code{type} = \code{"partitional"}, \code{distance} = \code{"sbd"} and \code{centroid} = \code{"shape"} is
-#' equivalent to the k-Shape algorithm (Paparrizos and Gravano, 2015).
+#' @export
 #'
-#' The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to a list,
-#' both row-wise. Only lists can have series with different lengths or
-#' multiple dimensions. Most of the optimizations require series to have the same length, so consider
-#' reinterpolating them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}).
-#' No missing values are allowed.
+#' @param data A list of series, a numeric matrix or a data frame. Matrices and data frames are
+#'   coerced row-wise.
+#' @param type What type of clustering method to use: \code{"partitional"}, \code{"hierarchical"},
+#'   \code{"tadpole"} or \code{"fuzzy"}.
+#' @param k Number of desired clusters. It may be a numeric vector with different values.
+#' @param method Character vector with one or more linkage methods to use in hierarchical procedures
+#'   (see \code{\link[stats]{hclust}}) or a function that performs hierarchical clustering based on
+#'   distance matrices (e.g. \code{\link[cluster]{diana}}). See Hierarchical section for more
+#'   details.
+#' @param distance A supported distance from \code{proxy}'s \code{\link[proxy]{dist}} (see Distance
+#'   section). Ignored for \code{type} = \code{"tadpole"}.
+#' @param centroid Either a supported string or an appropriate function to calculate centroids when
+#'   using partitional or prototypes for hierarchical/tadpole methods. See Centroid section.
+#' @param preproc Function to preprocess data. Defaults to \code{\link{zscore}} \emph{only} if
+#'   \code{centroid} \code{=} \code{"shape"}, but will be replaced by a custom function if provided.
+#'   See Preprocessing section.
+#' @param dc Cutoff distance for the \code{\link{TADPole}} algorithm.
+#' @param control Named list of parameters or \code{dtwclustControl} object for clustering
+#'   algorithms. See \code{\link{dtwclustControl}}. \code{NULL} means defaults.
+#' @param seed Random seed for reproducibility.
+#' @param distmat If a cross-distance matrix is already available, it can be provided here so it's
+#'   re-used. Only relevant if \code{centroid} = "pam" or \code{type} = "hierarchical". See
+#'   examples.
+#' @param ... Additional arguments to pass to \code{\link[proxy]{dist}} or a custom function
+#'   (preprocessing, centroid, etc.)
 #'
-#' In the case of multivariate time series, they should be provided as a list of matrices, where time spans
-#' the rows of each matrix and the dimensions span the columns. At the moment, only \code{DTW} and \code{DTW2}
-#' suppport such series, which means only partitional and hierarchical procedures using those distances will
-#' work. You can of course create your own custom distances. All included centroid functions should work with
-#' the aforementioned format, although \code{shape} is \strong{not} recommended. Note that the \code{plot}
-#' method will simply append all dimensions (columns) one after the other.
+#' @details
 #'
-#' Several parameters can be adjusted with the \code{control} argument. See \code{\link{dtwclustControl}}. In
-#' the following sections, elements marked with an asterisk (*) are those that can be adjutsed with this
-#' argument.
+#' Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering
+#' is done with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPole}}
+#' function. Specifying \code{type} = \code{"partitional"}, \code{distance} = \code{"sbd"} and
+#' \code{centroid} = \code{"shape"} is equivalent to the k-Shape algorithm (Paparrizos and Gravano,
+#' 2015).
+#'
+#' The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to
+#' a list, both row-wise. Only lists can have series with different lengths or multiple dimensions.
+#' Most of the optimizations require series to have the same length, so consider reinterpolating
+#' them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}). No
+#' missing values are allowed.
+#'
+#' In the case of multivariate time series, they should be provided as a list of matrices, where
+#' time spans the rows of each matrix and the dimensions span the columns. At the moment, only
+#' \code{DTW} and \code{DTW2} suppport such series, which means only partitional and hierarchical
+#' procedures using those distances will work. You can of course create your own custom distances.
+#' All included centroid functions should work with the aforementioned format, although \code{shape}
+#' is \strong{not} recommended. Note that the \code{plot} method will simply append all dimensions
+#' (columns) one after the other.
+#'
+#' Several parameters can be adjusted with the \code{control} argument. See
+#' \code{\link{dtwclustControl}}. In the following sections, elements marked with an asterisk (*)
+#' are those that can be adjutsed with this argument.
+#'
+#' @return
+#'
+#' An object with formal class \code{\link{dtwclust-class}}.
+#'
+#' If \code{control@nrep > 1} and a partitional procedure is used, \code{length(method)} \code{> 1}
+#' and hierarchical procedures are used, or \code{length(k)} \code{>} \code{1}, a list of objects is
+#' returned.
 #'
 #' @section Partitional Clustering:
 #'
-#' Stochastic algorithm that creates a hard partition of the data into \code{k} clusters, where each cluster
-#' has a centroid. In case of time series clustering, the centroids are also time series.
+#'   Stochastic algorithm that creates a hard partition of the data into \code{k} clusters, where
+#'   each cluster has a centroid. In case of time series clustering, the centroids are also time
+#'   series.
 #'
-#' The cluster centroids are first randomly initialized by selecting some of the series in the data. The
-#' distance between each series and each centroid is calculated, and the series are assigned to the cluster
-#' whose centroid is closest. The centroids are then updated by using a given rule, and the procedure is
-#' repeated until no series changes from one cluster to another, or until the maximum number of iterations*
-#' has been reached. The distance and centroid definitions can be specified through the corresponding
-#' parameters of this function. See their respective sections below.
+#'   The cluster centroids are first randomly initialized by selecting some of the series in the
+#'   data. The distance between each series and each centroid is calculated, and the series are
+#'   assigned to the cluster whose centroid is closest. The centroids are then updated by using a
+#'   given rule, and the procedure is repeated until no series changes from one cluster to another,
+#'   or until the maximum number of iterations* has been reached. The distance and centroid
+#'   definitions can be specified through the corresponding parameters of this function. See their
+#'   respective sections below.
 #'
-#' Note that it is possible for a cluster to become empty, in which case a new cluster is reinitialized
-#' randomly. However, if you see that the algorithm doesn't converge or the overall distance sum increases,
-#' it could mean that the chosen value of \code{k} is too large, or the chosen distance measure is not
-#' able to assess similarity effectively. The random reinitialization attempts to enforce a certain number
-#' of clusters, but can result in instability in the aforementioned cases.
+#'   Note that it is possible for a cluster to become empty, in which case a new cluster is
+#'   reinitialized randomly. However, if you see that the algorithm doesn't converge or the overall
+#'   distance sum increases, it could mean that the chosen value of \code{k} is too large, or the
+#'   chosen distance measure is not able to assess similarity effectively. The random
+#'   reinitialization attempts to enforce a certain number of clusters, but can result in
+#'   instability in the aforementioned cases.
 #'
 #' @section Fuzzy Clustering:
 #'
-#' This procedure is very similar to partitional clustering, except that each series no longer belongs
-#' exclusively to one cluster, but belongs to each cluster to a certain degree. For each series, the total
-#' degree of membership across clusters must sum to 1.
+#'   This procedure is very similar to partitional clustering, except that each series no longer
+#'   belongs exclusively to one cluster, but belongs to each cluster to a certain degree. For each
+#'   series, the total degree of membership across clusters must sum to 1.
 #'
-#' The default implementation uses the fuzzy c-means algorithm. In its definition, an objective function is to
-#' be minimized. The objective is defined in terms of a squared distance, which is usually the Euclidean (L2)
-#' distance, although the definition could be modified. The \code{distance} parameter of this function controls
-#' the one that is utilized. The fuzziness of the clustering can be controlled by means of the fuzziness
-#' exponent*. Bear in mind that the centroid definition of fuzzy c-means requires equal dimensions, which
-#' means that all series must have the same length. This problem can be circumvented by applying
-#' transformations to the series (see for example D'Urso and Maharaj, 2009).
+#'   The default implementation uses the fuzzy c-means algorithm. In its definition, an objective
+#'   function is to be minimized. The objective is defined in terms of a squared distance, which is
+#'   usually the Euclidean (L2) distance, although the definition could be modified. The
+#'   \code{distance} parameter of this function controls the one that is utilized. The fuzziness of
+#'   the clustering can be controlled by means of the fuzziness exponent*. Bear in mind that the
+#'   centroid definition of fuzzy c-means requires equal dimensions, which means that all series
+#'   must have the same length. This problem can be circumvented by applying transformations to the
+#'   series (see for example D'Urso and Maharaj, 2009).
 #'
-#' Note that the fuzzy clustering could be transformed to a crisp one by finding the highest membership
-#' coefficient. Some of the slots of the object returned by this function assume this, so be careful with
-#' interpretation (see \code{\link{dtwclust-class}}).
+#'   Note that the fuzzy clustering could be transformed to a crisp one by finding the highest
+#'   membership coefficient. Some of the slots of the object returned by this function assume this,
+#'   so be careful with interpretation (see \code{\link{dtwclust-class}}).
 #'
 #' @section Hierarchical Clustering:
 #'
-#' This is a deterministic algorithm that creates a hierarchy of groups by using different linkage methods
-#' (see \code{\link[stats]{hclust}}). The linkage method is controlled through the \code{method} parameter
-#' of this function, with the additional option "all" that uses all of the available methods. The distance
-#' to be used can be controlled with the \code{distance} parameter.
+#'   This is (by default) a deterministic algorithm that creates a hierarchy of groups by using
+#'   different linkage methods (see \code{\link[stats]{hclust}}). The linkage method is controlled
+#'   through the \code{method} parameter of this function, which can be a character vector with
+#'   several methods, with the additional option "all" that uses all of the available methods in
+#'   \code{\link[stats]{hclust}}. The distance to be used can be controlled with the \code{distance}
+#'   parameter.
 #'
-#' The hierarchy does not imply a specific number of clusters, but one can be induced by cutting the resulting
-#' dendrogram (see \code{\link[stats]{cutree}}). As with fuzzy clustering, this results in a crisp partition,
-#' and some of the slots of the returned object are calculated by cutting the dendrogram so that \code{k}
-#' clusters are created.
+#'   Optionally, \code{method} may be a \strong{function} that performs the hierarchical clustering
+#'   based on a distance matrix, such as the functions included in package \pkg{cluster}. The
+#'   function will receive the \code{dist} object as first argument (see
+#'   \code{\link[stats]{as.dist}}), followed by the elements in \code{...} that match the its formal
+#'   arguments. The object it returns must support the \code{\link[stats]{as.hclust}} generic so
+#'   that \code{\link[stats]{cutree}} can be used. See the examples.
+#'
+#'   The hierarchy does not imply a specific number of clusters, but one can be induced by cutting
+#'   the resulting dendrogram (see \code{\link[stats]{cutree}}). This results in a crisp partition,
+#'   and some of the slots of the returned object are calculated by cutting the dendrogram so that
+#'   \code{k} clusters are created.
 #'
 #' @section TADPole Clustering:
 #'
-#' TADPole clustering adopts a relatively new clustering framework and adapts it to time series clustering
-#' with DTW. Because of the way it works, it can be considered a kind of Partitioning Around Medoids (PAM).
-#' This means that the cluster centroids are always elements of the data. However, this algorithm is
-#' deterministic, depending on the value of the cutoff distance \code{dc}, which can be controlled with the
-#' corresponding parameter of this function.
+#'   TADPole clustering adopts a relatively new clustering framework and adapts it to time series
+#'   clustering with DTW. Because of the way it works, it can be considered a kind of Partitioning
+#'   Around Medoids (PAM). This means that the cluster centroids are always elements of the data.
+#'   However, this algorithm is deterministic, depending on the value of the cutoff distance
+#'   \code{dc}, which can be controlled with the corresponding parameter of this function.
 #'
-#' The algorithm relies on the DTW lower bounds, which are only defined for time series of equal length.
-#' Additionally, it requires a window constraint* for DTW. See the Sakoe-Chiba constraint section below.
-#' Unlike the other algorithms, TADPole always uses DTW2 as distance (with a symmetric1 step pattern).
+#'   The algorithm relies on the DTW lower bounds, which are only defined for time series of equal
+#'   length. Additionally, it requires a window constraint* for DTW. See the Sakoe-Chiba constraint
+#'   section below. Unlike the other algorithms, TADPole always uses DTW2 as distance (with a
+#'   symmetric1 step pattern).
 #'
 #' @section Centroid Calculation:
 #'
-#' In the case of partitional/fuzzy algorithms, a suitable function should calculate the cluster centroids at
-#' every iteration. In this case, the centroids are themselves time series. Fuzzy clustering uses the standard
-#' fuzzy c-means centroid by default.
+#'   In the case of partitional/fuzzy algorithms, a suitable function should calculate the cluster
+#'   centroids at every iteration. In this case, the centroids are themselves time series. Fuzzy
+#'   clustering uses the standard fuzzy c-means centroid by default.
 #'
-#' In either case, a custom function can be provided. If one is provided, it will receive the following
-#' parameters with the shown names (examples for partitional clustering are shown in parenthesis):
+#'   In either case, a custom function can be provided. If one is provided, it will receive the
+#'   following parameters with the shown names (examples for partitional clustering are shown in
+#'   parenthesis):
 #'
-#' \itemize{
-#'   \item \code{"x"}: The \emph{whole} data list (\code{list(ts1, ts2, ts3)})
-#'   \item \code{"cl_id"}: A numeric vector with length equal to the number of series in \code{data},
-#'   indicating which cluster a series belongs to (\code{c(1L, 2L, 2L)})
-#'   \item \code{"k"}: The desired number of total clusters (\code{2L})
-#'   \item \code{"cent"}: The current centroids in order, in a list (\code{list(centroid1, centroid2)})
-#'   \item \code{"cl_old"}: The membership vector of the \emph{previous} iteration (\code{c(1L, 1L, 2L)})
-#'   \item The elements of \code{...}
+#'   \itemize{
+#'     \item \code{"x"}: The \emph{whole} data list (\code{list(ts1, ts2, ts3)})
+#'     \item \code{"cl_id"}: A numeric vector with length equal to the number of series in
+#'       \code{data}, indicating which cluster a series belongs to (\code{c(1L, 2L, 2L)})
+#'     \item \code{"k"}: The desired number of total clusters (\code{2L})
+#'     \item \code{"cent"}: The current centroids in order, in a list (\code{list(centroid1,
+#'       centroid2)})
+#'     \item \code{"cl_old"}: The membership vector of the \emph{previous} iteration (\code{c(1L,
+#'       1L, 2L)})
+#'     \item The elements of \code{...} that match its formal arguments
+#'   }
+#'
+#'   In case of fuzzy clustering, the membership vectors (2nd and 5th elements above) are matrices
+#'   with number of rows equal to amount of elements in the data, and number of columns equal to the
+#'   number of desired clusters. Each row must sum to 1.
+#'
+#'   The other option is to provide a character string for the custom implementations. The following
+#'   options are available:
+#'
+#'   \itemize{
+#'     \item "mean": The average along each dimension. In other words, the average of all
+#'       \eqn{x^j_i} among the \eqn{j} series that belong to the same cluster for all time points
+#'       \eqn{t_i}.
+#'     \item "median": The median along each dimension. Similar to mean.
+#'     \item "shape": Shape averaging. By default, all series are z-normalized in this case, since
+#'       the resulting centroids will also have this normalization. See
+#'       \code{\link{shape_extraction}} for more details.
+#'     \item "dba": DTW Barycenter Averaging. See \code{\link{DBA}} for more details.
+#'     \item "pam": Partition around medoids (PAM). This basically means that the cluster centroids
+#'       are always one of the time series in the data. In this case, the distance matrix can be
+#'       pre-computed once using all time series in the data and then re-used at each iteration. It
+#'       usually saves overhead overall.
+#'     \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and always used for that type
+#'      of clustering if a string is provided in \code{centroid}.
 #' }
 #'
-#' Therefore, the function should \emph{always} include the ellipsis (\code{...}) in its definition. In case
-#' of fuzzy clustering, the membership vectors (2nd and 5th elements above) are matrices with number of rows
-#' equal to amount of elements in the data, and number of columns equal to the number of desired clusters.
-#' Each row must sum to 1.
+#'   These check for the special cases where parallelization might be desired. Note that only
+#'   \code{shape}, \code{dba} and \code{pam} support series of different length. Also note that, for
+#'   \code{shape} and \code{dba}, this support has a caveat: the final centroids' length will depend
+#'   on the length of those series that were randomly chosen at the beginning of the clustering
+#'   algorithm. For example, if the series in the dataset have a length of either 10 or 15, 2
+#'   clusters are desired, and the initial choice selects two series with length of 10, the final
+#'   centroids will have this same length.
 #'
-#' The other option is to provide a character string for the custom implementations. The following options
-#' are available:
-#'
-#' \itemize{
-#'   \item "mean": The average along each dimension. In other words, the average of all \eqn{x^j_i}
-#'   among the \eqn{j} series that belong to the same cluster for all time points \eqn{t_i}.
-#'   \item "median": The median along each dimension. Similar to mean.
-#'   \item "shape": Shape averaging. By default, all series are z-normalized in this case, since the resulting
-#'   centroids will also have this normalization. See \code{\link{shape_extraction}} for more details.
-#'   \item "dba": DTW Barycenter Averaging. See \code{\link{DBA}} for more details.
-#'   \item "pam": Partition around medoids (PAM). This basically means that the cluster centroids are always
-#'   one of the time series in the data. In this case, the distance matrix can be pre-computed once using all
-#'   time series in the data and then re-used at each iteration. It usually saves overhead overall.
-#'   \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and always used for that type of clustering
-#'   if a string is provided in \code{centroid}.
-#' }
-#'
-#' These check for the special cases where parallelization might be desired. Note that only \code{shape},
-#' \code{dba} and \code{pam} support series of different length. Also note that, for \code{shape} and
-#' \code{dba}, this support has a caveat: the final centroids' length will depend on the length of those
-#' series that were randomly chosen at the beginning of the clustering algorithm. For example, if the series
-#' in the dataset have a length of either 10 or 15, 2 clusters are desired, and the initial choice selects
-#' two series with length of 10, the final centroids will have this same length.
-#'
-#' As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid function that
-#' takes a list of series as only input and returns a single centroid series. These centroids are returned in
-#' the \code{centroids} slot. By default, a type of PAM centroid function is used.
+#'   As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid
+#'   function that takes a list of series as only input and returns a single centroid series. These
+#'   centroids are returned in the \code{centroids} slot. By default, a type of PAM centroid
+#'   function is used.
 #'
 #' @section Distance Measures:
 #'
-#' The distance measure to be used with partitional, hierarchical and fuzzy clustering can be modified with
-#' the \code{distance} parameter. The supported option is to provide a string, which must represent a
-#' compatible distance registered with \code{proxy}'s \code{\link[proxy]{dist}}. Registration is done via
-#' \code{\link[proxy]{pr_DB}}, and extra parameters can be provided in \code{...}.
+#'   The distance measure to be used with partitional, hierarchical and fuzzy clustering can be
+#'   modified with the \code{distance} parameter. The supported option is to provide a string, which
+#'   must represent a compatible distance registered with \code{proxy}'s \code{\link[proxy]{dist}}.
+#'   Registration is done via \code{\link[proxy]{pr_DB}}, and extra parameters can be provided in
+#'   \code{...}.
 #'
-#' Note that you are free to create your own distance functions and register them. Optionally, you can use
-#' one of the following custom implementations (all registered with \code{proxy}):
+#'   Note that you are free to create your own distance functions and register them. Optionally, you
+#'   can use one of the following custom implementations (all registered with \code{proxy}):
 #'
-#' \itemize{
-#'   \item \code{"dtw"}: DTW, optionally with a Sakoe-Chiba/Slanted-band constraint*.
-#'   \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*. Read
-#'   details below.
-#'   \item \code{"dtw_basic"}: A custom version of DTW with less functionality, but slightly faster.
-#'   See \code{\link{dtw_basic}}.
-#'   \item \code{"dtw_lb"}: DTW with L1 or L2 norm* and optionally a Sakoe-Chiba constraint*. Some
-#'   computations are avoided by first estimating the distance matrix with Lemire's lower bound and then
-#'   iteratively refining with DTW. See \code{\link{dtw_lb}}. Not suitable for \code{pam.precompute}* =
-#'   \code{TRUE}.
-#'   \item \code{"lbk"}: Keogh's lower bound with either L1 or L2 norm* for the Sakoe-Chiba constraint*.
-#'   \item \code{"lbi"}: Lemire's lower bound with either L1 or L2 norm* for the Sakoe-Chiba constraint*.
-#'   \item \code{"sbd"}: Shape-based distance. See \code{\link{SBD}} for more details.
-#' }
+#'   \itemize{
+#'     \item \code{"dtw"}: DTW, optionally with a Sakoe-Chiba/Slanted-band constraint*.
+#'     \item \code{"dtw2"}: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint*.
+#'       Read details below.
+#'     \item \code{"dtw_basic"}: A custom version of DTW with less functionality, but slightly
+#'       faster. See \code{\link{dtw_basic}}.
+#'     \item \code{"dtw_lb"}: DTW with L1 or L2 norm* and optionally a Sakoe-Chiba constraint*. Some
+#'       computations are avoided by first estimating the distance matrix with Lemire's lower bound
+#'       and then iteratively refining with DTW. See \code{\link{dtw_lb}}. Not suitable for
+#'       \code{pam.precompute}* = \code{TRUE}.
+#'     \item \code{"lbk"}: Keogh's lower bound with either L1 or L2 norm* for the Sakoe-Chiba
+#'       constraint*.
+#'     \item \code{"lbi"}: Lemire's lower bound with either L1 or L2 norm* for the Sakoe-Chiba
+#'       constraint*.
+#'     \item \code{"sbd"}: Shape-based distance. See \code{\link{SBD}} for more details.
+#'     \item \code{"gak"}: Global alignment kernels. See \code{\link{GAK}} for more details.
+#'   }
 #'
-#' DTW2 is done with \code{\link[dtw]{dtw}}, but it differs from the result you would obtain if you specify
-#' \code{L2} as \code{dist.method}: with \code{DTW2}, pointwise distances (the local cost matrix) are
-#' calculated with \code{L1} norm, \emph{each} element of the matrix is squared and the result is fed into
-#' \code{\link[dtw]{dtw}}, which finds the optimum warping path. The square root of the resulting
-#' distance is \emph{then} computed. See \code{\link{dtw2}}.
+#'   DTW2 is done with \code{\link[dtw]{dtw}}, but it differs from the result you would obtain if
+#'   you specify \code{L2} as \code{dist.method}: with \code{DTW2}, pointwise distances (the local
+#'   cost matrix) are calculated with \code{L1} norm, \emph{each} element of the matrix is squared
+#'   and the result is fed into \code{\link[dtw]{dtw}}, which finds the optimum warping path. The
+#'   square root of the resulting distance is \emph{then} computed. See \code{\link{dtw2}}.
 #'
-#' Only \code{dtw}, \code{dtw2} and \code{sbd} support series of different length. The lower bounds
-#' are probably unsuitable for direct clustering unless series are very easily distinguishable.
+#'   Only \code{dtw}, \code{dtw2} and \code{sbd} support series of different length. The lower
+#'   bounds are probably unsuitable for direct clustering unless series are very easily
+#'   distinguishable.
 #'
-#' If you create your own distance, register it with \code{proxy}, and it includes the ellipsis (\code{...})
-#' in its definition, it will receive the following parameters*:
+#'   If you create your own distance, register it with \code{proxy}, and it includes the ellipsis
+#'   (\code{...}) in its definition, it will receive the following parameters*:
 #'
-#' \itemize{
-#'   \item \code{window.type}: Either \code{"none"} for a \code{NULL} \code{window.size}, or \code{"slantedband"}
-#'   otherwise
-#'   \item \code{window.size}: The provided window size
-#'   \item \code{norm}: The provided desired norm
-#'   \item \code{...}: Any additional parameters provided in the original call's ellipsis
-#' }
+#'   \itemize{
+#'     \item \code{window.type}: Either \code{"none"} for a \code{NULL} \code{window.size}, or
+#'       \code{"slantedband"} otherwise
+#'     \item \code{window.size}: The provided window size
+#'     \item \code{norm}: The provided desired norm
+#'     \item \code{...}: Any additional parameters provided in the original call's ellipsis
+#'   }
 #'
-#' Whether your function makes use of them or not, is up to you.
+#'   Whether your function makes use of them or not, is up to you.
 #'
-#' If you know that the distance function is symmetric, and you use a hierarchical algorithm, or a partitional
-#' algorithm with PAM centroids and \code{pam.precompute}* = \code{TRUE}, some time can be saved by
-#' calculating only half the distance matrix. Therefore, consider setting the symmetric* control parameter
-#' to \code{TRUE} if this is the case.
+#'   If you know that the distance function is symmetric, and you use a hierarchical algorithm, or a
+#'   partitional algorithm with PAM centroids and \code{pam.precompute}* = \code{TRUE}, some time
+#'   can be saved by calculating only half the distance matrix. Therefore, consider setting the
+#'   symmetric* control parameter to \code{TRUE} if this is the case.
 #'
 #' @section Sakoe-Chiba Constraint:
 #'
-#' A global constraint to speed up the DTW calculations is the Sakoe-Chiba band (Sakoe and Chiba, 1978). To
-#' use it, a window width* must be defined.
+#'   A global constraint to speed up the DTW calculations is the Sakoe-Chiba band (Sakoe and Chiba,
+#'   1978). To use it, a window width* must be defined.
 #'
-#' The windowing constraint uses a centered window. The function expects a value in \code{window.size}
-#' that represents the distance between the point considered and one of the edges of the window. Therefore,
-#' if, for example, \code{window.size = 10}, the warping for an observation \eqn{x_i} considers the points
-#' between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10(2) + 1 = 21} observations falling within
-#' the window.
+#'   The windowing constraint uses a centered window. The function expects a value in
+#'   \code{window.size} that represents the distance between the point considered and one of the
+#'   edges of the window. Therefore, if, for example, \code{window.size = 10}, the warping for an
+#'   observation \eqn{x_i} considers the points between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting
+#'   in \code{10(2) + 1 = 21} observations falling within the window.
 #'
-#' The computations actually use a \code{slantedband} window, which is equivalent to the Sakoe-Chiba one
-#' if series have equal length, and stays along the diagonal of the local cost matrix if series have
-#' different length.
+#'   The computations actually use a \code{slantedband} window, which is equivalent to the
+#'   Sakoe-Chiba one if series have equal length, and stays along the diagonal of the local cost
+#'   matrix if series have different length.
 #'
 #' @section Preprocessing:
 #'
-#' It is strongly advised to use z-normalization in case of \code{centroid = "shape"}, because the resulting
-#' series have this normalization (see \code{\link{shape_extraction}}). Therefore, \code{\link{zscore}} is the
-#' default in this case. The user can, however, specify a custom function that performs any transformation
-#' on the data, but the user must make sure that the format stays consistent, i.e. a list of time series.
+#'   It is strongly advised to use z-normalization in case of \code{centroid = "shape"}, because the
+#'   resulting series have this normalization (see \code{\link{shape_extraction}}). Therefore,
+#'   \code{\link{zscore}} is the default in this case. The user can, however, specify a custom
+#'   function that performs any transformation on the data, but the user must make sure that the
+#'   format stays consistent, i.e. a list of time series.
 #'
-#' Setting to \code{NULL} means no preprocessing (except for \code{centroid = "shape"}). A provided function
-#' will receive the data as first argument, followed by the contents of \code{...}. Therefore, the preprocessing
-#' function should have \code{...} in its arguments, even if it is not used.
+#'   Setting to \code{NULL} means no preprocessing (except for \code{centroid = "shape"}). A
+#'   provided function will receive the data as first argument, followed by the contents of
+#'   \code{...} that match its formal arguments.
 #'
-#' It is convenient to provide this function if you're planning on using the \code{\link[stats]{predict}}
-#' generic.
+#'   It is convenient to provide this function if you're planning on using the
+#'   \code{\link[stats]{predict}} generic.
 #'
 #' @section Repetitions:
 #'
-#' Due to their stochastic nature, partitional clustering is usually repeated* several times with different
-#' random seeds to allow for different starting points. This function uses \code{\link[rngtools]{RNGseq}} to
-#' obtain different seed streams for each repetition, utilizing the \code{seed} parameter (if provided) to
-#' initialize it. If more than one repetition is made, the streams are returned in an attribute called
-#' \code{rng}.
+#'   Due to their stochastic nature, partitional clustering is usually repeated* several times with
+#'   different random seeds to allow for different starting points. This function uses
+#'   \code{\link[rngtools]{RNGseq}} to obtain different seed streams for each repetition, utilizing
+#'   the \code{seed} parameter (if provided) to initialize it. If more than one repetition is made,
+#'   the streams are returned in an attribute called \code{rng}.
 #'
-#' Technically, you can also perform random repetitions for fuzzy clustering, although it might be difficult
-#' to evaluate the results, since they are usually evaluated relative to each other and not in an absolute
-#' way. Ideally, the groups wouldn't change too much once the algorithm converges.
+#'   Technically, you can also perform random repetitions for fuzzy clustering, although it might be
+#'   difficult to evaluate the results, since they are usually evaluated relative to each other and
+#'   not in an absolute way. Ideally, the groups wouldn't change too much once the algorithm
+#'   converges.
 #'
-#' Multiple values of \code{k} can also be provided to get different partitions using any \code{type} of
-#' clustering.
+#'   Multiple values of \code{k} can also be provided to get different partitions using any
+#'   \code{type} of clustering.
 #'
-#' Repetitions are greatly optimized when PAM centroids are used and the whole distance matrix is precomputed*,
-#' since said matrix is reused for every repetition, and can be comptued in parallel (see Parallel section).
+#'   Repetitions are greatly optimized when PAM centroids are used and the whole distance matrix is
+#'   precomputed*, since said matrix is reused for every repetition, and can be comptued in parallel
+#'   (see Parallel section).
 #'
 #' @section Parallel Computing:
 #'
-#' Please note that running tasks in parallel does \strong{not} guarantee faster computations.
-#' The overhead introduced is sometimes too large, and it's better to run tasks sequentially.
+#'   Please note that running tasks in parallel does \strong{not} guarantee faster computations. The
+#'   overhead introduced is sometimes too large, and it's better to run tasks sequentially.
 #'
-#' The user can register a parallel backend, for eample with the \code{doParallel} package, in order to do
-#' the repetitions in parallel, as well as distance and some centroid calculations.
+#'   The user can register a parallel backend, for eample with the \code{doParallel} package, in
+#'   order to do the repetitions in parallel, as well as distance and some centroid calculations.
 #'
-#' Unless each repetition requires a few seconds, parallel computing probably isn't worth it. As such, I
-#' would only use this feature with \code{shape} and \code{DBA} centroids, or an expensive distance function
-#' like \code{DTW}.
+#'   Unless each repetition requires a few seconds, parallel computing probably isn't worth it. As
+#'   such, I would only use this feature with \code{shape} and \code{DBA} centroids, or an expensive
+#'   distance function like \code{DTW}.
 #'
-#' If you register a parallel backend, the function will also try to do the calculation of the distance
-#' matrices in parallel. This should work with any function registered with \code{\link[proxy]{dist}} via
-#' \code{\link[proxy]{pr_DB}} whose \code{loop} flag is set to \code{TRUE}. If the function requires special
-#' packages to be loaded, provide their names in the \code{packages}* slot of \code{control}. Note that
-#' "dtwclust" is always loaded in each parallel worker, so that doesn't need to be included. Alternatively,
-#' you may want to pre-load \code{dtwclust} in each worker with \code{\link[parallel]{clusterEvalQ}}.
+#'   If you register a parallel backend, the function will also try to do the calculation of the
+#'   distance matrices in parallel. This should work with any function registered with
+#'   \code{\link[proxy]{dist}} via \code{\link[proxy]{pr_DB}} whose \code{loop} flag is set to
+#'   \code{TRUE}. If the function requires special packages to be loaded, provide their names in the
+#'   \code{packages}* slot of \code{control}. Note that "dtwclust" is always loaded in each parallel
+#'   worker, so that doesn't need to be included. Alternatively, you may want to pre-load
+#'   \code{dtwclust} in each worker with \code{\link[parallel]{clusterEvalQ}}.
 #'
-#' In case of multiple repetitions, each worker gets a repetition task. Otherwise, the tasks (which can be
-#' a distance matrix or a centroid calculation) are usually divided into chunks according to the number of
-#' workers available.
+#'   In case of multiple repetitions, each worker gets a repetition task. Otherwise, the tasks
+#'   (which can be a distance matrix or a centroid calculation) are usually divided into chunks
+#'   according to the number of workers available.
 #'
 #' @section Notes:
 #'
-#' The lower bounds are defined only for time series of equal length. \code{DTW} and \code{DTW2}
-#' don't require this, but they are much slower to compute.
+#'   The lower bounds are defined only for time series of equal length. \code{DTW} and \code{DTW2}
+#'   don't require this, but they are much slower to compute.
 #'
-#' The lower bounds are \strong{not} symmetric, and \code{DTW} is not symmetric in general.
+#'   The lower bounds are \strong{not} symmetric, and \code{DTW} is not symmetric in general.
+#'
+#' @author Alexis Sarda-Espinosa
 #'
 #' @references
 #'
 #' Please refer to the package vignette references.
-#'
-#' @example inst/dtwclust-examples.R
 #'
 #' @seealso
 #'
 #' \code{\link{dtwclust-methods}}, \code{\link{dtwclust-class}}, \code{\link{dtwclustControl}},
 #' \code{\link{dtwclustFamily}}.
 #'
-#' @author Alexis Sarda-Espinosa
+#' @example inst/dtwclust-examples.R
 #'
-#' @param data A list of series, a numeric matrix or a data frame. Matrices and data frames are coerced row-wise.
-#' @param type What type of clustering method to use: \code{"partitional"}, \code{"hierarchical"}, \code{"tadpole"}
-#' or \code{"fuzzy"}.
-#' @param k Number of desired clusters. It may be a numeric vector with different values.
-#' @param method One or more linkage methods to use in hierarchical procedures. See \code{\link[stats]{hclust}}.
-#' You can provide a character vector to compute different hierarchical cluster structures in one go, or
-#' specify \code{method} \code{=} \code{"all"} to use all the available ones.
-#' @param distance A supported distance from \code{proxy}'s \code{\link[proxy]{dist}} (see Distance section).
-#' Ignored for \code{type} = \code{"tadpole"}.
-#' @param centroid Either a supported string or an appropriate function to calculate centroids
-#' when using partitional or prototypes for hierarchical/tadpole methods. See Centroid section.
-#' @param preproc Function to preprocess data. Defaults to \code{\link{zscore}} \emph{only} if \code{centroid}
-#' \code{=} \code{"shape"}, but will be replaced by a custom function if provided. See Preprocessing section.
-#' @param dc Cutoff distance for the \code{\link{TADPole}} algorithm.
-#' @param control Named list of parameters or \code{dtwclustControl} object for clustering algorithms. See
-#' \code{\link{dtwclustControl}}. \code{NULL} means defaults.
-#' @param seed Random seed for reproducibility.
-#' @param distmat If a cross-distance matrix is already available, it can be provided here so it's re-used.
-#' Only relevant if \code{centroid} = "pam" or \code{type} = "hierarchical". See examples.
-#' @param ... Additional arguments to pass to \code{\link[proxy]{dist}} or a custom function.
-#'
-#' @return An object with formal class \code{\link{dtwclust-class}}.
-#'
-#' If \code{control@nrep > 1} and a partitional procedure is used, \code{length(method)} \code{> 1} and
-#' hierarchical procedures are used, or \code{length(k)} \code{>} \code{1}, a list of objects is returned.
-#'
-#' @export
-#'
-
 dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "average",
                      distance = "dtw_basic", centroid = "pam", preproc = NULL,
                      dc = NULL, control = NULL, seed = NULL, distmat = NULL,
                      ...)
 {
-     ## =================================================================================================================
-     ## Start
-     ## =================================================================================================================
+    ## =================================================================================================================
+    ## Start
+    ## =================================================================================================================
 
-     tic <- proc.time()
+    tic <- proc.time()
 
-     if (is.null(data))
-          stop("No data provided")
+    if (is.null(data))
+        stop("No data provided")
 
-     type <- match.arg(type, c("partitional", "hierarchical", "tadpole", "fuzzy"))
+    type <- match.arg(type, c("partitional", "hierarchical", "tadpole", "fuzzy"))
 
-     ## coerce to list if necessary
-     data <- consistency_check(data, "tsmat")
+    ## coerce to list if necessary
+    data <- any2list(data)
 
-     MYCALL <- match.call(expand.dots = TRUE)
+    if (any(k < 2L))
+        stop("At least two clusters must be defined")
+    if (any(k > length(data)))
+        stop("Cannot have more clusters than series in the data")
 
-     if (type == "fuzzy" && !missing(centroid) && is.character(centroid) && centroid != "fcm") {
-          warning("The 'centroid' argument was provided but was different than 'fcm', so it was ignored.")
-          centroid <- "fcm"
-     }
+    if (type == "fuzzy" && !missing(centroid) && is.character(centroid) && centroid != "fcm") {
+        warning("The 'centroid' argument was provided but was different than 'fcm', so it was ignored.")
+        centroid <- "fcm"
+    }
 
-     ## ----------------------------------------------------------------------------------------------------------
-     ## Control parameters
-     ## ----------------------------------------------------------------------------------------------------------
+    MYCALL <- match.call(expand.dots = TRUE)
 
-     if (is.null(control) || is.list(control)) {
-          control <- as(control, "dtwclustControl")
+    ## ----------------------------------------------------------------------------------------------------------
+    ## Control parameters
+    ## ----------------------------------------------------------------------------------------------------------
 
-     } else if (class(control) != "dtwclustControl" || !validObject(control)) {
-          stop("Invalid control argument") # validObject should generate an error anyway
-     }
+    if (is.null(control) || is.list(control)) {
+        control <- as(control, "dtwclustControl")
 
-     dots <- list(...)
+    } else if (class(control) != "dtwclustControl") {
+        stop("Invalid control argument")
 
-     ## ----------------------------------------------------------------------------------------------------------
-     ## Preprocess
-     ## ----------------------------------------------------------------------------------------------------------
+    } else {
+        methods::validObject(control)
+    }
 
-     if (!is.null(preproc) && is.function(preproc)) {
-          if (is.null(formals(preproc)$...))
-               stop("The preprocessing function should have '...' in its formal arguments, ",
-                    "even if it is not used.")
+    dots <- list(...)
 
-          data <- preproc(data, ...)
-          preproc_char <- as.character(substitute(preproc))[1L]
+    ## ----------------------------------------------------------------------------------------------------------
+    ## Preprocess
+    ## ----------------------------------------------------------------------------------------------------------
 
-     } else if (type == "partitional" && is.character(centroid) && centroid == "shape") {
-          preproc <- zscore
-          preproc_char <- "zscore"
-          data <- zscore(data, ...)
+    if (!is.null(preproc) && is.function(preproc)) {
+        if (has_dots(preproc)) {
+            data <- preproc(data, ...)
 
-     } else if (is.null(preproc)) {
-          preproc <- function(x, ...) x
-          preproc_char <- "none"
+        } else {
+            data <- do.call(preproc,
+                            enlist(data,
+                                   dots = subset_dots(dots, preproc)))
+        }
 
-     } else stop("Invalid preprocessing")
+        preproc_char <- as.character(substitute(preproc))[1L]
 
-     ## ----------------------------------------------------------------------------------------------------------
-     ## Further options
-     ## ----------------------------------------------------------------------------------------------------------
+    } else if (type == "partitional" && is.character(centroid) && centroid == "shape") {
+        preproc <- zscore
+        preproc_char <- "zscore"
+        data <- zscore(data, ...)
 
-     if (control@save.data)
-          datalist <- data
-     else
-          datalist <- list()
+    } else if (is.null(preproc)) {
+        preproc <- function(x, ...) x
+        preproc_char <- "none"
 
-     diff_lengths <- check_lengths(data)
+    } else stop("Invalid preprocessing")
 
-     consistency_check(distance, "dist", trace = control@trace, Lengths = diff_lengths, silent = FALSE)
+    check_consistency(data, "vltslist")
 
-     if(type %in% c("partitional", "fuzzy")) {
-          if (diff_lengths && type == "fuzzy")
-               stop("Fuzzy clustering does not support series with different length.")
+    ## ----------------------------------------------------------------------------------------------------------
+    ## Further options
+    ## ----------------------------------------------------------------------------------------------------------
 
-          if (is.character(centroid)) {
-               if (type == "fuzzy")
-                    centroid <- "fcm"
-               else
-                    centroid <- match.arg(centroid, c("mean", "median", "shape", "dba", "pam"))
-          }
+    if (control@save.data)
+        datalist <- data
+    else
+        datalist <- list()
 
-          if (diff_lengths)
-               consistency_check(centroid, "cent", trace = control@trace)
-     }
+    diff_lengths <- different_lengths(data)
 
-     ## symmetric versions of dtw that I know of
-     ## unconstrained and with symmetric1/symmetric2 is always symmetric, regardless of diff_lengths
-     symmetric_pattern <- !is.null(dots$step.pattern) &&
-          (identical(dots$step.pattern, symmetric1) ||
-                identical(dots$step.pattern, symmetric2))
+    check_consistency(distance, "dist", trace = control@trace, Lengths = diff_lengths, silent = FALSE)
 
-     if (distance %in% c("dtw", "dtw2", "dtw_basic")) {
-          if (!symmetric_pattern)
-               control@symmetric <- FALSE
-          else if (!is.null(control@window.size) && diff_lengths)
-               control@symmetric <- FALSE
-          else
-               control@symmetric <- TRUE
+    ## symmetric versions of dtw that I know of
+    ## unconstrained and with symmetric1/symmetric2 is always symmetric, regardless of lengths
+    ## constrained and same lengths with symmetric1/symmetric2 is also symmetric
+    symmetric_pattern <- is.null(dots$step.pattern) ||
+        identical(dots$step.pattern, symmetric1) ||
+        identical(dots$step.pattern, symmetric2)
 
-     } else if (distance %in% c("lbk", "lbi")) {
-          control@symmetric <- FALSE
+    if (tolower(distance) %in% c("dtw", "dtw2", "dtw_basic")) {
+        control@symmetric <- symmetric_pattern && (is.null(control@window.size) || !diff_lengths)
 
-     } else if (distance %in% c("sbd")) {
-          control@symmetric <- TRUE
-     }
+        if (tolower(distance) == "dtw2") control@norm <- "L2"
 
-     ## For parallel computation
-     control@packages <- c("dtwclust", control@packages)
-     check_parallel() # register doSEQ if necessary
+    } else if (tolower(distance) %in% c("lbk", "lbi")) {
+        control@symmetric <- FALSE
 
-     if (any(k < 2L))
-          stop("At least two clusters must be defined")
-     if (any(k > length(data)))
-          stop("Cannot have more clusters than series in the data")
-
-     if (type %in% c("partitional", "fuzzy")) {
-
-          ## =================================================================================================================
-          ## Partitional or fuzzy
-          ## =================================================================================================================
-
-          ## ----------------------------------------------------------------------------------------------------------
-          ## Distance function
-          ## ----------------------------------------------------------------------------------------------------------
-
-          # ddist.R
-          distfun <- ddist(distance = distance,
-                           control = control,
-                           distmat = distmat)
-
-          ## ----------------------------------------------------------------------------------------------------------
-          ## PAM precompute?
-          ## ----------------------------------------------------------------------------------------------------------
-
-          ## for a check near the end, changed if appropriate
-          distmat_flag <- FALSE
-
-          # precompute distance matrix?
-          if (is.character(centroid) && centroid == "pam") {
-
-               ## check if distmat was not provided and should be precomputed
-               if (!is.null(distmat)) {
-                    if ( nrow(distmat) != length(data) || ncol(distmat) != length(data) )
-                         stop("Dimensions of provided cross-distance matrix don't correspond to length of provided data")
-
-                    ## distmat was provided in call
-                    distmat_flag <- TRUE
-
-                    if (control@trace)
-                         cat("\n\tDistance matrix provided...\n\n")
-
-               } else if (control@pam.precompute) {
-                    if (tolower(distance) == "dtw_lb")
-                         warning("Using dtw_lb with control@pam.precompute = TRUE is not advised.")
-
-                    if (control@trace)
-                         cat("\n\tPrecomputing distance matrix...\n\n")
-
-                    distmat <- do.call("distfun", enlist(x = data, centroids = NULL, dots = dots))
-
-                    ## Redefine new distmat
-                    assign("distmat", distmat, envir = environment(distfun))
-
-                    gc(FALSE)
-               }
-
-          } else {
-               # replace any given distmat if centroid != "pam"
-               distmat <- NULL
-          }
-
-          ## ----------------------------------------------------------------------------------------------------------
-          ## Centroid function
-          ## ----------------------------------------------------------------------------------------------------------
-
-          ## Closures, all-cent.R
-          allcent <- all_cent(case = centroid,
-                              distmat = distmat,
-                              distfun = distfun,
-                              control = control,
-                              fuzzy = isTRUE(type == "fuzzy"))
-
-          centroid <- as.character(substitute(centroid))[[1L]]
-
-          ## ----------------------------------------------------------------------------------------------------------
-          ## Further options
-          ## ----------------------------------------------------------------------------------------------------------
-
-          family <- new("dtwclustFamily",
-                        dist = distfun,
-                        allcent = allcent,
-                        preproc = preproc)
-
-          if (type == "fuzzy")
-               family@cluster <- fcm_cluster # fuzzy.R
-
-          if (control@trace && control@nrep > 1L)
-               message("Tracing of repetitions might not be available if done in parallel.\n")
-
-          ## ----------------------------------------------------------------------------------------------------------
-          ## Cluster
-          ## ----------------------------------------------------------------------------------------------------------
-
-          if (length(k) == 1L && control@nrep == 1L) {
-               rngtools::setRNG(rngtools::RNGseq(1L, seed = seed, simplify = TRUE))
-
-               ## Just one repetition
-               kc.list <- list(do.call("kcca.list",
-                                       enlist(x = data,
-                                              k = k,
-                                              family = family,
-                                              control = control,
-                                              fuzzy = isTRUE(type == "fuzzy"),
-                                              dots = dots)))
-
-          } else {
-               ## I need to re-register any custom distances in each parallel worker
-               dist_entry <- proxy::pr_DB$get_entry(distance)
-
-               export <- c("kcca.list", "consistency_check", "enlist")
-
-               rng <- rngtools::RNGseq(length(k) * control@nrep, seed = seed, simplify = FALSE)
-               rng <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) rng[i])
-
-               comb0 <- if(control@nrep > 1L) c else list
-
-               k0 <- k
-               rng0 <- rng
-               i <- integer() # CHECK complains now?
-
-               kc.list <- foreach(k = k0, rng = rng0, .combine = comb0, .multicombine = TRUE,
-                                  .packages = control@packages, .export = export) %:%
-                    foreach(i = 1L:control@nrep, .combine = list, .multicombine = TRUE,
-                            .packages = control@packages, .export = export) %dopar% {
-                                 rngtools::setRNG(rng[[i]])
-
-                                 if (!consistency_check(dist_entry$names[1], "dist"))
-                                      do.call(proxy::pr_DB$set_entry, dist_entry)
-
-                                 kc <- do.call("kcca.list",
-                                               enlist(x = data,
-                                                      k = k,
-                                                      family = family,
-                                                      control = control,
-                                                      fuzzy = isTRUE(type == "fuzzy"),
-                                                      dots = dots))
-
-                                 gc(FALSE)
-
-                                 kc
-                            }
-          }
-
-          ## ----------------------------------------------------------------------------------------------------------
-          ## Prepare results
-          ## ----------------------------------------------------------------------------------------------------------
-
-          ## Replace distmat with NULL so that, if the distance function is called again, it won't subset it
-          assign("distmat", NULL, envir = environment(family@dist))
-
-          ## If distmat was provided, let it be shown in the results
-          if (distmat_flag) {
-               if (!is.null(attr(distmat, "method")))
-                    distance <- attr(distmat, "method")
-               else
-                    distance <- "unknown"
-          }
-
-          ## Create objects
-          RET <- lapply(kc.list, function(kc) {
-               new("dtwclust",
-                   call = MYCALL,
-                   control = control,
-                   family = family,
-                   distmat = distmat,
-
-                   type = type,
-                   method = "NA",
-                   distance = distance,
-                   centroid = centroid,
-                   preproc = preproc_char,
-
-                   centers = kc$centroids,
-                   centroids = kc$centroids,
-                   k = kc$k,
-                   cluster = kc$cluster,
-                   fcluster = kc$fcluster,
-
-                   clusinfo = kc$clusinfo,
-                   cldist = kc$cldist,
-                   iter = kc$iter,
-                   converged = kc$converged,
-
-                   datalist = datalist)
-          })
-
-          if (length(RET) == 1L) RET <- RET[[1L]]
-
-     } else if (type == "hierarchical") {
-
-          ## =================================================================================================================
-          ## Hierarchical
-          ## =================================================================================================================
-
-          hclust_methods <- match.arg(method,
-                                      c("ward.D", "ward.D2", "single", "complete",
-                                        "average", "mcquitty", "median", "centroid",
-                                        "all"),
-                                      several.ok = TRUE)
-
-          if (any(hclust_methods == "all"))
-               hclust_methods <- c("ward.D", "ward.D2", "single", "complete",
-                                   "average", "mcquitty", "median", "centroid")
-
-          if (tolower(distance) == "dtw_lb")
-               warning("Using dtw_lb with hierarchical clustering is not advised.")
-
-          ## Take advantage of the function I defined for the partitional methods
-          ## Which can do calculations in parallel if appropriate
-          distfun <- ddist(distance = distance,
-                           control = control,
-                           distmat = NULL)
-
-          if (!is.null(distmat)) {
-               if ( nrow(distmat) != length(data) || ncol(distmat) != length(data) )
+    } else if (tolower(distance) %in% c("sbd", "gak")) {
+        control@symmetric <- TRUE
+    }
+
+    ## For parallel computation
+    control@packages <- c("dtwclust", control@packages)
+
+    if (type %in% c("partitional", "fuzzy")) {
+
+        ## =================================================================================================================
+        ## Partitional or fuzzy
+        ## =================================================================================================================
+
+        ## replace any given distmat if centroid != "pam"
+        if (is.character(centroid)) {
+            if (type == "fuzzy")
+                centroid <- "fcm"
+            else
+                centroid <- match.arg(centroid, c("mean", "median", "shape", "dba", "pam"))
+
+            if (centroid != "pam") distmat <- NULL
+
+        } else {
+            distmat <- NULL
+        }
+
+        if (diff_lengths) {
+            if (type == "fuzzy")
+                stop("Fuzzy c-means does not support series with different length.")
+
+            check_consistency(centroid, "cent", trace = control@trace)
+        }
+
+        ## ----------------------------------------------------------------------------------------------------------
+        ## Family creation, see initialization in dtwclust-methods.R
+        ## ----------------------------------------------------------------------------------------------------------
+
+        family <- new("dtwclustFamily",
+                      dist = distance,
+                      allcent = centroid,
+                      preproc = preproc,
+                      distmat = distmat,
+                      control = control,
+                      fuzzy = isTRUE(type == "fuzzy"))
+
+        if (!all(c("x", "cl_id", "k", "cent", "cl_old") %in% names(formals(family@allcent))))
+            stop("The provided centroid function must have at least the following arguments with ",
+                 "the shown names:\n\t",
+                 paste(c("x", "cl_id", "k", "cent", "cl_old"), collapse = ", "))
+
+        cent_char <- as.character(substitute(centroid))[1L]
+
+        ## ----------------------------------------------------------------------------------------------------------
+        ## PAM precompute?
+        ## ----------------------------------------------------------------------------------------------------------
+
+        ## for a check near the end, changed if appropriate
+        distmat_provided <- FALSE
+
+        ## precompute distance matrix?
+        if (is.character(centroid) && centroid == "pam") {
+            ## check if distmat was not provided and should be precomputed
+            if (!is.null(distmat)) {
+                if ( nrow(distmat) != length(data) || ncol(distmat) != length(data) )
                     stop("Dimensions of provided cross-distance matrix don't correspond to length of provided data")
 
-               if (control@trace)
-                    cat("\n\tDistance matrix provided...\n")
+                ## distmat was provided in call
+                distmat_provided <- TRUE
 
-               D <- distmat
+                if (control@trace) cat("\n\tDistance matrix provided...\n\n")
 
-               if (!is.null(attr(distmat, "method")))
-                    distance <- attr(distmat, "method")
-               else
-                    distance <- "unknown"
+            } else if (control@pam.precompute) {
+                if (tolower(distance) == "dtw_lb")
+                    warning("Using dtw_lb with control@pam.precompute = TRUE is not advised.")
 
-          } else {
-               if (control@trace)
-                    cat("\n\tCalculating distance matrix...\n")
+                if (control@trace) cat("\n\tPrecomputing distance matrix...\n\n")
 
-               ## single argument is to calculate whole distance matrix
-               D <- do.call("distfun", enlist(x = data, dots = dots))
-          }
+                distmat <- do.call(family@dist, enlist(x = data, centroids = NULL, dots = dots))
 
-          ## Required form for 'hclust'
-          Dist <- D[lower.tri(D)]
+                ## Redefine new distmat
+                assign("distmat", distmat, environment(family@dist))
+                assign("distmat", distmat, environment(family@allcent))
 
-          ## Needed attribute for 'hclust' (case sensitive)
-          attr(Dist, "Size") <- length(data)
-          attr(Dist, "method") <- attr(D, "method")
+                gc(FALSE)
+            }
+        }
 
-          if (control@trace)
-               cat("\n\tPerforming hierarchical clustering...\n\n")
+        ## ----------------------------------------------------------------------------------------------------------
+        ## Cluster
+        ## ----------------------------------------------------------------------------------------------------------
 
-          ## Cluster
-          hc <- lapply(hclust_methods, function(method) stats::hclust(Dist, method))
+        if (length(k) == 1L && control@nrep == 1L) {
+            rngtools::setRNG(rngtools::RNGseq(1L, seed = seed, simplify = TRUE))
 
-          ## Invalid centroid specifier provided?
-          if (!missing(centroid) && !is.function(centroid))
-               warning("The 'centroid' argument was provided but it wasn't a function, so it was ignored.")
-          if (!is.function(centroid))
-               centroid <- NA
+            ## Just one repetition
+            pc.list <- list(do.call(kcca.list,
+                                    enlist(x = data,
+                                           k = k,
+                                           family = family,
+                                           control = control,
+                                           fuzzy = isTRUE(type == "fuzzy"),
+                                           dots = dots)))
 
-          RET <- lapply(k, function(k) {
-               lapply(hc, function(hc) {
-                    ## cutree and corresponding centroids
-                    cluster <- stats::cutree(hc, k)
+        } else {
+            if ((foreach::getDoParName() != "doSEQ") && control@trace)
+                message("Tracing of repetitions might not be available if done in parallel.\n")
 
-                    if (is.function(centroid)) {
-                         allcent <- centroid
+            ## I need to re-register any custom distances in each parallel worker
+            dist_entry <- proxy::pr_DB$get_entry(distance)
 
-                         centroids <- lapply(1L:k, function(kcent) centroid(data[cluster == kcent]))
+            export <- c("kcca.list", "check_consistency", "enlist")
 
-                         cldist <- do.call("distfun", enlist(x = data,
-                                                             centroids = centroids[cluster],
-                                                             pairwise = TRUE,
-                                                             dots = dots))
+            rng <- rngtools::RNGseq(length(k) * control@nrep, seed = seed, simplify = FALSE)
+            rng0 <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) rng[i])
 
-                         cldist <- as.matrix(cldist)
+            ## if %do% is used, the outer loop replaces value of k in this envir
+            k0 <- k
+            comb0 <- if (control@nrep > 1L) c else list
 
-                    } else {
-                         allcent <- function(dummy) { data[which.min(apply(D, 1L, sum))] }
+            i <- integer() # CHECK complains about non-initialization now
 
-                         centroids <- sapply(1L:k, function(kcent) {
-                              id_k <- cluster == kcent
+            pc.list <- foreach(k = k0, rng = rng0, .combine = comb0, .multicombine = TRUE,
+                               .packages = control@packages, .export = export) %:%
+                foreach(i = 1L:control@nrep, .combine = list, .multicombine = TRUE,
+                        .packages = control@packages, .export = export) %op%
+                        {
+                            if (control@trace) message("Repetition ", i, " for k = ", k)
 
-                              d_sub <- D[id_k, id_k, drop = FALSE]
+                            rngtools::setRNG(rng[[i]])
 
-                              id_centroid <- which.min(apply(d_sub, 1L, sum))
+                            if (!check_consistency(dist_entry$names[1], "dist"))
+                                do.call(proxy::pr_DB$set_entry, dist_entry)
 
-                              which(id_k)[id_centroid]
-                         })
+                            pc <- do.call(kcca.list,
+                                          enlist(x = data,
+                                                 k = k,
+                                                 family = family,
+                                                 control = control,
+                                                 fuzzy = isTRUE(type == "fuzzy"),
+                                                 dots = dots))
 
-                         cldist <- as.matrix(D[,centroids][cbind(1L:length(data), cluster)])
-                         centroids <- data[centroids]
-                    }
+                            gc(FALSE)
 
-                    ## Some additional cluster information (taken from flexclust)
-                    size <- as.vector(table(cluster))
-                    clusinfo <- data.frame(size = size, av_dist = 0)
-                    clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], cluster, mean))
+                            pc
+                        }
+        }
 
-                    new("dtwclust", hc,
-                        call = MYCALL,
-                        control = control,
-                        family = new("dtwclustFamily",
-                                     dist = distfun,
-                                     allcent = allcent,
-                                     preproc = preproc),
-                        distmat = D,
+        ## ----------------------------------------------------------------------------------------------------------
+        ## Prepare results
+        ## ----------------------------------------------------------------------------------------------------------
 
-                        type = type,
-                        method = hc$method,
-                        distance = distance,
-                        centroid = as.character(substitute(centroid)),
-                        preproc = preproc_char,
+        ## Replace distmat with NULL so that, if the distance function is called again, it won't subset it
+        assign("distmat", NULL, envir = environment(family@dist))
 
-                        centers = centroids,
-                        centroids = centroids,
-                        k = as.integer(k),
-                        cluster = cluster,
-                        fcluster = matrix(NA_real_),
+        ## If distmat was provided, let it be shown in the results
+        if (distmat_provided) {
+            if (is.null(attr(distmat, "method")))
+                distance <- "unknown"
+            else
+                distance <- attr(distmat, "method")
+        }
 
-                        clusinfo = clusinfo,
-                        cldist = cldist,
-                        iter = 1L,
-                        converged = TRUE,
+        ## Create objects
+        RET <- lapply(pc.list, function(pc) {
+            create_dtwclust(call = MYCALL,
+                            control = control,
+                            family = family,
+                            distmat = distmat,
 
-                        datalist = datalist)
-               })
-          })
+                            type = type,
+                            method = "NA",
+                            distance = distance,
+                            centroid = cent_char,
+                            preproc = preproc_char,
 
-          RET <- unlist(RET, recursive = FALSE)
+                            centroids = pc$centroids,
+                            k = pc$k,
+                            cluster = pc$cluster,
+                            fcluster = pc$fcluster,
+                            iter = pc$iter,
+                            converged = pc$converged,
+                            cldist = pc$cldist,
+                            clusinfo = pc$clusinfo,
 
-          if (length(RET) == 1L) RET <- RET[[1L]]
+                            datalist = datalist,
+                            dots = dots,
+                            override.family = FALSE)
+        })
 
-     } else if (type == "tadpole") {
+        if (class(RET) != "dtwclust" && length(RET) == 1L) RET <- RET[[1L]]
 
-          ## =================================================================================================================
-          ## TADPole
-          ## =================================================================================================================
+    } else if (type == "hierarchical") {
 
-          control@window.size <- consistency_check(control@window.size, "window")
-          control@norm <- "L2"
+        ## =================================================================================================================
+        ## Hierarchical
+        ## =================================================================================================================
 
-          if (is.null(dc))
-               stop("Please specify 'dc' for tadpole algorithm")
-          if (dc < 0)
-               stop("The cutoff distance 'dc' must be positive")
+        if (is.character(method)) {
+            hclust_methods <- match.arg(method,
+                                        c("ward.D", "ward.D2", "single", "complete",
+                                          "average", "mcquitty", "median", "centroid",
+                                          "all"),
+                                        several.ok = TRUE)
 
-          ## ----------------------------------------------------------------------------------------------------------
-          ## Check data
-          ## ----------------------------------------------------------------------------------------------------------
+            if (any(hclust_methods == "all"))
+                hclust_methods <- c("ward.D", "ward.D2", "single", "complete",
+                                    "average", "mcquitty", "median", "centroid")
 
-          consistency_check(data, "tslist")
+        } else if (!is.function(method))
+            stop("Argument 'method' must be either a supported character or a function.")
 
-          ## ----------------------------------------------------------------------------------------------------------
-          ## Cluster
-          ## ----------------------------------------------------------------------------------------------------------
+        if (tolower(distance) == "dtw_lb")
+            warning("Using dtw_lb with hierarchical clustering is not advised.")
 
-          if (control@trace)
-               cat("\nEntering TADPole...\n\n")
+        ## Take advantage of the function I defined for the partitional methods
+        ## Which can do calculations in parallel if appropriate
+        distfun <- ddist(distance = distance,
+                         control = control,
+                         distmat = NULL)
 
-          ## mainly for predict generic
-          distfun <- ddist("dtw_lb", control = control, distmat = NULL)
+        if (!is.null(distmat)) {
+            if ( nrow(distmat) != length(data) || ncol(distmat) != length(data) )
+                stop("Dimensions of provided cross-distance matrix don't correspond to length of provided data")
 
-          ## Invalid centroid specifier provided?
-          if (!missing(centroid) && !is.function(centroid))
-               warning("The 'centroid' argument was provided but it wasn't a function, so it was ignored.")
+            if (control@trace)
+                cat("\n\tDistance matrix provided...\n")
 
-          if(is.function(centroid))
-               centchar <- as.character(substitute(centroid))
-          else
-               centchar <- "PAM (TADPole)"
+            if (is.null(attr(distmat, "method")))
+                distance <- "unknown"
+            else
+                distance <- attr(distmat, "method")
 
-          RET <- foreach(k = k, .combine = list, .multicombine = TRUE, .packages = "dtwclust", .export = "enlist") %dopar% {
-               R <- TADPole(data, k = k, dc = dc, window.size = control@window.size, error.check = FALSE)
+        } else {
+            if (control@trace)
+                cat("\n\tCalculating distance matrix...\n")
 
-               if (control@trace) {
-                    cat("TADPole completed, pruning percentage = ",
-                        formatC(100 - R$distCalcPercentage, digits = 3L, width = -1L, format = "fg"),
-                        "%\n\n",
-                        sep = "")
-               }
+            ## single argument is to calculate whole distance matrix
+            distmat <- do.call(distfun, enlist(x = data, centroids = NULL, dots = dots))
+        }
 
-               ## ----------------------------------------------------------------------------------------------------------
-               ## Prepare results
-               ## ----------------------------------------------------------------------------------------------------------
+        if (control@trace)
+            cat("\n\tPerforming hierarchical clustering...\n\n")
 
-               if (is.function(centroid)) {
+        if (is.character(method)) {
+            ## Using hclust
+            hc <- lapply(hclust_methods, function(method) {
+                stats::hclust(stats::as.dist(distmat), method)
+            })
+
+        } else {
+            ## Using provided function
+            if (has_dots(method)) {
+                hc <- list(method(stats::as.dist(distmat), ...))
+
+            } else {
+                hc <- list(do.call(method,
+                                   args = enlist(stats::as.dist(distmat),
+                                                 dots = subset_dots(dots, method))))
+            }
+
+            method <- as.character(substitute(method))[1L]
+        }
+
+        ## Invalid centroid specifier provided?
+        if (!missing(centroid) && !is.function(centroid))
+            warning("The 'centroid' argument was provided but it wasn't a function, so it was ignored.")
+        if (!is.function(centroid))
+            centroid <- NA
+
+        RET <- lapply(k, function(k) {
+            lapply(hc, function(hc) {
+                ## cutree and corresponding centroids
+                cluster <- stats::cutree(stats::as.hclust(hc), k)
+
+                if (is.function(centroid)) {
                     allcent <- centroid
-                    centroids <- lapply(1L:k, function(kcent) centroid(data[R$cl == kcent]))
 
-               } else {
-                    ## this is important for cvi function
-                    allcent <- function(dummy) { data[R$centroids[1L]] }
-                    centroids <- data[R$centroids]
-               }
+                    centroids <- lapply(1L:k, function(kcent) { centroid(data[cluster == kcent]) })
 
-               ## Some additional cluster information (taken from flexclust)
-               cldist <- do.call("distfun", enlist(x = data,
-                                                   centroids = centroids[R$cl],
-                                                   pairwise = TRUE,
-                                                   dots = dots))
+                } else {
+                    allcent <- function() {}
 
-               cldist <- as.matrix(cldist)
-               size <- as.vector(table(R$cl))
-               clusinfo <- data.frame(size = size, av_dist = 0)
-               clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], R$cl, mean))
+                    centroids <- sapply(1L:k, function(kcent) {
+                        id_k <- cluster == kcent
 
-               new("dtwclust",
-                   call = MYCALL,
-                   control = control,
-                   family = new("dtwclustFamily",
-                                dist = distfun,
-                                allcent = allcent,
-                                preproc = preproc),
-                   distmat = NULL,
+                        d_sub <- distmat[id_k, id_k, drop = FALSE]
 
-                   type = type,
-                   distance = "DTW2_LB",
-                   centroid = centchar,
-                   preproc = preproc_char,
+                        id_centroid <- which.min(apply(d_sub, 1L, sum))
 
-                   centers = centroids,
-                   centroids = centroids,
-                   k = as.integer(k),
-                   cluster = as.integer(R$cl),
-                   fcluster = matrix(NA_real_),
+                        which(id_k)[id_centroid]
+                    })
 
-                   clusinfo = clusinfo,
-                   cldist = cldist,
-                   iter = 1L,
-                   converged = TRUE,
+                    centroids <- data[centroids]
+                }
 
-                   datalist = datalist)
-          }
-     }
+                create_dtwclust(stats::as.hclust(hc),
+                                call = MYCALL,
+                                control = control,
+                                family = new("dtwclustFamily",
+                                             dist = distfun,
+                                             allcent = allcent,
+                                             preproc = preproc),
+                                distmat = distmat,
 
-     toc <- proc.time() - tic
+                                type = type,
+                                method = if (!is.null(hc$method)) hc$method else method,
+                                distance = distance,
+                                centroid = as.character(substitute(centroid))[1L],
+                                preproc = preproc_char,
 
-     if (class(RET) == "dtwclust") {
-          RET@proctime <- toc
-          RET@dots <- dots
+                                centroids = centroids,
+                                k = as.integer(k),
+                                cluster = cluster,
 
-     } else {
-          RET <- lapply(RET, function(ret) {
-               ret@proctime <- toc
-               ret@dots <- dots
+                                datalist = datalist,
+                                dots = dots,
+                                override.family = !is.function(centroid))
+            })
+        })
 
-               ret
-          })
-     }
+        RET <- unlist(RET, recursive = FALSE)
 
-     if (type %in% c("partitional", "fuzzy") && (control@nrep > 1L || length(k) > 1L))
-          attr(RET, "rng") <- unlist(rng0, recursive = FALSE, use.names = FALSE)
+        if (class(RET) != "dtwclust" && length(RET) == 1L) RET <- RET[[1L]]
 
-     if (control@trace) {
-          cat("\tElapsed time is", toc["elapsed"], "seconds.\n\n")
-     }
+    } else if (type == "tadpole") {
 
-     RET
+        ## =================================================================================================================
+        ## TADPole
+        ## =================================================================================================================
+
+        control@window.size <- check_consistency(control@window.size, "window")
+        control@norm <- "L2"
+
+        if (is.null(dc))
+            stop("Please specify 'dc' for the TADPole algorithm")
+        if (dc < 0)
+            stop("The cutoff distance 'dc' must be positive")
+
+        ## ----------------------------------------------------------------------------------------------------------
+        ## Cluster
+        ## ----------------------------------------------------------------------------------------------------------
+
+        if (control@trace) cat("\nEntering TADPole...\n\n")
+
+        ## mainly for predict generic
+        distfun <- ddist("dtw_lb", control = control, distmat = NULL)
+
+        ## Invalid centroid specifier provided?
+        if (!missing(centroid) && !is.function(centroid))
+            warning("The 'centroid' argument was provided but it wasn't a function, so it was ignored.")
+
+        if (is.function(centroid))
+            cent_char <- as.character(substitute(centroid))
+        else
+            cent_char <- "PAM (TADPole)"
+
+        lb <- if (is.null(dots$lb)) "lbk" else dots$lb
+
+        RET <- foreach(k = k, .combine = list, .multicombine = TRUE, .packages = "dtwclust", .export = "enlist") %op% {
+            R <- TADPole(data, k = k, dc = dc, window.size = control@window.size, lb = lb)
+
+            if (control@trace) {
+                cat("TADPole completed, pruning percentage = ",
+                    formatC(100 - R$distCalcPercentage, digits = 3L, width = -1L, format = "fg"),
+                    "%\n\n",
+                    sep = "")
+            }
+
+            ## ----------------------------------------------------------------------------------------------------------
+            ## Prepare results
+            ## ----------------------------------------------------------------------------------------------------------
+
+            if (is.function(centroid)) {
+                allcent <- centroid
+                centroids <- lapply(1L:k, function(kcent) { centroid(data[R$cl == kcent]) })
+
+            } else {
+                allcent <- function() {}
+                centroids <- data[R$centroids]
+            }
+
+            obj <- create_dtwclust(call = MYCALL,
+                                   control = control,
+                                   family = new("dtwclustFamily",
+                                                dist = distfun,
+                                                allcent = allcent,
+                                                preproc = preproc),
+                                   distmat = NULL,
+
+                                   type = type,
+                                   distance = "dtw_lb",
+                                   centroid = cent_char,
+                                   preproc = preproc_char,
+
+                                   centroids = centroids,
+                                   k = as.integer(k),
+                                   cluster = as.integer(R$cl),
+
+                                   datalist = datalist,
+                                   dots = dots,
+                                   override.family = !is.function(centroid))
+
+            obj@distance <- "LB_Keogh+DTW2"
+            obj
+        }
+    }
+
+    ## =================================================================================================================
+    ## Finish
+    ## =================================================================================================================
+
+    toc <- proc.time() - tic
+
+    if (class(RET) == "dtwclust") {
+        RET@proctime <- toc
+
+    } else {
+        RET <- lapply(RET, function(ret) {
+            ret@proctime <- toc
+
+            ret
+        })
+    }
+
+    if (type %in% c("partitional", "fuzzy") && (control@nrep > 1L || length(k) > 1L))
+        attr(RET, "rng") <- unlist(rng0, recursive = FALSE, use.names = FALSE)
+
+    if (control@trace) {
+        cat("\tElapsed time is", toc["elapsed"], "seconds.\n\n")
+    }
+
+    RET
 }

@@ -1,27 +1,53 @@
 #' Keogh's DTW lower bound
 #'
-#' This function calculates a lower bound (LB) on the Dynamic Time Warp (DTW) distance between two time
-#' series. It uses a Sakoe-Chiba constraint.
+#' This function calculates a lower bound (LB) on the Dynamic Time Warp (DTW) distance between two
+#' time series. It uses a Sakoe-Chiba constraint.
 #'
-#' The windowing constraint uses a centered window. The calculations expect a value in \code{window.size}
-#' that represents the distance between the point considered and one of the edges of the window. Therefore,
-#' if, for example, \code{window.size = 10}, the warping for an observation \eqn{x_i} considers the points
-#' between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting in \code{10(2) + 1 = 21} observations falling within
-#' the window.
+#' @export
 #'
-#' The reference time series should go in \code{x}, whereas the query time series should go in \code{y}.
+#' @param x A time series (reference).
+#' @param y A time series with the same length as \code{x} (query).
+#' @param window.size Window size for envelope calculation. See details.
+#' @param norm Vector norm. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.
+#' @param lower.env Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided
+#'   (non-proxy version only).
+#' @param upper.env Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided
+#'   (non-proxy version only).
+#' @param force.symmetry If \code{TRUE}, a second lower bound is calculated by swapping \code{x} and
+#'   \code{y}, and whichever result has a \emph{higher} distance value is returned. The proxy
+#'   version can only work if a square matrix is obtained, but use carefully.
+#' @param error.check Check data inconsistencies?
+#'
+#' @details
+#'
+#' The windowing constraint uses a centered window. The calculations expect a value in
+#' \code{window.size} that represents the distance between the point considered and one of the edges
+#' of the window. Therefore, if, for example, \code{window.size = 10}, the warping for an
+#' observation \eqn{x_i} considers the points between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting
+#' in \code{10(2) + 1 = 21} observations falling within the window.
+#'
+#' The reference time series should go in \code{x}, whereas the query time series should go in
+#' \code{y}.
+#'
+#' @return A list with:
+#' \itemize{
+#'   \item \code{d}: The lower bound of the DTW distance.
+#'   \item \code{upper.env}: The time series of \code{y}'s upper envelope.
+#'   \item \code{lower.env}: The time series of \code{y}'s lower envelope.
+#' }
 #'
 #' @note
 #'
 #' The lower bound is defined for time series of equal length only and is \strong{not} symmetric.
 #'
-#' If you wish to calculate the lower bound between several time series, it would be better to use the version
-#' registered with the \code{proxy} package, since it includes some small optimizations. The convention
-#' mentioned above for references and queries still holds. See the examples.
+#' If you wish to calculate the lower bound between several time series, it would be better to use
+#' the version registered with the \code{proxy} package, since it includes some small optimizations.
+#' The convention mentioned above for references and queries still holds. See the examples.
 #'
-#' The proxy version has an extra parameter \code{force.symmetry} that should only be used when only \code{x}
-#' is provided or both \code{x} and \code{y} are equal. It compares the lower and upper triangular of the
-#' resulting distance matrix and forces symmetry in such a way that the tightest lower bound is obtained.
+#' The proxy version of \code{force.symmetry} should only be used when only \code{x} is provided or
+#' both \code{x} and \code{y} are identical. It compares the lower and upper triangular of the
+#' resulting distance matrix and forces symmetry in such a way that the tightest lower bound is
+#' obtained.
 #'
 #' @references
 #'
@@ -54,199 +80,179 @@
 #'
 #' D.lbk <= D.dtw
 #'
-#' @param x A time series (reference).
-#' @param y A time series with the same length as \code{x} (query).
-#' @param window.size Window size for envelope calculation. See details.
-#' @param norm Vector norm. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.
-#' @param lower.env Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided
-#' (non-proxy version only).
-#' @param upper.env Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided
-#' (non-proxy version only).
-#' @param force.symmetry If \code{TRUE}, a second lower bound is calculated by swapping \code{x} and
-#' \code{y}, and whichever result has a \emph{higher} distance value is returned. The proxy version
-#' can only work if a square matrix is obtained, but use carefully.
-#'
-#' @return A list with: \itemize{
-#'   \item \code{d}: The lower bound of the DTW distance.
-#'   \item \code{upper.env}: The time series of \code{y}'s upper envelope.
-#'   \item \code{lower.env}: The time series of \code{y}'s lower envelope.
-#' }
-#'
-#' @export
-#'
-
 lb_keogh <- function(x, y, window.size = NULL, norm = "L1",
-                     lower.env = NULL, upper.env = NULL, force.symmetry = FALSE) {
+                     lower.env = NULL, upper.env = NULL,
+                     force.symmetry = FALSE, error.check = TRUE)
+{
+    norm <- match.arg(norm, c("L1", "L2"))
 
-     norm <- match.arg(norm, c("L1", "L2"))
+    if (error.check) check_consistency(x, "ts")
 
-     consistency_check(x, "ts")
+    if (is_multivariate(list(x)))
+        stop("lb_keogh does not support multivariate series.")
 
-     if (is.null(lower.env) || is.null(upper.env)) {
-          consistency_check(y, "ts")
+    if (is.null(lower.env) || is.null(upper.env)) {
+        if (error.check) check_consistency(y, "ts")
 
-          if (length(x) != length(y))
-               stop("The series must have the same length")
+        if (is_multivariate(list(y)))
+            stop("lb_keogh does not support multivariate series.")
 
-          window.size <- consistency_check(window.size, "window")
+        if (length(x) != length(y))
+            stop("The series must have the same length")
 
-          if (window.size > length(x))
-               stop("The width of the window should not exceed the length of the series")
-     }
+        window.size <- check_consistency(window.size, "window")
+    }
 
-     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
-     if (is.null(lower.env) && is.null(upper.env)) {
-          envelopes <- call_envelop(y, window.size*2L + 1L)
-          lower.env <- envelopes$min
-          upper.env <- envelopes$max
+    ## NOTE: the 'window.size' definition varies betwen dtw/call_envelop and runmin/max
+    if (is.null(lower.env) && is.null(upper.env)) {
+        envelopes <- call_envelop(y, window.size)
+        lower.env <- envelopes$lower
+        upper.env <- envelopes$upper
 
-     } else if (is.null(lower.env)) {
-          lower.env <- caTools::runmin(y, window.size*2L + 1L)
+    } else if (is.null(lower.env)) {
+        lower.env <- caTools::runmin(y, window.size*2L + 1L)
 
-     } else if (is.null(upper.env)) {
-          upper.env <- caTools::runmax(y, window.size*2L + 1L)
-     }
+    } else if (is.null(upper.env)) {
+        upper.env <- caTools::runmax(y, window.size*2L + 1L)
+    }
 
-     if (length(lower.env) != length(x))
-          stop("Length mismatch between 'x' and the lower envelope")
+    if (length(lower.env) != length(x))
+        stop("Length mismatch between 'x' and the lower envelope")
 
-     if (length(upper.env) != length(x))
-          stop("Length mismatch between 'x' and the upper envelope")
+    if (length(upper.env) != length(x))
+        stop("Length mismatch between 'x' and the upper envelope")
 
-     D <- rep(0, length(x))
+    D <- rep(0, length(x))
 
-     ind1 <- x > upper.env
-     D[ind1] <- x[ind1] - upper.env[ind1]
-     ind2 <- x < lower.env
-     D[ind2] <- lower.env[ind2] - x[ind2]
+    ind1 <- x > upper.env
+    D[ind1] <- x[ind1] - upper.env[ind1]
+    ind2 <- x < lower.env
+    D[ind2] <- lower.env[ind2] - x[ind2]
 
-     d <- switch(EXPR = norm,
-                 L1 = sum(D),
-                 L2 = sqrt(sum(D^2)))
+    d <- switch(EXPR = norm,
+                L1 = sum(D),
+                L2 = sqrt(sum(D^2)))
 
-     if (force.symmetry) {
-          d2 <- lb_keogh(x = y, y = x, window.size = window.size, norm = norm)
+    if (force.symmetry) {
+        d2 <- lb_keogh(x = y, y = x, window.size = window.size, norm = norm)
 
-          if (d2$d > d) {
-               d <- d2$d
-               lower.env = d2$lower.env
-               upper.env = d2$upper.env
-          }
-     }
+        if (d2$d > d) {
+            d <- d2$d
+            lower.env = d2$lower.env
+            upper.env = d2$upper.env
+        }
+    }
 
-     ## Finish
-     list(d = d,
-          upper.env = upper.env,
-          lower.env = lower.env)
+    ## Finish
+    list(d = d,
+         upper.env = upper.env,
+         lower.env = lower.env)
 }
 
 # ========================================================================================================
 # Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
 # ========================================================================================================
 
-lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1",
-                           force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE, ...) {
+lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
+                           force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE)
+{
+    norm <- match.arg(norm, c("L1", "L2"))
 
-     norm <- match.arg(norm, c("L1", "L2"))
+    window.size <- check_consistency(window.size, "window")
 
-     if (error.check)
-          window.size <- consistency_check(window.size, "window")
+    x <- any2list(x)
 
-     x <- consistency_check(x, "tsmat")
+    if (error.check)
+        check_consistency(x, "tslist")
 
-     if (error.check)
-          consistency_check(x, "tslist")
+    if (is.null(y)) {
+        y <- x
 
-     if (window.size > length(x[[1L]]))
-          stop("Window size should not exceed length of the time series")
+    } else {
+        y <- any2list(y)
 
-     if (is.null(y)) {
-          y <- x
+        if (error.check)
+            check_consistency(y, "tslist")
+    }
 
-     } else {
-          y <- consistency_check(y, "tsmat")
+    if (is_multivariate(x) || is_multivariate(y))
+        stop("lb_keogh does not support multivariate series.")
 
-          if (error.check)
-               consistency_check(y, "tslist")
+    retclass <- "crossdist"
 
-          if (window.size > length(y[[1L]]))
-               stop("Window size should not exceed length of the time series")
-     }
+    envelops <- lapply(y, function(s) { call_envelop(s, window.size) })
 
-     retclass <- "crossdist"
+    lower.env <- lapply(envelops, "[[", "lower")
+    upper.env <- lapply(envelops, "[[", "upper")
 
-     ## NOTE: the 'window.size' definition varies betwen 'dtw' and 'runminmax'
-     envelops <- lapply(y, function(s) { call_envelop(s, window.size*2L + 1L) })
+    lower.env <- split_parallel(lower.env)
+    upper.env <- split_parallel(upper.env)
 
-     lower.env <- lapply(envelops, "[[", "min")
-     upper.env <- lapply(envelops, "[[", "max")
+    if (pairwise) {
+        X <- split_parallel(x)
 
-     check_parallel()
+        validate_pairwise(X, lower.env)
 
-     x <- split_parallel(x)
+        D <- foreach(x = X, lower.env = lower.env, upper.env = upper.env,
+                     .packages = "dtwclust",
+                     .combine = c,
+                     .multicombine = TRUE) %op% {
+                         mapply(upper.env, lower.env, x,
+                                FUN = function(u, l, x) {
+                                    lb_keogh(x,
+                                             norm = norm,
+                                             lower.env = l,
+                                             upper.env = u,
+                                             error.check = FALSE)$d
+                                })
+                     }
 
-     if (pairwise) {
-          lower.env <- split_parallel(lower.env)
-          upper.env <- split_parallel(upper.env)
+        retclass <- "pairdist"
 
-          if (length(lengths(x)) != length(lengths(lower.env)) || any(lengths(x) != lengths(lower.env)))
-               stop("Pairwise distances require the same amount of series in 'x' and 'y'")
+    } else {
+        D <- foreach(lower.env = lower.env, upper.env = upper.env,
+                     .packages = "dtwclust",
+                     .combine = cbind,
+                     .multicombine = TRUE) %op% {
+                         ret <- mapply(U = upper.env, L = lower.env,
+                                       MoreArgs = list(x = x),
+                                       SIMPLIFY = FALSE,
+                                       FUN = function(U, L, x) {
+                                           ## This will return one row of the distance matrix
+                                           D <- sapply(x, u = U, l = L,
+                                                       FUN = function(x, u, l) {
+                                                           lb_keogh(x,
+                                                                    norm = norm,
+                                                                    lower.env = l,
+                                                                    upper.env = u,
+                                                                    error.check = FALSE)$d
+                                                       })
+                                           D
+                                       })
 
-          D <- foreach(x = x, lower.env = lower.env, upper.env = upper.env,
-                       .combine = c,
-                       .multicombine = TRUE) %dopar% {
-                            mapply(upper.env, lower.env, x,
-                                   FUN = function(u, l, x) {
-                                        lb_keogh(x,
-                                                 norm = norm,
-                                                 lower.env = l,
-                                                 upper.env = u)$d
-                                   })
-                       }
+                         do.call(cbind, ret)
+                     }
+    }
 
-          retclass <- "pairdist"
+    if (force.symmetry && !pairwise) {
+        if (nrow(D) != ncol(D)) {
+            warning("Unable to force symmetry. Resulting distance matrix is not square.")
 
-     } else {
-          D <- foreach(x = x,
-                       .combine = rbind,
-                       .multicombine = TRUE) %dopar% {
-                            ret <- lapply(X = x, U = upper.env, L = lower.env,
-                                          FUN = function(x, U, L) {
-                                               ## This will return one row of the distance matrix
-                                               D <- mapply(U, L,
-                                                           MoreArgs = list(x = x),
-                                                           FUN = function(u, l, x) {
-                                                                lb_keogh(x,
-                                                                         norm = norm,
-                                                                         lower.env = l,
-                                                                         upper.env = u)$d
-                                                           })
-                                               D
-                                          })
+        } else {
+            ind.tri <- lower.tri(D)
 
-                            do.call(rbind, ret)
-                       }
-     }
+            new.low.tri.vals <- t(D)[ind.tri]
+            indCorrect <- D[ind.tri] > new.low.tri.vals
+            new.low.tri.vals[indCorrect] <- D[ind.tri][indCorrect]
 
-     if (force.symmetry && !pairwise) {
-          if (nrow(D) != ncol(D)) {
-               warning("Unable to force symmetry. Resulting distance matrix is not square.")
+            D[ind.tri] <- new.low.tri.vals
+            D <- t(D)
+            D[ind.tri] <- new.low.tri.vals
+        }
+    }
 
-          } else {
-               ind.tri <- lower.tri(D)
+    class(D) <- retclass
+    attr(D, "method") <- "LB_Keogh"
 
-               new.low.tri.vals <- t(D)[ind.tri]
-               indCorrect <- D[ind.tri] > new.low.tri.vals
-               new.low.tri.vals[indCorrect] <- D[ind.tri][indCorrect]
-
-               D[ind.tri] <- new.low.tri.vals
-               D <- t(D)
-               D[ind.tri] <- new.low.tri.vals
-          }
-     }
-
-     class(D) <- retclass
-     attr(D, "method") <- "LB_Keogh"
-
-     D
+    D
 }

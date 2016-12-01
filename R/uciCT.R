@@ -1,22 +1,28 @@
 #' Subset of character trajectories data set
 #'
-#' Subset: only 5 examples of X velocity. See details.
+#' Subset: only 5 examples of each considered character. See details.
+#'
+#' @name uciCT
+#' @aliases ucict CharTraj CharTrajLabels CharTrajMV
+#'
+#' @format
+#'
+#' A list with 100 elements. Each element is a time series. Labels included as factor vector.
+#'
+#' @details
 #'
 #' Quoting the source:
 #'
-#' "Multiple, labelled samples of pen tip trajectories recorded whilst writing individual characters.
-#' All samples are from the same writer, for the purposes of primitive extraction. Only characters with a
-#' single pen-down segment were considered."
+#' "Multiple, labelled samples of pen tip trajectories recorded whilst writing individual
+#' characters. All samples are from the same writer, for the purposes of primitive extraction. Only
+#' characters with a single pen-down segment were considered."
 #'
-#' The subset included here (\code{CharTraj}) has only 5 examples of the X velocity for each character.
+#' The subset included in \code{CharTraj} has only 5 examples of the X velocity for each character.
 #' A vector with labels is also loaded in \code{CharTrajLabels}.
 #'
-#' @name uciCT
-#'
-#' @format A list with 100 elements. Each element is a time series. Labels included as factor vector.
+#' The subset included in \code{CharTrajMV} has 5 examples too, but includes tip force as well as X
+#' and Y velocity. Each element of the list is a multivariate series with 3 variables.
 #'
 #' @source \url{https://archive.ics.uci.edu/ml/datasets/Character+Trajectories}
-#'
-#' @aliases ucict CharTraj CharTrajLabels
 #'
 NULL

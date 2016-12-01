@@ -11,8 +11,8 @@ Formal S4 class with a family of functions used in \code{\link{dtwclust}}.
 \details{
 The custom implementations also handle parallelization.
 
-Since the distance function makes use of \code{proxy}, it also supports any extra \code{\link[proxy]{dist}}
-parameters in \code{...}.
+Since the distance function makes use of \code{proxy}, it also supports any extra
+\code{\link[proxy]{dist}} parameters in \code{...}.
 
 The prototype includes the \code{cluster} function for partitional methods, as well as a
 pass-through \code{preproc} function.
@@ -26,6 +26,26 @@ pass-through \code{preproc} function.
 
 \item{\code{cluster}}{The function used to assign a series to a cluster.}
 
-\item{\code{preproc}}{The function used to preprocess the data (relevant for \code{\link[stats]{predict}}).}
+\item{\code{preproc}}{The function used to preprocess the data (relevant for
+\code{\link[stats]{predict}}).}
 }}
+\examples{
+
+# The dist() function in dtwclustFamily works like proxy::dist() but supports
+# parallelization and optimized symmetric calculations. If you like, you can
+# use the function more or less directly, but provide a control argument when
+# creating the family.
+
+\dontrun{
+data(uciCT)
+ctrl <- new("dtwclustControl", window.size = 18L, symmetric = TRUE)
+fam <- new("dtwclustFamily", dist = "gak",
+           control = list(symmetric = TRUE, window.size = 18L))
+fam@dist(CharTraj)
+}
+
+# If you want the fuzzy family, use fuzzy = TRUE
+ffam <- new("dtwclustFamily", control = new("dtwclustControl"), fuzzy = TRUE)
+
+}
 
