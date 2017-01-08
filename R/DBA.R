@@ -1,6 +1,6 @@
 #' DTW Barycenter Averaging
 #'
-#' A global averaging method for time series under DTW (Petitjean, Ketterlin and Gancarski, 2011).
+#' A global averaging method for time series under DTW (Petitjean, Ketterlin and Gancarski 2011).
 #'
 #' @export
 #'
@@ -10,7 +10,8 @@
 #' @param centroid Optionally, a time series to use as reference. Defaults to a random series of
 #'   \code{X} if \code{NULL}. For multivariate series, this should be a matrix with the same
 #'   characteristics as the matrices in \code{X}.
-#' @param ... Currently ignored.
+#' @param ... Further arguments for \code{\link{dtw_basic}}. However, the following are already pre-
+#'   specified: \code{window.size}, \code{norm} (passed along), \code{backtrack} and \code{gcm}.
 #' @param window.size Window constraint for the DTW calculations. \code{NULL} means no constraint. A
 #'   slanted band is used by default.
 #' @param norm Norm for the local cost matrix of DTW. Either "L1" for Manhattan distance or "L2" for
@@ -45,6 +46,11 @@
 #'
 #'   The user can register a parallel backend, e.g. with the \code{doParallel} package, in order to
 #'   attempt to speed up the calculations (see the examples).
+#'
+#' @note
+#'
+#' The indices of the DTW alignment are obtained by calling \code{\link{dtw_basic}} with
+#' \code{backtrack = TRUE}.
 #'
 #' @references
 #'

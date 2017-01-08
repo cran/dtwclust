@@ -2,8 +2,8 @@ Package: dtwclust
 Type: Package
 Title: Time Series Clustering Along with Optimizations for the Dynamic
         Time Warping Distance
-Version: 3.0.0
-Date: 2016-12-01
+Version: 3.1.0
+Date: 2017-01-07
 Depends: R (>= 3.2.0), proxy (>= 0.4-16), clue, dtw, ggplot2
 Imports: methods, parallel, stats, utils, caTools, flexclust, foreach,
         Rcpp, reshape2, rngtools
@@ -23,12 +23,12 @@ LazyData: TRUE
 NeedsCompilation: yes
 RoxygenNote: 5.0.1
 Collate: 'DBA.R' 'GAK.R' 'NCCc.R' 'SBD.R' 'TADPole.R' 'all-cent.R'
-        'create-dtwclust.R' 'cvi.R' 'ddist.R' 'dtw-basic.R' 'dtw-lb.R'
-        'dtw2.R' 'dtwclust-classes.R' 'dtwclust-methods.R' 'dtwclust.R'
-        'fuzzy.R' 'lb-improved.R' 'lb-keogh.R' 'partitional.R'
-        'utils.R' 'pkg.R' 'reinterpolate.R' 'shape-extraction.R'
-        'uciCT.R' 'zscore.R'
+        'compute-envelop.R' 'create-dtwclust.R' 'cvi.R' 'ddist.R'
+        'dtw-basic.R' 'dtw-lb.R' 'dtw2.R' 'dtwclust-classes.R'
+        'dtwclust-methods.R' 'dtwclust.R' 'fuzzy.R' 'lb-improved.R'
+        'lb-keogh.R' 'partitional.R' 'utils.R' 'pkg.R'
+        'reinterpolate.R' 'shape-extraction.R' 'uciCT.R' 'zscore.R'
 VignetteBuilder: knitr
-Packaged: 2016-12-01 06:35:14 UTC; oso
+Packaged: 2017-01-07 18:54:16 UTC; oso
 Repository: CRAN
-Date/Publication: 2016-12-01 11:28:36
+Date/Publication: 2017-01-08 11:20:09

@@ -63,22 +63,22 @@ information, as well as the included package vignette (which can be loaded by ty
 Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering
 is done with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPole}}
 function. Specifying \code{type} = \code{"partitional"}, \code{distance} = \code{"sbd"} and
-\code{centroid} = \code{"shape"} is equivalent to the k-Shape algorithm (Paparrizos and Gravano,
+\code{centroid} = \code{"shape"} is equivalent to the k-Shape algorithm (Paparrizos and Gravano
 2015).
 
 The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to
 a list, both row-wise. Only lists can have series with different lengths or multiple dimensions.
 Most of the optimizations require series to have the same length, so consider reinterpolating
-them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}). No
+them to save some time (see Ratanamahatana and Keogh 2004; \code{\link{reinterpolate}}). No
 missing values are allowed.
 
 In the case of multivariate time series, they should be provided as a list of matrices, where
-time spans the rows of each matrix and the dimensions span the columns. At the moment, only
-\code{DTW} and \code{DTW2} suppport such series, which means only partitional and hierarchical
-procedures using those distances will work. You can of course create your own custom distances.
-All included centroid functions should work with the aforementioned format, although \code{shape}
-is \strong{not} recommended. Note that the \code{plot} method will simply append all dimensions
-(columns) one after the other.
+time spans the rows of each matrix and the variables span the columns. At the moment, only
+\code{DTW}, \code{DTW2} and \code{GAK} suppport such series, which means only partitional and
+hierarchical procedures using those distances will work. You can of course create your own custom
+distances. All included centroid functions should work with the aforementioned format, although
+\code{shape} is \strong{not} recommended. Note that the \code{plot} method will simply append all
+dimensions (columns) one after the other.
 
 Several parameters can be adjusted with the \code{control} argument. See
 \code{\link{dtwclustControl}}. In the following sections, elements marked with an asterisk (*)
@@ -121,7 +121,7 @@ are those that can be adjutsed with this argument.
   the clustering can be controlled by means of the fuzziness exponent*. Bear in mind that the
   centroid definition of fuzzy c-means requires equal dimensions, which means that all series
   must have the same length. This problem can be circumvented by applying transformations to the
-  series (see for example D'Urso and Maharaj, 2009).
+  series (see for example D'Urso and Maharaj (2009)).
 
   Note that the fuzzy clustering could be transformed to a crisp one by finding the highest
   membership coefficient. Some of the slots of the object returned by this function assume this,
@@ -209,8 +209,10 @@ are those that can be adjutsed with this argument.
       are always one of the time series in the data. In this case, the distance matrix can be
       pre-computed once using all time series in the data and then re-used at each iteration. It
       usually saves overhead overall.
-    \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and always used for that type
-     of clustering if a string is provided in \code{centroid}.
+    \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and used by default in that
+      case.
+    \item "fcmdd": Fuzzy c-medoids. Only supported for fuzzy clustering. It \strong{always}
+      precomputes the whole cross-distance matrix.
 }
 
   These check for the special cases where parallelization might be desired. Note that only
@@ -263,8 +265,8 @@ are those that can be adjutsed with this argument.
   and the result is fed into \code{\link[dtw]{dtw}}, which finds the optimum warping path. The
   square root of the resulting distance is \emph{then} computed. See \code{\link{dtw2}}.
 
-  Only \code{dtw}, \code{dtw2} and \code{sbd} support series of different length. The lower
-  bounds are probably unsuitable for direct clustering unless series are very easily
+  Only \code{dtw}, \code{dtw2}, \code{sbd} and \code{gak} support series of different length. The
+  lower bounds are probably unsuitable for direct clustering unless series are very easily
   distinguishable.
 
   If you create your own distance, register it with \code{proxy}, and it includes the ellipsis
@@ -290,7 +292,7 @@ are those that can be adjutsed with this argument.
 
 
   A global constraint to speed up the DTW calculations is the Sakoe-Chiba band (Sakoe and Chiba,
-  1978). To use it, a window width* must be defined.
+  1978). To use it, a window size* must be defined.
 
   The windowing constraint uses a centered window. The function expects a value in
   \code{window.size} that represents the distance between the point considered and one of the

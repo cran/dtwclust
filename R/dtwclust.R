@@ -38,22 +38,22 @@
 #' Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering
 #' is done with \code{\link[stats]{hclust}}. TADPole clustering uses the \code{\link{TADPole}}
 #' function. Specifying \code{type} = \code{"partitional"}, \code{distance} = \code{"sbd"} and
-#' \code{centroid} = \code{"shape"} is equivalent to the k-Shape algorithm (Paparrizos and Gravano,
+#' \code{centroid} = \code{"shape"} is equivalent to the k-Shape algorithm (Paparrizos and Gravano
 #' 2015).
 #'
 #' The \code{data} may be a matrix, a data frame or a list. Matrices and data frames are coerced to
 #' a list, both row-wise. Only lists can have series with different lengths or multiple dimensions.
 #' Most of the optimizations require series to have the same length, so consider reinterpolating
-#' them to save some time (see Ratanamahatana and Keogh, 2004; \code{\link{reinterpolate}}). No
+#' them to save some time (see Ratanamahatana and Keogh 2004; \code{\link{reinterpolate}}). No
 #' missing values are allowed.
 #'
 #' In the case of multivariate time series, they should be provided as a list of matrices, where
-#' time spans the rows of each matrix and the dimensions span the columns. At the moment, only
-#' \code{DTW} and \code{DTW2} suppport such series, which means only partitional and hierarchical
-#' procedures using those distances will work. You can of course create your own custom distances.
-#' All included centroid functions should work with the aforementioned format, although \code{shape}
-#' is \strong{not} recommended. Note that the \code{plot} method will simply append all dimensions
-#' (columns) one after the other.
+#' time spans the rows of each matrix and the variables span the columns. At the moment, only
+#' \code{DTW}, \code{DTW2} and \code{GAK} suppport such series, which means only partitional and
+#' hierarchical procedures using those distances will work. You can of course create your own custom
+#' distances. All included centroid functions should work with the aforementioned format, although
+#' \code{shape} is \strong{not} recommended. Note that the \code{plot} method will simply append all
+#' dimensions (columns) one after the other.
 #'
 #' Several parameters can be adjusted with the \code{control} argument. See
 #' \code{\link{dtwclustControl}}. In the following sections, elements marked with an asterisk (*)
@@ -101,7 +101,7 @@
 #'   the clustering can be controlled by means of the fuzziness exponent*. Bear in mind that the
 #'   centroid definition of fuzzy c-means requires equal dimensions, which means that all series
 #'   must have the same length. This problem can be circumvented by applying transformations to the
-#'   series (see for example D'Urso and Maharaj, 2009).
+#'   series (see for example D'Urso and Maharaj (2009)).
 #'
 #'   Note that the fuzzy clustering could be transformed to a crisp one by finding the highest
 #'   membership coefficient. Some of the slots of the object returned by this function assume this,
@@ -183,8 +183,10 @@
 #'       are always one of the time series in the data. In this case, the distance matrix can be
 #'       pre-computed once using all time series in the data and then re-used at each iteration. It
 #'       usually saves overhead overall.
-#'     \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and always used for that type
-#'      of clustering if a string is provided in \code{centroid}.
+#'     \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and used by default in that
+#'       case.
+#'     \item "fcmdd": Fuzzy c-medoids. Only supported for fuzzy clustering. It \strong{always}
+#'       precomputes the whole cross-distance matrix.
 #' }
 #'
 #'   These check for the special cases where parallelization might be desired. Note that only
@@ -235,8 +237,8 @@
 #'   and the result is fed into \code{\link[dtw]{dtw}}, which finds the optimum warping path. The
 #'   square root of the resulting distance is \emph{then} computed. See \code{\link{dtw2}}.
 #'
-#'   Only \code{dtw}, \code{dtw2} and \code{sbd} support series of different length. The lower
-#'   bounds are probably unsuitable for direct clustering unless series are very easily
+#'   Only \code{dtw}, \code{dtw2}, \code{sbd} and \code{gak} support series of different length. The
+#'   lower bounds are probably unsuitable for direct clustering unless series are very easily
 #'   distinguishable.
 #'
 #'   If you create your own distance, register it with \code{proxy}, and it includes the ellipsis
@@ -260,7 +262,7 @@
 #' @section Sakoe-Chiba Constraint:
 #'
 #'   A global constraint to speed up the DTW calculations is the Sakoe-Chiba band (Sakoe and Chiba,
-#'   1978). To use it, a window width* must be defined.
+#'   1978). To use it, a window size* must be defined.
 #'
 #'   The windowing constraint uses a centered window. The function expects a value in
 #'   \code{window.size} that represents the distance between the point considered and one of the
@@ -362,6 +364,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
     tic <- proc.time()
 
+    set.seed(seed)
+
     if (is.null(data))
         stop("No data provided")
 
@@ -374,11 +378,6 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
         stop("At least two clusters must be defined")
     if (any(k > length(data)))
         stop("Cannot have more clusters than series in the data")
-
-    if (type == "fuzzy" && !missing(centroid) && is.character(centroid) && centroid != "fcm") {
-        warning("The 'centroid' argument was provided but was different than 'fcm', so it was ignored.")
-        centroid <- "fcm"
-    }
 
     MYCALL <- match.call(expand.dots = TRUE)
 
@@ -468,21 +467,24 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
         ## Partitional or fuzzy
         ## =================================================================================================================
 
-        ## replace any given distmat if centroid != "pam"
+        ## fuzzy default
+        if (type == "fuzzy" && missing(centroid)) centroid <- "fcm"
+
         if (is.character(centroid)) {
             if (type == "fuzzy")
-                centroid <- "fcm"
+                centroid <- match.arg(centroid, c("fcm", "fcmdd"))
             else
                 centroid <- match.arg(centroid, c("mean", "median", "shape", "dba", "pam"))
 
-            if (centroid != "pam") distmat <- NULL
+            ## replace any given distmat if centroid not "pam" or "fcmdd"
+            if (!(centroid %in% c("pam", "fcmdd"))) distmat <- NULL
 
         } else {
             distmat <- NULL
         }
 
         if (diff_lengths) {
-            if (type == "fuzzy")
+            if (type == "fuzzy" && is.character(centroid) && centroid == "fcm")
                 stop("Fuzzy c-means does not support series with different length.")
 
             check_consistency(centroid, "cent", trace = control@trace)
@@ -515,7 +517,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
         distmat_provided <- FALSE
 
         ## precompute distance matrix?
-        if (is.character(centroid) && centroid == "pam") {
+        if (cent_char %in% c("pam", "fcmdd")) {
             ## check if distmat was not provided and should be precomputed
             if (!is.null(distmat)) {
                 if ( nrow(distmat) != length(data) || ncol(distmat) != length(data) )
@@ -526,7 +528,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
                 if (control@trace) cat("\n\tDistance matrix provided...\n\n")
 
-            } else if (control@pam.precompute) {
+            } else if (control@pam.precompute || cent_char == "fcmdd") {
                 if (tolower(distance) == "dtw_lb")
                     warning("Using dtw_lb with control@pam.precompute = TRUE is not advised.")
 
@@ -556,6 +558,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                                            family = family,
                                            control = control,
                                            fuzzy = isTRUE(type == "fuzzy"),
+                                           cent = cent_char,
                                            dots = dots)))
 
         } else {
@@ -594,6 +597,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                                                  family = family,
                                                  control = control,
                                                  fuzzy = isTRUE(type == "fuzzy"),
+                                                 cent = cent_char,
                                                  dots = dots))
 
                             gc(FALSE)
@@ -669,6 +673,10 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
         if (tolower(distance) == "dtw_lb")
             warning("Using dtw_lb with hierarchical clustering is not advised.")
 
+        ## ----------------------------------------------------------------------------------------------------------
+        ## Calculate distance matrix
+        ## ----------------------------------------------------------------------------------------------------------
+
         ## Take advantage of the function I defined for the partitional methods
         ## Which can do calculations in parallel if appropriate
         distfun <- ddist(distance = distance,
@@ -694,6 +702,10 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
             ## single argument is to calculate whole distance matrix
             distmat <- do.call(distfun, enlist(x = data, centroids = NULL, dots = dots))
         }
+
+        ## ----------------------------------------------------------------------------------------------------------
+        ## Cluster
+        ## ----------------------------------------------------------------------------------------------------------
 
         if (control@trace)
             cat("\n\tPerforming hierarchical clustering...\n\n")
@@ -724,6 +736,10 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
         if (!is.function(centroid))
             centroid <- NA
 
+        ## ----------------------------------------------------------------------------------------------------------
+        ## Prepare results
+        ## ----------------------------------------------------------------------------------------------------------
+
         RET <- lapply(k, function(k) {
             lapply(hc, function(hc) {
                 ## cutree and corresponding centroids
@@ -731,8 +747,8 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
 
                 if (is.function(centroid)) {
                     allcent <- centroid
-
                     centroids <- lapply(1L:k, function(kcent) { centroid(data[cluster == kcent]) })
+                    cent_char <- as.character(substitute(centroid))[1L]
 
                 } else {
                     allcent <- function() {}
@@ -748,6 +764,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                     })
 
                     centroids <- data[centroids]
+                    cent_char <- "PAM (Hierarchical)"
                 }
 
                 create_dtwclust(stats::as.hclust(hc),
@@ -762,7 +779,7 @@ dtwclust <- function(data = NULL, type = "partitional", k = 2L, method = "averag
                                 type = type,
                                 method = if (!is.null(hc$method)) hc$method else method,
                                 distance = distance,
-                                centroid = as.character(substitute(centroid))[1L],
+                                centroid = cent_char,
                                 preproc = preproc_char,
 
                                 centroids = centroids,

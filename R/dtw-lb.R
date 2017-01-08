@@ -13,7 +13,6 @@
 #' @param pairwise Calculate pairwise distances?
 #' @param dtw.func Which function to use for core DTW the calculations, either "dtw" or "dtw_basic".
 #'   See \code{\link[dtw]{dtw}} and \code{\link{dtw_basic}}.
-#' @param force.symmetry Force symmetry of the distance matrix. Only supported for \code{y = NULL}.
 #' @param ... Further arguments for \code{dtw.func} or \code{\link{lb_improved}}.
 #'
 #' @details
@@ -48,6 +47,11 @@
 #'
 #' This function uses a lower bound that is only defined for time series of equal length.
 #'
+#' A considerably large dataset is probably necessary before this is faster than using
+#' \code{\link{dtw_basic}} with \code{proxy::\link[proxy]{dist}}.
+#'
+#' Nearest neighbors are found row-wise.
+#'
 #' @author Alexis Sarda-Espinosa
 #'
 #' @references
@@ -73,17 +77,25 @@
 #' system.time(d <- dtw_lb(data[1:5], data[6:50], window.size = 20))
 #'
 #' # Nearest neighbors
-#' NN1 <- apply(d, 1, which.min)
+#' NN1 <- apply(d, 1L, which.min)
 #'
-#' # Calculate the DTW distances between all elements (about three times slower)
+#' # Calculate the DTW distances between all elements (slower)
 #' system.time(d2 <- proxy::dist(data[1:5], data[6:50], method = "DTW",
 #'                               window.type = "slantedband", window.size = 20))
 #'
 #' # Nearest neighbors
-#' NN2 <- apply(d2, 1, which.min)
+#' NN2 <- apply(d2, 1L, which.min)
+#'
+#' # Calculate the DTW distances between all elements using dtw_basic (actually faster, see notes)
+#' system.time(d3 <- proxy::dist(data[1:5], data[6:50], method = "DTW_BASIC",
+#'                               window.size = 20))
+#'
+#' # Nearest neighbors
+#' NN3 <- apply(d3, 1L, which.min)
 #'
 #' # Same results?
 #' all(NN1 == NN2)
+#' all(NN1 == NN3)
 #'
 #' \dontrun{
 #' #### Running DTW_LB with parallel support
@@ -111,7 +123,7 @@
 #'
 dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
                    error.check = TRUE, pairwise = FALSE,
-                   dtw.func = "dtw_basic", force.symmetry = FALSE, ...)
+                   dtw.func = "dtw_basic", ...)
 {
     norm <- match.arg(norm, c("L1", "L2"))
     dtw.func <- match.arg(dtw.func, c("dtw", "dtw_basic"))
@@ -125,13 +137,8 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
 
     if (is.null(y))
         Y <- X
-    else {
+    else
         Y <- any2list(y)
-
-        if (force.symmetry && !pairwise && length(X) != length(Y)) {
-            warning("Unable to force symmetry. Resulting distance matrix is not square.")
-        }
-    }
 
     if (is_multivariate(X) || is_multivariate(Y))
         stop("dtw_lb does not support multivariate series.")
@@ -141,6 +148,13 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
     dots$norm <- norm
     dots$window.size <- window.size
     dots$pairwise <- TRUE
+
+    if (!is.null(dots$force.symmetry)) { # nocov start
+        warning("'force.symmetry' was removed since it served no real purpose here. ",
+                "Use LB_Improved with proxy::dist and force symmetry there if you wish.")
+
+        dots$force.symmetry <- NULL
+    } # nocov end
 
     if (pairwise) {
         check_consistency(X, "tslist")
@@ -182,44 +196,40 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
                      window.size = window.size,
                      norm = norm,
                      error.check = error.check,
-                     force.symmetry = force.symmetry,
                      ...)
 
-    ## Update with DTW
-    new.indNN <- apply(D, 1L, which.min) # index of nearest neighbors
-    indNN <- new.indNN + 1L # initialize all different
+    D <- split_parallel(D, 1L)
+    X <- split_parallel(X)
 
-    while (any(new.indNN != indNN)) {
-        indNew <- which(new.indNN != indNN)
-        indNN <- new.indNN
+    ## Update with DTW in parallel
+    D <- foreach(X = X,
+                 distmat = D,
+                 .combine = rbind,
+                 .multicombine = TRUE,
+                 .packages = "dtwclust",
+                 .export = "enlist") %op% {
+                     id_nn <- apply(distmat, 1L, which.min) # index of nearest neighbors
+                     id_nn_prev <- id_nn + 1L # initialize all different
+                     id_mat <- cbind(1L:nrow(distmat), id_nn) # to index the distance matrix
 
-        indNew <- split_parallel(indNew)
+                     while (!is.null(y) && any(id_nn_prev != id_nn)) {
+                         id_changed <- which(id_nn_prev != id_nn)
+                         id_nn_prev <- id_nn
 
-        exclude <- setdiff(ls(), c("X", "Y", "method", "dots", "indNew", "indNN"))
+                         d_sub <- do.call(proxy::dist,
+                                          enlist(x = X[id_changed],
+                                                 y = Y[id_nn[id_changed]],
+                                                 method = method,
+                                                 dots = dots))
 
-        dSub <- foreach(indNew = indNew,
-                        .combine = c,
-                        .multicombine = TRUE,
-                        .packages = "dtwclust",
-                        .noexport = exclude,
-                        .export = "enlist") %op% {
-                            do.call(proxy::dist,
-                                    enlist(x = X[indNew],
-                                           y = Y[indNN[indNew]],
-                                           method = method,
-                                           dots = dots))
-                        }
+                         distmat[id_mat[id_changed, , drop = FALSE]] <- d_sub
 
-        indNew <- unlist(indNew)
+                         id_nn <- apply(distmat, 1L, which.min)
+                         id_mat[ , 2L] <- id_nn
+                     }
 
-        idd <- cbind(1L:length(X), indNN)[indNew, , drop = FALSE]
-
-        D[idd] <- dSub
-
-        if (force.symmetry) D[idd[ , 2L:1L]] <- dSub
-
-        new.indNN <- apply(D, 1L, which.min)
-    }
+                     distmat
+                 }
 
     class(D) <- "crossdist"
     attr(D, "method") <- "DTW_LB"

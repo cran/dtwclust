@@ -63,12 +63,12 @@ check_consistency <- function(obj, case, ..., trace = FALSE, Lengths = FALSE, si
 
     } else if (case == "cent") {
         ## only checking for different lengths
-        included <- c("mean", "median", "shape", "dba", "pam", "fcm")
-        valid <- c("dba", "pam", "shape")
+        included <- c("mean", "median", "shape", "dba", "pam", "fcm", "fcmdd")
+        valid <- c("dba", "pam", "shape", "fcmdd")
 
         if (is.character(obj) && (obj %in% included) && !(obj %in% valid))
             stop("Only the following centroids are supported for series with different lengths:",
-                 "\n\tdba\tpam\tshape")
+                 "\n\tdba\tpam\tshape\tfcmdd")
 
     }
 
@@ -123,23 +123,9 @@ validate_pairwise <- function(x, y) {
 # Helper C/C++ functions
 # ========================================================================================================
 
-# Envelop calculation
-call_envelop <- function(series, window.size) {
-    check_consistency(series, "ts")
-    window.size <- check_consistency(window.size, "window")
-    window.size <- window.size * 2L + 1L
-
-    ## NOTE: window.size in this function is window.size*2 + 1, thus the 2L below
-    if (window.size > (2L * length(series)))
-        stop("Window cannot be greater or equal than the series' length.")
-
-    .Call("envelop", series, window.size, PACKAGE = "dtwclust")
-}
-
 # Create combinations of all possible pairs
 call_pairs <- function(n = 2L, lower = TRUE) {
-    if (n < 2L)
-        stop("At least two elements are needed to create pairs.")
+    if (n < 2L) stop("At least two elements are needed to create pairs.")
 
     .Call("pairs", n, lower, PACKAGE = "dtwclust")
 }
@@ -216,9 +202,7 @@ split_parallel <- function(obj, margin = NULL) {
 
 ## tasks created based on getDoParWorkers() could be larger than tasks based on objects
 allocate_matrices <- function(mat = NULL, ..., target.size) {
-    num_workers <- foreach::getDoParWorkers()
-
-    if (num_workers > 1L) {
+    if (foreach::getDoParWorkers() > 1L) {
         MAT <- lapply(1L:target.size, function(dummy) {
             matrix(0, ...)
         })
@@ -248,7 +232,7 @@ lnorm <- function(x, n = 2) {
         sum(abs(x) ^ n) ^ (1 / n)
 }
 
-# PREFUN for some of my proxy distances so that they support 'pairwise' direclty
+# PREFUN for some of my proxy distances so that they support 'pairwise' directly
 proxy_prefun <- function(x, y, pairwise, params, reg_entry) {
     params$pairwise <- pairwise
 

@@ -51,7 +51,7 @@ setMethod("initialize", "dtwclustFamily",
 
               if (fuzzy) {
                   dots$cluster <- fcm_cluster # fuzzy.R
-                  allcent <- "fcm"
+                  if (!missing(allcent)) allcent <- match.arg(allcent, c("fcm", "fcmdd"))
               }
 
               if (!missing(allcent)) {
@@ -92,9 +92,8 @@ setMethod("show", "dtwclust",
 
               cat(object@type, "clustering with", object@k, "clusters\n")
               cat("Using", object@distance, "distance\n")
+              cat("Using", object@centroid, "centroids\n")
 
-              if (object@type == "partitional")
-                  cat("Using", object@centroid, "centroids\n")
               if (object@type == "hierarchical")
                   cat("Using method", object@method, "\n")
               if (object@preproc != "none")
@@ -420,11 +419,12 @@ plot.dtwclust <- function(x, y, ...,
                                       aes_string(colour = "color"))
     }
 
+    ## add vertical lines to separate variables of multivariate series
     if (mv) {
         ggdata <- data.frame(cl = rep(1L:x@k, each = (nc - 1L)),
                              vbreaks = as.numeric(1L:(nc - 1L) %o% sapply(centroids, NROW)))
 
-        gg <- gg + ggplot2::geom_vline(data = ggdata,
+        gg <- gg + ggplot2::geom_vline(data = ggdata[ggdata$cl %in% clus, , drop = FALSE],
                                        colour = "black", linetype = "longdash",
                                        aes_string(xintercept = "vbreaks"))
     }
