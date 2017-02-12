@@ -2,13 +2,13 @@
 # Custom functions to calculate centroids
 # ========================================================================================================
 
-all_cent <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FALSE) {
+all_cent2 <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FALSE) {
     ## --------------------------------------------------------------------------------------------
     ## pam
-    pam_cent <- function(x, x_split, cl_id, id_changed, ...) {
+    pam_cent <- function(x, x_split, cent, cl_id, id_changed, ...) {
         if (is.null(distmat)) {
             new_cent <- lapply(x_split, function(xsub) {
-                distmat <- distfun(xsub, xsub)
+                distmat <- distfun(xsub, xsub, ...)
 
                 d <- apply(distmat, 1L, sum)
 
@@ -78,17 +78,13 @@ all_cent <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FALS
                             .combine = c,
                             .multicombine = TRUE,
                             .packages = "dtwclust",
-                            .export = c("control", "enlist")) %op% {
+                            .export = c("enlist")) %op% {
                                 mapply(x_split, cent,
                                        SIMPLIFY = FALSE,
                                        FUN = function(x, c) {
                                            new_c <- do.call(DBA,
                                                             enlist(X = x,
                                                                    centroid = c,
-                                                                   norm = control@norm,
-                                                                   window.size = control@window.size,
-                                                                   max.iter = control@dba.iter,
-                                                                   delta = control@delta,
                                                                    error.check = FALSE,
                                                                    dots = dots))
 
@@ -188,7 +184,7 @@ all_cent <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FALS
         ## function created here to capture objects of this environment (closure)
         allcent <- function(x, cl_id, k, cent, cl_old, ...) {
             ## cent and cl_old are unused here, but R complains if signatures don't match
-            u <- cl_id ^ control@fuzziness
+            u <- cl_id ^ control$fuzziness
 
             cent <- do.call(paste0(case, "_cent"),
                             enlist(x = x,

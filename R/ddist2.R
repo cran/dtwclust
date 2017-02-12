@@ -2,27 +2,18 @@
 # Return a custom distance function that calls registered functions of proxy
 # ========================================================================================================
 
-ddist <- function(distance, control = new("dtwclustControl"), distmat = NULL) {
-    needs_window <- c("dtw_lb", "lbk", "lbi")
-
-    if (distance %in% needs_window)
-        control@window.size <- check_consistency(control@window.size, "window")
-
-    if (is.null(control@window.size))
-        window.type <- "none"
-    else
-        window.type <- "slantedband"
-
+ddist2 <- function(distance, control) {
     ## Closures capture the values of the objects from the environment where they're created
     distfun <- function(x, centroids = NULL, ...) {
-        if (!is.null(distmat)) {
+        if (!is.null(control$distmat)) {
+            ## distmat pre-computed
             if (is.null(centroids)) {
                 ## return whole distmat
-                d <- distmat
+                d <- control$distmat
 
             } else {
                 ## distmat matrix already calculated, just subset it
-                d <- distmat[ , attr(centroids, "id_cent"), drop = FALSE]
+                d <- control$distmat[ , attr(centroids, "id_cent"), drop = FALSE]
             }
 
         } else {
@@ -31,10 +22,15 @@ ddist <- function(distance, control = new("dtwclustControl"), distmat = NULL) {
             ## They can be for the function or for proxy::dist
             dots <- list(...)
 
-            dots$window.type <- window.type
-            dots$window.size <- control@window.size
-            dots$norm <- control@norm
+            ## Added defaults
+            if (is.null(dots$window.size))
+                dots$window.type <- "none"
+            else if (is.null(dots$window.type))
+                dots$window.type <- "slantedband"
+
             dots$error.check <- FALSE
+
+            symmetric <- if (is.null(control$symmetric)) FALSE else control$symmetric
 
             ## I need to re-register any custom distances in each parallel worker
             dist_entry <- proxy::pr_DB$get_entry(distance)
@@ -60,7 +56,7 @@ ddist <- function(distance, control = new("dtwclustControl"), distmat = NULL) {
             ## variables/functions from the parent environments that should be exported
             export <- c("distance", "check_consistency", "enlist")
 
-            if (is.null(centroids) && control@symmetric && !isTRUE(dots$pairwise)) {
+            if (is.null(centroids) && symmetric && !isTRUE(dots$pairwise)) {
                 if (dist_entry$loop) {
                     ## WHOLE SYMMETRIC DISTMAT WITH proxy LOOP
                     ## Only half of it is computed
@@ -76,7 +72,7 @@ ddist <- function(distance, control = new("dtwclustControl"), distmat = NULL) {
                     d <- foreach(pairs = pairs,
                                  .combine = c,
                                  .multicombine = TRUE,
-                                 .packages = control@packages,
+                                 .packages = control$packages,
                                  .export = export) %op% {
 
                                      if (!check_consistency(dist_entry$names[1L], "dist"))
@@ -137,7 +133,7 @@ ddist <- function(distance, control = new("dtwclustControl"), distmat = NULL) {
                 d <- foreach(x = x, centroids = centroids,
                              .combine = combine,
                              .multicombine = TRUE,
-                             .packages = control@packages,
+                             .packages = control$packages,
                              .export = export) %op% {
                                  if (!check_consistency(dist_entry$names[1L], "dist"))
                                      do.call(proxy::pr_DB$set_entry, dist_entry)

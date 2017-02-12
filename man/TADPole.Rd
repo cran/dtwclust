@@ -34,7 +34,8 @@ A list with:
 Time-series Anytime Density Peaks Clustering as proposed by Begum et al. (2015).
 }
 \details{
-This function can be called either directly or through \code{\link{dtwclust}}.
+This function can be called either directly or through \code{\link{dtwclust}} and
+\code{\link{tsclust}}.
 
 TADPole clustering adopts a relatively new clustering framework and adapts it to time series
 clustering with DTW. See the cited article for the details of the algorithm.
@@ -66,6 +67,7 @@ in \code{10*2 + 1 = 21} observations falling within the window.
   The user can register a parallel backend, e.g. with the \code{doParallel} package, in order to
   attempt to speed up the calculations (see the examples).
 }
+
 \examples{
 
 \dontrun{
@@ -103,4 +105,3 @@ with a Novel Admissible Pruning Strategy.'' In \emph{Conference on Knowledge Dis
 Mining}, series KDD '15. ISBN 978-1-4503-3664-2/15/08, \url{
 http://dx.doi.org/10.1145/2783258.2783286}.
 }
-

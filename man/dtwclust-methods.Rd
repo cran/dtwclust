@@ -3,17 +3,17 @@
 \docType{methods}
 \name{dtwclust-methods}
 \alias{dtwclust-methods}
-\alias{plot,dtwclust,missing}
-\alias{plot,dtwclust,missing-method}
-\alias{plot.dtwclust}
-\alias{predict,dtwclust}
-\alias{predict,dtwclust-method}
-\alias{predict.dtwclust}
-\alias{show,dtwclust}
 \alias{show,dtwclust-method}
-\alias{update,dtwclust}
-\alias{update,dtwclust-method}
+\alias{show,dtwclust}
 \alias{update.dtwclust}
+\alias{update,dtwclust-method}
+\alias{update,dtwclust}
+\alias{predict.dtwclust}
+\alias{predict,dtwclust-method}
+\alias{predict,dtwclust}
+\alias{plot.dtwclust}
+\alias{plot,dtwclust,missing-method}
+\alias{plot,dtwclust,missing}
 \title{Methods for \code{dtwclust}}
 \usage{
 \S4method{show}{dtwclust}(object)
@@ -118,8 +118,8 @@ indices. It preprocesses the data with the corresponding function if available.
 
   \code{plot(object, plot = FALSE)} \code{+} \code{facet_wrap(~cl, scales = "free")}
 }
+
 \seealso{
 \code{\link{dtwclust-class}}, \code{\link{dtwclust}}, \code{\link[ggplot2]{ggplot}},
 \code{\link{cvi}}
 }
-
