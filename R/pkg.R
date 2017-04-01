@@ -12,10 +12,11 @@
 #'
 #' @details
 #'
-#' Many of the algorithms implemented in this package are specifically tailored to time series and
-#' DTW, hence its name. However, the main clustering function is flexible so that one can test many
-#' different clustering approaches, using either the time series directly, or by applying suitable
-#' transformations and then clustering in the resulting space.
+#' Many of the algorithms implemented in this package are specifically tailored to DTW, hence its
+#' name. However, the main clustering function is flexible so that one can test many different
+#' clustering approaches, using either the time series directly, or by applying suitable
+#' transformations and then clustering in the resulting space. Other implementations included in the
+#' package provide some alternatives to DTW.
 #'
 #' DTW is a dynamic programming algorithm that tries to find the optimum warping path between two
 #' series. Over the years, several variations have appeared in order to make the procedure faster or
@@ -39,6 +40,11 @@
 #' For more information, please read the included package vignette, which can be accessed by typing
 #' \code{vignette("dtwclust")}.
 #'
+#' @note
+#'
+#' This software package was developed independently of any organization or institution that is or
+#' has been associated with the author.
+#'
 #' @author Alexis Sarda-Espinosa
 #'
 #' @references
@@ -49,7 +55,7 @@
 #'
 #' \code{\link{tsclust}}, \code{\link[proxy]{dist}}, \code{\link[dtw]{dtw}}
 #'
-#' @useDynLib dtwclust
+#' @useDynLib dtwclust, .registration = TRUE
 #'
 #' @import clue
 #' @import foreach
@@ -163,10 +169,10 @@ NULL
 
     packageStartupMessage("\ndtwclust: Setting random number generator to L'Ecuyer-CMRG (see RNGkind()).\n",
                           'To read the included vignette, type: vignette("dtwclust").\n',
-                          'Please see news(package = "dtwclust") for important information!\n')
+                          'Please see news(package = "dtwclust") for important information.\n')
 
     if (grepl("\\.9000$", utils::packageVersion("dtwclust")))
-        packageStartupMessage("This is a developer version of 'dtwclust'.")
+        packageStartupMessage("This is a developer version of 'dtwclust'. Using devtools::test() is currently broken.")
 }
 
 .onUnload <- function(libpath) {

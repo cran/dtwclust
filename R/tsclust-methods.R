@@ -77,7 +77,7 @@ setMethod("initialize", "tsclustFamily",
 #'       partitional clustering).
 #'   }
 #'
-#'   *Necessary when overriding the default family for the calculation of other slots, CVIs or
+#'   * Necessary when overriding the default family for the calculation of other slots, CVIs or
 #'   prediction. Maybe not always needed, e.g. for plotting.
 #'
 #' @examples
@@ -127,6 +127,12 @@ setMethod("initialize", "TSClusters", function(.Object, ..., override.family = T
     ## some "defaults"
     if (is.null(dots$preproc)) .Object@preproc <- "none"
     if (is.null(dots$k)) .Object@k <- length(.Object@centroids)
+    if (is.null(dots$args))
+        .Object@args <- tsclust_args(preproc = .Object@dots,
+                                     dist = .Object@dots,
+                                     cent = .Object@dots)
+    else
+        .Object@args <- lapply(.Object@args, function(args) { c(args, .Object@dots) })
 
     ## more helpful for hierarchical/tadpole
     if (override.family) {
@@ -619,10 +625,8 @@ plot.TSClusters <- function(x, y, ...,
     }
 
     ## add series next if appropriate
-    if (type %in% c("sc", "series")) {
-        gg <- gg + ggplot2::geom_line(data = dfm[dfm$cl %in% clus, ],
-                                      aes_string(colour = "color"))
-    }
+    if (type %in% c("sc", "series"))
+        gg <- gg + ggplot2::geom_line(data = dfm[dfm$cl %in% clus, ], aes_string(colour = "color"))
 
     ## add vertical lines to separate variables of multivariate series
     if (mv) {
@@ -1035,7 +1039,9 @@ setAs("dtwclust", "TSClusters",
           to@args <- tsclust_args()
           to@args$preproc <- subset_dots(from@dots, to@family@preproc)
 
-          if (tolower(to@distance) %in% c("dtw", "dtw2", "dtw_basic", "dtw_lb", "lbk", "lbi", "gak", "lb_keogh+dtw2")) {
+          if (tolower(to@distance) %in% c("dtw", "dtw2", "dtw_basic", "dtw_lb",
+                                          "lbk", "lbi", "gak", "lb_keogh+dtw2"))
+          {
               to@args$dist <- list(window.size = from@control@window.size,
                                    norm = from@control@norm)
 
