@@ -1,6 +1,6 @@
-# ========================================================================================================
+# ==================================================================================================
 # Miscellaneous
-# ========================================================================================================
+# ==================================================================================================
 
 check_consistency <- function(obj, case, ..., trace = FALSE, Lengths = FALSE, silent = TRUE) {
     case <- match.arg(case, c("ts", "tslist", "vltslist", "window", "dist", "cent"))
@@ -19,7 +19,7 @@ check_consistency <- function(obj, case, ..., trace = FALSE, Lengths = FALSE, si
 
     } else if (case == "window") {
         if (is.null(obj)) stop("Please provide the 'window.size' parameter")
-        if (obj <= 0L) stop("Window width must be larger than 0")
+        if (any(obj <= 0L)) stop("Window width must be larger than 0")
 
         return(as.integer(obj))
 
@@ -131,20 +131,46 @@ reinitalize_clusters <- function(x, cent, cent_case, num_empty) {
     extra_cent
 }
 
-# ========================================================================================================
+# Like dynGet() I assume, but that one is supposed to be experimental...
+get_from_callers <- function(obj_name, mode = "any") {
+    ret <- get0(obj_name, mode = mode, inherits = TRUE)
+
+    if (!is.null(ret)) return(ret)
+
+    for (env in sys.frames()) {
+        ret <- get0(obj_name, env, mode = mode, inherits = FALSE)
+
+        if (!is.null(ret)) return(ret)
+    }
+
+    stop("Could not find object '", obj_name, "' of mode '", mode, "'")
+}
+
+# ==================================================================================================
 # Helper C/C++ functions
-# ========================================================================================================
+# ==================================================================================================
 
 # Create combinations of all possible pairs
 call_pairs <- function(n = 2L, lower = TRUE) {
     if (n < 2L) stop("At least two elements are needed to create pairs.")
 
-    .Call(C_pairs, n, lower, PACKAGE = "dtwclust")
+    pairs <- try(.Call(C_pairs, n, lower, PACKAGE = "dtwclust"), silent = TRUE)
+
+    if (inherits(pairs, "try-error")) {
+        message("There was an error calculating the distance matrix. ",
+                "This usually indicates that the matrix is too big to fit in RAM.\n",
+                "If it applies, try using a non-hierarchical algorithm, ",
+                "or set pam.precompute = FALSE in the control.")
+
+        stop(pairs, call. = FALSE)
+    }
+
+    pairs
 }
 
-# ========================================================================================================
+# ==================================================================================================
 # Parallel helper functions
-# ========================================================================================================
+# ==================================================================================================
 
 # allow_parallel <- function() {
 #     do_par <- TRUE
@@ -164,9 +190,9 @@ call_pairs <- function(n = 2L, lower = TRUE) {
 #
 # @export
 #
-# @param flag \code{TRUE} to allow use of parallel backends or \code{FALSE} to prevent it.
+# @param flag `TRUE` to allow use of parallel backends or `FALSE` to prevent it.
 #
-# @return \code{flag} invisibly
+# @return `flag` invisibly
 #
 # parallel_dtwclust <- allow_parallel()
 
@@ -226,9 +252,9 @@ allocate_matrices <- function(mat = NULL, ..., target.size) {
     MAT
 }
 
-# ========================================================================================================
+# ==================================================================================================
 # Helper distance-related
-# ========================================================================================================
+# ==================================================================================================
 
 # column-wise medians
 colMedians <- function(mat) { apply(mat, 2L, stats::median) }
@@ -251,9 +277,9 @@ proxy_prefun <- function(x, y, pairwise, params, reg_entry) {
          reg_entry = reg_entry)
 }
 
-# ========================================================================================================
+# ==================================================================================================
 # Multviariate helpers
-# ========================================================================================================
+# ==================================================================================================
 
 is_multivariate <- function(x) {
     ncols <- sapply(x, NCOL)

@@ -3,10 +3,10 @@
 
 \title{News for package \pkg{dtwclust}}
 
-\section{Changes in version 3.1.2}{
+\section{Changes in version 3.2.0}{
     \itemize{
-        \item The arguments in \code{tsclust}'s ellipsis are now passed to all preprocessing, centroid and distance functions.
-        \item Fixed some symmetry detection in \code{tsclust} when using DTW.
-        \item Updated vignette to use \code{tsclust} in the examples.
+        \item Added functions \code{compare_clusterings} and helpers to compare many clustering configurations, possibly in parallel.
+        \item Fixed an error in \code{tsclust} that prevented CVIs to be calculated for hierarchical/TADPole cases if a custom centroid function was used.
+        \item Added slot \code{seed} to the objects returned by \code{tsclust}.
     }
 }

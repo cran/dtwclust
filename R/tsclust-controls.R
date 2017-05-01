@@ -1,4 +1,4 @@
-#' Control parameters for clusterings with \code{\link{tsclust}}
+#' Control parameters for clusterings with [tsclust()]
 #'
 #' Control parameters for fine-grained control.
 #'
@@ -11,10 +11,10 @@
 #'   each iteration if using PAM centroids. Otherwise calculate distances at every iteration.
 #' @param iter.max Integer. Maximum number of allowed iterations for partitional/fuzzy clustering.
 #' @param nrep Integer. How many times to repeat clustering with different starting points.
-#' @param symmetric Logical flag. Is the distance function symmetric? In other words, is
-#'   \code{dist(x,y)} == \code{dist(y,x)}? If \code{TRUE}, only half the distance matrix needs to be
-#'   computed. Overridden if the function detects an invalid user-provided value.
-#' @param packages Character vector with the names of any packages required for custom \code{proxy}
+#' @param symmetric Logical flag. Is the distance function symmetric? In other words, is `dist(x,y)`
+#'   == `dist(y,x)`? If `TRUE`, only half the distance matrix needs to be computed. Overridden if
+#'   the function detects an invalid user-provided value.
+#' @param packages Character vector with the names of any packages required for custom `proxy`
 #'   functions. Since the distance entries are re-registered in each parallel worker if needed, this
 #'   is probably useless, but just in case.
 #' @param distmat If available, the cross-distance matrix can be provided here. Only relevant for
@@ -32,9 +32,8 @@ partitional_control <- function(pam.precompute = TRUE,
                                 packages = character(0L),
                                 distmat = NULL)
 {
-    if (iter.max <= 0L) stop("Maximum iterations must be positive")
-
-    if (nrep < 1L) stop("Number of repetitions must be at least one")
+    if (any(iter.max <= 0L)) stop("Maximum iterations must be positive")
+    if (any(nrep < 1L)) stop("Number of repetitions must be at least one")
 
     structure(
         list(pam.precompute = as.logical(pam.precompute),
@@ -52,9 +51,17 @@ partitional_control <- function(pam.precompute = TRUE,
 #' @export
 #'
 #' @param method Character vector with one or more linkage methods to use in hierarchical procedures
-#'   (see \code{\link[stats]{hclust}}), the character \code{"all"} to use all of the available ones,
-#'   or a function that performs hierarchical clustering based on distance matrices (e.g.
-#'   \code{\link[cluster]{diana}}).
+#'   (see [stats::hclust()]), the character `"all"` to use all of the available ones, or a function
+#'   that performs hierarchical clustering based on distance matrices (e.g. [cluster::diana()]). See
+#'   details.
+#'
+#' @details
+#'
+#' There are some limitations when using a custom hierarchical function in `method`: it will receive
+#' the lower triangular of the distance matrix as first argument (see [stats::as.dist()]) and the
+#' result should support the [stats::as.hclust()] generic. This functionality was added with the
+#' \pkg{cluster} in mind, since its functions follow this convention, but other functions could be
+#' used if they are adapted to work similarly.
 #'
 hierarchical_control <- function(method = "average",
                                  symmetric = FALSE,
@@ -68,7 +75,7 @@ hierarchical_control <- function(method = "average",
                               "all"),
                             several.ok = TRUE)
 
-        if (any(method == "all"))
+        if ("all" %in% method)
             method <- c("ward.D", "ward.D2", "single", "complete",
                         "average", "mcquitty", "median", "centroid")
 
@@ -90,7 +97,7 @@ hierarchical_control <- function(method = "average",
 #' @aliases tsclust-controls
 #' @export
 #'
-#' @param fuzziness Numeric. Exponent used for fuzzy clustering. Commonly termed \code{m} in the
+#' @param fuzziness Numeric. Exponent used for fuzzy clustering. Commonly termed `m` in the
 #'   literature.
 #' @param delta Numeric. Convergence criterion for fuzzy clustering.
 #'
@@ -99,11 +106,9 @@ fuzzy_control <- function(fuzziness = 2,
                           delta = 1e-3,
                           packages = character(0L))
 {
-    if (fuzziness <= 1) stop("Fuzziness exponent should be greater than one")
-
-    if (iter.max <= 0L) stop("Maximum iterations must be positive")
-
-    if (delta < 0) stop("Delta should be positive")
+    if (any(fuzziness <= 1)) stop("Fuzziness exponent should be greater than one")
+    if (any(iter.max <= 0L)) stop("Maximum iterations must be positive")
+    if (any(delta < 0)) stop("Delta should be positive")
 
     structure(
         list(fuzziness = fuzziness,
@@ -120,17 +125,15 @@ fuzzy_control <- function(fuzziness = 2,
 #'
 #' @param dc The cutoff distance for the TADPole algorithm.
 #' @param window.size The window.size specifically for the TADPole algorithm.
-#' @param lb The lower bound to use with TADPole. Either \code{"lbk"} or \code{"lbi"}.
+#' @param lb The lower bound to use with TADPole. Either `"lbk"` or `"lbi"`.
 #'
 tadpole_control <- function(dc,
                             window.size,
                             lb = "lbk")
 {
-    if (dc <= 0) stop("Cutoff distance 'dc' must be positive")
-
+    if (any(dc <= 0)) stop("Cutoff distance 'dc' must be positive")
     window.size <- check_consistency(window.size, "window")
-
-    lb <- match.arg(lb, c("lbk", "lbi"))
+    lb <- match.arg(lb, c("lbk", "lbi"), several.ok = TRUE)
 
     structure(
         list(dc = dc,
@@ -144,15 +147,14 @@ tadpole_control <- function(dc,
 #' @aliases tsclust-controls
 #' @export
 #'
-#' @param preproc A list of arguments for a preprocessing function to be used in
-#'   \code{\link{tsclust}}.
-#' @param dist A list of arguments for a distance function to be used in \code{\link{tsclust}}.
-#' @param cent A list of arguments for a centroid function to be used in \code{\link{tsclust}}.
+#' @param preproc A list of arguments for a preprocessing function to be used in [tsclust()].
+#' @param dist A list of arguments for a distance function to be used in [tsclust()].
+#' @param cent A list of arguments for a centroid function to be used in [tsclust()].
 #'
 #' @details
 #'
-#' When using TADPole, the \code{dist} argument list includes the \code{window.size} and specifies
-#' \code{norm = "L2"}.
+#' When using TADPole, the `dist` argument list includes the `window.size` and specifies `norm =
+#' "L2"`.
 #'
 tsclust_args <- function(preproc = list(), dist = list(), cent = list())
 {
