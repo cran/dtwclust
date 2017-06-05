@@ -4,7 +4,8 @@
 \alias{shape_extraction}
 \title{Shape average of several time series}
 \usage{
-shape_extraction(X, centroid = NULL, znorm = FALSE)
+shape_extraction(X, centroid = NULL, znorm = FALSE, ...,
+  error.check = TRUE)
 }
 \arguments{
 \item{X}{A matrix or data frame where each row is a time series, or a list where each element is
@@ -16,6 +17,11 @@ if \code{NULL}. For multivariate series, this should be a matrix with the same c
 the matrices in \code{X}. \strong{It will be z-normalized}.}
 
 \item{znorm}{Logical flag. Should z-scores be calculated for \code{X} before processing?}
+
+\item{...}{Further arguments for \code{\link[=zscore]{zscore()}}.}
+
+\item{error.check}{Logical indicating whether the function should try to detect inconsistencies
+and give more informative errors messages. Also used internally to avoid repeating checks.}
 }
 \value{
 Centroid time series (z-normalized).

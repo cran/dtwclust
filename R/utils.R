@@ -2,13 +2,16 @@
 # Miscellaneous
 # ==================================================================================================
 
-check_consistency <- function(obj, case, ..., trace = FALSE, Lengths = FALSE, silent = TRUE) {
+check_consistency <- function(obj, case, ..., clus_type,
+                              diff_lengths = FALSE, cent_missing,
+                              trace = FALSE, silent = TRUE)
+{
     case <- match.arg(case, c("ts", "tslist", "vltslist", "window", "dist", "cent"))
 
     if (case == "ts") {
         if (!is.numeric(obj)) stop("The series must be numeric")
         if (length(obj) < 1L) stop("The series must have at least one point")
-        if (any(is.na(obj))) stop("There are missing values in the series")
+        if (anyNA(obj)) stop("There are missing values in the series")
 
     } else if (case %in% c("tslist", "vltslist")) {
         if (!is.list(obj)) stop("Oops, data should already be a list by this point...")
@@ -24,9 +27,6 @@ check_consistency <- function(obj, case, ..., trace = FALSE, Lengths = FALSE, si
         return(as.integer(obj))
 
     } else if (case == "dist") {
-        included <- c("dtw", "dtw2", "dtw_lb", "lbk", "lbi", "sbd", "dtw_basic", "gak")
-        valid <- c("dtw", "dtw2", "sbd", "dtw_basic", "gak") ## for different lengths
-
         if (!is.character(obj) || !pr_DB$entry_exists(obj)) {
             if (silent)
                 return(FALSE)
@@ -35,27 +35,73 @@ check_consistency <- function(obj, case, ..., trace = FALSE, Lengths = FALSE, si
                      "'proxy' package.")
         }
 
-        if (Lengths) {
-            if ((obj %in% included) && !(obj %in% valid))
+        if (diff_lengths) {
+            if ((obj %in% distances_included) && !(obj %in% distances_difflength))
                 stop("Only the following distances are supported for series with different length:\n\t",
-                     paste(valid, collapse = "\t"))
-            else if (!(obj %in% included) && trace)
-                message("Series have different lengths. Please confirm that the provided distance ",
-                        "function supports this.")
+                     paste(distances_difflength, collapse = "\t"))
+            else if (!(obj %in% distances_included) && trace)
+                message("Series have different lengths. ",
+                        "Please confirm that the provided distance function supports this.")
         }
 
         ## valid registered distance
         return(TRUE)
 
     } else if (case == "cent") {
-        ## only checking for different lengths
-        included <- c("mean", "median", "shape", "dba", "pam", "fcm", "fcmdd")
-        valid <- c("dba", "pam", "shape", "fcmdd")
+        cent_char <- switch(
+            clus_type,
+            partitional = {
+                if (is.character(obj)) {
+                    cent_char <- match.arg(obj, centroids_nonfuzzy)
 
-        if (is.character(obj) && (obj %in% included) && !(obj %in% valid))
-            stop("Only the following centroids are supported for series with different lengths:",
-                 "\n\tdba\tpam\tshape\tfcmdd")
+                    if (diff_lengths &&
+                        cent_char %in% centroids_included &&
+                        !(cent_char %in% centroids_difflength))
+                        stop("Only the following centroids are supported for ",
+                             "series with different lengths:\n\t",
+                             paste(centroids_difflength, collapse = "\t"))
 
+                } else {
+                    cent_char <- as.character(substitute(obj))[1L]
+                }
+
+                ## return partitional switch
+                cent_char
+            },
+            fuzzy = {
+                if (is.character(obj)) {
+                    cent_char <- match.arg(obj, centroids_fuzzy)
+
+                    if (diff_lengths && cent_char == "fcm")
+                        stop("Fuzzy c-means does not support series with different length.")
+
+                } else {
+                    cent_char <- as.character(substitute(obj))[1L]
+                }
+
+                ## return fuzzy switch
+                cent_char
+            },
+            hierarchical =, tadpole = {
+                cent_char <- paste("PAM",
+                                   switch(clus_type,
+                                          hierarchical = "(Hierarchical)",
+                                          tadpole = "(TADPole)"))
+
+                if (is.function(obj))
+                    cent_char <- as.character(substitute(obj))[1L]
+                else if (!cent_missing)
+                    warning("The 'centroid' argument was provided but it wasn't a function, ",
+                            "so it was ignored.",
+                            call. = FALSE, immediate. = TRUE)
+
+                ## return hierarchical/tadpole switch
+                cent_char
+            }
+        )
+
+        ## cent case
+        return(cent_char)
     }
 
     invisible(NULL)
@@ -64,15 +110,15 @@ check_consistency <- function(obj, case, ..., trace = FALSE, Lengths = FALSE, si
 # Coerce to list
 any2list <- function(obj) {
     if (is.matrix(obj)) {
-        Names <- rownames(obj)
+        rnms <- rownames(obj)
         obj <- lapply(seq_len(nrow(obj)), function(i) obj[i, ])
-        names(obj) <- Names
+        if (!is.null(rnms)) setnames_inplace(obj, rnms)
 
     } else if (is.numeric(obj)) {
         obj <- list(obj)
 
     } else if (is.data.frame(obj)) {
-        obj <- any2list(as.matrix(obj))
+        obj <- any2list(base::as.matrix(obj))
 
     } else if (!is.list(obj))
         stop("Unsupported data type.")
@@ -99,16 +145,16 @@ subset_dots <- function(dots = list(), foo) {
         list()
 }
 
-# This only works if it's used after split_parallel()
-validate_pairwise <- function(x, y) {
-    if (!identical(lengths(x, use.names = FALSE), lengths(y, use.names = FALSE)))
-        stop("Pairwise distances require the same amount of series in 'x' and 'y'.")
-
-    invisible(NULL)
+# Adjust args for tsclust() and TSClusters-class
+adjust_args <- function(args, dots) {
+    lapply(args, function(arg) {
+        arg <- c(arg, dots)
+        arg[!duplicated(names(arg))]
+    })
 }
 
 # Reinitialize empty clusters
-reinitalize_clusters <- function(x, cent, cent_case, num_empty) {
+reinit_clusters <- function(x, cent, cent_case, num_empty, empty_clusters, control) {
     ## Make sure no centroid is repeated (especially in case of PAM)
     any_rep <- logical(num_empty)
 
@@ -122,7 +168,7 @@ reinitalize_clusters <- function(x, cent, cent_case, num_empty) {
             }))
 
             if (cent_case == "pam")
-                attr(extra_cent[[id_extra]], "id_cent") <- id_cent_extra[id_extra]
+                control$distmat$id_cent[empty_clusters[id_extra]] <- id_cent_extra[id_extra]
         }
 
         if (all(!any_rep)) break
@@ -134,12 +180,10 @@ reinitalize_clusters <- function(x, cent, cent_case, num_empty) {
 # Like dynGet() I assume, but that one is supposed to be experimental...
 get_from_callers <- function(obj_name, mode = "any") {
     ret <- get0(obj_name, mode = mode, inherits = TRUE)
-
     if (!is.null(ret)) return(ret)
 
     for (env in sys.frames()) {
         ret <- get0(obj_name, env, mode = mode, inherits = FALSE)
-
         if (!is.null(ret)) return(ret)
     }
 
@@ -153,7 +197,6 @@ get_from_callers <- function(obj_name, mode = "any") {
 # Create combinations of all possible pairs
 call_pairs <- function(n = 2L, lower = TRUE) {
     if (n < 2L) stop("At least two elements are needed to create pairs.")
-
     pairs <- try(.Call(C_pairs, n, lower, PACKAGE = "dtwclust"), silent = TRUE)
 
     if (inherits(pairs, "try-error")) {
@@ -168,40 +211,24 @@ call_pairs <- function(n = 2L, lower = TRUE) {
     pairs
 }
 
+# Modify names in place
+setnames_inplace <- function(vec, names) {
+    if (!is.vector(vec) || !is.vector(names)) stop("Both 'vec' and 'names' must be vectors.")
+    if (length(vec) != length(names)) stop("Length mismatch when changing names in place.")
+    if (!is.character(names)) stop("Trying to set names in place with non-character names.")
+    invisible(.Call(C_setnames_inplace, vec, names, PACKAGE = "dtwclust"))
+}
+
 # ==================================================================================================
 # Parallel helper functions
 # ==================================================================================================
-
-# allow_parallel <- function() {
-#     do_par <- TRUE
-#
-#     function(flag) {
-#         if (!missing(flag))
-#             do_par <<- as.logical(flag)[1L]
-#
-#         invisible(do_par)
-#     }
-# }
-#
-# Allow parallel computation with \pkg{dtwclust} functions
-#
-# Set an internal flag that is checked by the functions that support parallel computation and
-# determines if they should attempt to use a parallel backend if one is registered.
-#
-# @export
-#
-# @param flag `TRUE` to allow use of parallel backends or `FALSE` to prevent it.
-#
-# @return `flag` invisibly
-#
-# parallel_dtwclust <- allow_parallel()
 
 # Custom binary operator for %dopar% to avoid unnecessary warnings
 `%op%` <- function(obj, ex) {
     withCallingHandlers({
         ret <- eval.parent(substitute(obj %dopar% ex))
-
-    }, warning = function(w) {
+    },
+    warning = function(w) {
         if (grepl("package:dtwclust", w$message, ignore.case = TRUE))
             invokeRestart("muffleWarning")
     })
@@ -235,21 +262,12 @@ split_parallel <- function(obj, margin = NULL) {
     ret
 }
 
-## tasks created based on getDoParWorkers() could be larger than tasks based on objects
-allocate_matrices <- function(mat = NULL, ..., target.size) {
-    if (foreach::getDoParWorkers() > 1L) {
-        MAT <- lapply(1L:target.size, function(dummy) {
-            matrix(0, ...)
-        })
+# This only works if it's used after split_parallel()
+validate_pairwise <- function(x, y) {
+    if (!identical(lengths(x, use.names = FALSE), lengths(y, use.names = FALSE)))
+        stop("Pairwise distances require the same amount of series in 'x' and 'y'.")
 
-    } else if (is.null(mat)) {
-        MAT <- list(matrix(0, ...))
-
-    } else {
-        MAT <- list(mat)
-    }
-
-    MAT
+    invisible(NULL)
 }
 
 # ==================================================================================================
@@ -278,18 +296,16 @@ proxy_prefun <- function(x, y, pairwise, params, reg_entry) {
 }
 
 # ==================================================================================================
-# Multviariate helpers
+# Multivariate helpers
 # ==================================================================================================
 
 is_multivariate <- function(x) {
     ncols <- sapply(x, NCOL)
-
     if (any(diff(ncols) != 0L)) stop("Inconsistent dimensions across series.")
-
     any(ncols > 1L)
 }
 
-reshape_multviariate <- function(series, cent) {
+reshape_multivariate <- function(series, cent) {
     ncols <- ncol(series[[1L]])
 
     series <- lapply(1L:ncols, function(idc) {

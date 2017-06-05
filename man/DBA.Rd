@@ -5,7 +5,8 @@
 \title{DTW Barycenter Averaging}
 \usage{
 DBA(X, centroid = NULL, ..., window.size = NULL, norm = "L1",
-  max.iter = 20L, delta = 0.001, error.check = TRUE, trace = FALSE)
+  max.iter = 20L, delta = 0.001, error.check = TRUE, trace = FALSE,
+  gcm = NULL, mv.ver = "by-variable")
 }
 \arguments{
 \item{X}{A matrix or data frame where each row is a time series, or a list where each element is
@@ -17,7 +18,7 @@ if \code{NULL}. For multivariate series, this should be a matrix with the same c
 the matrices in \code{X}.}
 
 \item{...}{Further arguments for \code{\link[=dtw_basic]{dtw_basic()}}. However, the following are already pre-
-specified: \code{window.size}, \code{norm} (passed along), \code{backtrack} and \code{gcm}.}
+specified: \code{window.size}, \code{norm} (passed along), and \code{backtrack}.}
 
 \item{window.size}{Window constraint for the DTW calculations. \code{NULL} means no constraint. A
 slanted band is used by default.}
@@ -30,9 +31,16 @@ Euclidean distance.}
 \item{delta}{At iteration \code{i}, if \code{all(abs(centroid_{i}} \code{-} \code{centroid_{i-1})} \code{< delta)},
 convergence is assumed.}
 
-\item{error.check}{Should inconsistencies in the data be checked?}
+\item{error.check}{Logical indicating whether the function should try to detect inconsistencies
+and give more informative errors messages. Also used internally to avoid repeating checks.}
 
 \item{trace}{If \code{TRUE}, the current iteration is printed to output.}
+
+\item{gcm}{Optional matrix to pass to \code{\link[=dtw_basic]{dtw_basic()}} (for the case when \code{backtrack = TRUE}). To
+define the matrix size, it should be assumed that \code{x} is the \emph{longest} series in \code{X}, and \code{y}
+is the \code{centroid} if provided or \code{x} otherwise. Ignored in parallel computations.}
+
+\item{mv.ver}{Multivariate version to use. See below.}
 }
 \value{
 The average time series.
@@ -56,15 +64,23 @@ in \code{10(2) + 1 = 21} observations falling within the window.
 }
 \note{
 The indices of the DTW alignment are obtained by calling \code{\link[=dtw_basic]{dtw_basic()}} with \code{backtrack = TRUE}.
+
+The new \code{C++} implementation (v4.0.0) has slightly different numerical accuracy (in the
+order of 10^-16, at least in x64 systems), and no longer supports parallelization directly. The
+calls through \code{\link[=tsclust]{tsclust()}} can still perform different DBA calculations in parallel.
 }
-\section{Parallel Computing}{
+\section{Multivariate series}{
 
 
-  Please note that running tasks in parallel does \strong{not} guarantee faster computations.
-  The overhead introduced is sometimes too large, and it's better to run tasks sequentially.
-
-  The user can register a parallel backend, e.g. with the \pkg{doParallel} package, in order to
-  attempt to speed up the calculations (see the examples).
+There are currently 2 versions of DBA implemented for multivariate series:
+\itemize{
+\item If \code{mv.ver = "by-variable"}, then each variable of \code{X} and \code{centroid} are extracted, and the
+univariate version of the algorithm is applied to each set of variables, binding the results
+by column. Therefore, the DTW backtracking is different for each variable.
+\item If \code{mv.ver = "by-series"}, then all variables are considered at the same time, so the DTW
+backtracking is computed based on each multivariate series as a whole. This version was
+implemented in version 4.0.0 of \pkg{dtwclust}, and it might be faster.
+}
 }
 
 \examples{
@@ -84,26 +100,6 @@ dtw.avg2 <- DBA(CharTraj[5:1], CharTraj[[1]], trace = TRUE)
 
 # Same result?
 all(dtw.avg == dtw.avg2)
-
-\dontrun{
-#### Running DBA with parallel support
-# For such a small dataset, this is probably slower in parallel
-require(doParallel)
-
-# Create parallel workers
-cl <- makeCluster(detectCores())
-invisible(clusterEvalQ(cl, library(dtwclust)))
-registerDoParallel(cl)
-
-# DTW Average
-cen <- DBA(CharTraj[1:5], CharTraj[[1]], trace = TRUE)
-
-# Stop parallel workers
-stopCluster(cl)
-
-# Return to sequential computations
-registerDoSEQ()
-}
 
 }
 \references{

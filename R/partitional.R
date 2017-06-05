@@ -7,23 +7,19 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, cent, ...) {
     k <- as.integer(k)
     dots <- list(...)
 
-    if (is.null(names(x)))
-        names(x) <- paste0("series_", 1:N) # used by custom PAM centroids
+    if (is.null(names(x))) names(x) <- paste0("series_", 1:N) # used by custom PAM centroids
 
     if (fuzzy && cent == "fcm") {
         cluster <- matrix(0, N, k)
         cluster[ , -1L] <- stats::runif(N *(k - 1)) / (k - 1)
         cluster[ , 1L] <- 1 - apply(cluster[ , -1L, drop = FALSE], 1L, sum)
 
-        if (has_dots(family@allcent))
-            centroids <- family@allcent(x = x, cl_id = cluster, k = k, cl_old = cluster, ...)
-        else
-            centroids <- do.call(family@allcent,
-                                 enlist(x = x,
-                                        cl_id = cluster,
-                                        k = k,
-                                        cl_old = cluster,
-                                        dots = subset_dots(dots, family@allcent)))
+        centroids <- do.call(family@allcent,
+                             enlist(x = x,
+                                    cl_id = cluster,
+                                    k = k,
+                                    cl_old = cluster,
+                                    dots = subset_dots(dots, family@allcent)))
 
     } else {
         id_cent <- sample(N, k)
@@ -37,11 +33,8 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, cent, ...) {
 
     while (iter <= control@iter.max) {
         clustold <- if (cent != "fcmdd") cluster else attr(centroids, "id_cent")
-
         distmat <- family@dist(x, centroids, ...)
-
         cluster <- family@cluster(distmat = distmat, m = control@fuzziness)
-
         centroids <- family@allcent(x = x,
                                     cl_id = cluster,
                                     k = k,
@@ -108,20 +101,18 @@ kcca.list <- function (x, k, family, control, fuzzy = FALSE, cent, ...) {
         fcluster <- cluster
         rownames(fcluster) <- names(x)
         colnames(fcluster) <- paste0("cluster_", 1:k)
-
         cluster <- max.col(-distmat, "first")
 
     } else {
         fcluster <- matrix(NA_real_)
     }
 
-    cldist <- as.matrix(distmat[cbind(1L:N, cluster)])
+    cldist <- base::as.matrix(distmat[cbind(1L:N, cluster)])
     size <- tabulate(cluster)
 
     ## if some clusters are empty, tapply() would not return enough rows
     clusinfo <- data.frame(size = size, av_dist = 0)
     clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], cluster, mean))
-
     names(centroids) <- NULL
     attr(centroids, "id_cent") <- NULL
     centroids <- lapply(centroids, "attr<-", which = "id_cent", value = NULL)
@@ -144,14 +135,10 @@ pfclust <- function (x, k, family, control, fuzzy = FALSE, cent, trace = FALSE, 
     N <- length(x)
     k <- as.integer(k)
 
-    if (is.null(names(x)))
-        names(x) <- paste0("series_", 1:N) # used by custom PAM centroids
-
     if (fuzzy && cent == "fcm") {
         cluster <- matrix(0, N, k)
         cluster[ , -1L] <- stats::runif(N *(k - 1)) / (k - 1)
         cluster[ , 1L] <- 1 - apply(cluster[ , -1L, drop = FALSE], 1L, sum)
-
         centroids <- do.call(family@allcent,
                              enlist(x = x,
                                     cl_id = cluster,
@@ -162,26 +149,17 @@ pfclust <- function (x, k, family, control, fuzzy = FALSE, cent, trace = FALSE, 
     } else {
         id_cent <- sample(N, k)
         centroids <- x[id_cent]
-        attr(centroids, "id_cent") <- id_cent # also used by PAM
+        if (inherits(control$distmat, "Distmat")) control$distmat$id_cent <- id_cent
         cluster <- integer(N)
     }
-
-    if (cent == "pam" && !control$pam.precompute)
-        args$cent <- c(args$cent, args$dist)
 
     iter <- 1L
     objective_old <- Inf
 
     while (iter <= control$iter.max) {
-        clustold <- if (cent != "fcmdd") cluster else attr(centroids, "id_cent")
-
-        distmat <- do.call(family@dist,
-                           enlist(x = x,
-                                  centroids = centroids,
-                                  dots = subset_dots(args$dist, family@dist)))
-
+        clustold <- if (cent != "fcmdd") cluster else control$distmat$id_cent
+        distmat <- do.call(family@dist, enlist(x = x, centroids = centroids, dots = args$dist))
         cluster <- family@cluster(distmat = distmat, m = control$fuzziness)
-
         centroids <- do.call(family@allcent,
                              enlist(x = x,
                                     cl_id = cluster,
@@ -191,7 +169,7 @@ pfclust <- function (x, k, family, control, fuzzy = FALSE, cent, trace = FALSE, 
                                     dots = subset_dots(args$cent, family@allcent)))
 
         if (fuzzy && cent == "fcm") {
-            # fuzzy.R
+            ## fuzzy.R
             objective <- fuzzy_objective(cluster, distmat = distmat, m = control$fuzziness)
 
             if (trace) {
@@ -212,7 +190,7 @@ pfclust <- function (x, k, family, control, fuzzy = FALSE, cent, trace = FALSE, 
             if (cent != "fcmdd")
                 changes <- sum(cluster != clustold)
             else
-                changes <- sum(attr(centroids, "id_cent") != clustold)
+                changes <- sum(control$distmat$id_cent != clustold)
 
             if (trace) {
                 td <- sum(distmat[cbind(1L:N, cluster)])
@@ -242,35 +220,28 @@ pfclust <- function (x, k, family, control, fuzzy = FALSE, cent, trace = FALSE, 
         converged <- TRUE
     }
 
-    distmat <- do.call(family@dist,
-                       enlist(x = x,
-                              centroids = centroids,
-                              dots = subset_dots(args$dist, family@dist)))
-
+    distmat <- do.call(family@dist, enlist(x = x, centroids = centroids, dots = args$dist))
     cluster <- family@cluster(distmat = distmat, m = control$fuzziness)
 
     if (fuzzy) {
         fcluster <- cluster
+        cluster <- max.col(-distmat, "first")
         rownames(fcluster) <- names(x)
         colnames(fcluster) <- paste0("cluster_", 1:k)
-
-        cluster <- max.col(-distmat, "first")
 
     } else {
         fcluster <- matrix(NA_real_)
     }
 
-    cldist <- as.matrix(distmat[cbind(1L:N, cluster)])
+    cldist <- base::as.matrix(distmat[cbind(1L:N, cluster)])
     size <- tabulate(cluster)
 
     ## if some clusters are empty, tapply() would not return enough rows
     clusinfo <- data.frame(size = size, av_dist = 0)
     clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(cldist[ , 1L], cluster, mean))
-
     names(centroids) <- NULL
-    attr(centroids, "id_cent") <- NULL
-    centroids <- lapply(centroids, "attr<-", which = "id_cent", value = NULL)
 
+    ## return
     list(k = k,
          cluster = cluster,
          fcluster = fcluster,

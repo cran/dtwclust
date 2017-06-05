@@ -228,42 +228,77 @@ test_that("Operations with pam centroid complete successfully.", {
     assign("cent_mv_pam", cent_mv_pam, persistent)
 
     ## ---------------------------------------------------------- tsclustFamily
-    family <- new("tsclustFamily", control = pt_ctrl, dist = "sbd", allcent = "pam")
-    expect_null(as.list(environment(family@allcent))$distmat)
 
-    expect_identical(cent_pam,
-                     family@allcent(x,
-                                    cl_id = cl_id,
-                                    k = k,
-                                    cent = x[c(1L,20L)],
-                                    cl_old = 0L))
-
+    ## with distmat
+    pt_ctrl$distmat <- proxy::dist(x, method = "sbd")
     family <- new("tsclustFamily",
                   control = pt_ctrl,
                   dist = "sbd",
-                  allcent = "pam",
-                  distmat = proxy::dist(x, method = "sbd"))
-    expect_false(is.null(as.list(environment(family@allcent))$distmat))
+                  allcent = "pam")
+    expect_false(is.null(as.list(environment(family@allcent))$control$distmat))
 
-    expect_identical(cent_pam_distmat,
-                     family@allcent(x,
-                                    cl_id = cl_id,
-                                    k = k,
-                                    cent = x[c(1L,20L)],
-                                    cl_old = 0L))
+    expect_equal(cent_pam_distmat,
+                 family@allcent(x,
+                                cl_id = cl_id,
+                                k = k,
+                                cent = x[c(1L,20L)],
+                                cl_old = 0L),
+                 check.attributes = FALSE)
 
+    ## multivariate
+    pt_ctrl$distmat <- proxy::dist(x_mv, method = "dtw_basic", window.size = 18L)
     family <- new("tsclustFamily",
                   control = pt_ctrl,
                   dist = "dtw_basic",
                   allcent = "pam")
 
-    expect_identical(cent_mv_pam,
-                     family@allcent(x_mv,
-                                    cl_id = cl_id,
-                                    k = k,
-                                    cent = x_mv[c(1L,20L)],
-                                    cl_old = 0L,
-                                    window.size = 18L))
+    expect_equal(cent_mv_pam,
+                 family@allcent(x_mv,
+                                cl_id = cl_id,
+                                k = k,
+                                cent = x_mv[c(1L,20L)],
+                                cl_old = 0L),
+                 check.attributes = FALSE)
+
+    ## sparse symmetric
+    pt_ctrl$symmetric <- TRUE
+    dm <- dtwclust:::SparseDistmat$new(series = x,
+                                       control = pt_ctrl,
+                                       distance = "sbd",
+                                       dist_args = list())
+    pt_ctrl$distmat <- dm
+    family <- new("tsclustFamily",
+                  control = pt_ctrl,
+                  dist = "sbd",
+                  allcent = "pam")
+
+    expect_equal(cent_pam,
+                 family@allcent(x,
+                                cl_id = cl_id,
+                                k = k,
+                                cent = x[c(1L,20L)],
+                                cl_old = 0L),
+                 check.attributes = FALSE)
+
+    ## sparse non-symmetric
+    pt_ctrl$symmetric <- FALSE
+    dm <- dtwclust:::SparseDistmat$new(series = x_mv,
+                                       control = pt_ctrl,
+                                       distance = "dtw_basic",
+                                       dist_args = list(window.size = 18L))
+    pt_ctrl$distmat <- dm
+    family <- new("tsclustFamily",
+                  control = pt_ctrl,
+                  dist = "dtw_basic",
+                  allcent = "pam")
+
+    expect_equal(cent_mv_pam,
+                 family@allcent(x_mv,
+                                cl_id = cl_id,
+                                k = k,
+                                cent = x_mv[c(1L,20L)],
+                                cl_old = 0L),
+                 check.attributes = FALSE)
 })
 
 # =================================================================================================
@@ -325,6 +360,18 @@ test_that("Operations with dba centroid complete successfully.", {
                                     window.size = 18L,
                                     max.iter = ctrl@dba.iter,
                                     norm = "L2"))
+})
+
+test_that("Second version of DBA works as expected.", {
+    dba2_uv <- DBA(data_subset[1L:5L], centroid = data_subset[[1L]], mv.ver = "by-s")
+    expect_true(is.null(dim(dba2_uv)))
+
+    dba2_mv <- DBA(data_multivariate[1L:5L], centroid = data_multivariate[[1L]], mv.ver = "by-s")
+    expect_identical(dim(dba2_mv), dim(data_multivariate[[1L]]))
+    expect_identical(dimnames(dba2_mv), dimnames(data_multivariate[[1L]]))
+
+    assign("dba2_uv", dba2_uv, persistent)
+    assign("dba2_mv", dba2_mv, persistent)
 })
 
 # =================================================================================================

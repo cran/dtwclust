@@ -102,27 +102,100 @@ cfgs <- compare_clusterings_configs(c("p", "h", "f", "t"), k = 2L:3L,
                                     )
 )
 
+cfgs_gak <- compare_clusterings_configs(types = "p", k = 2L:3L,
+                                        controls = list(
+                                            partitional = partitional_control(
+                                                iter.max = 5L,
+                                                nrep = 2L
+                                            )
+                                        ),
+                                        preprocs = pdc_configs(
+                                            "preproc",
+                                            none = list()
+                                        ),
+                                        distances = pdc_configs(
+                                            "distance",
+                                            gak = list(window.size = 20L, sigma = c(100, 120))
+                                        ),
+                                        centroids = pdc_configs(
+                                            "centroid",
+                                            pam = list()
+                                        )
+)
+
+cfgs_dba <- compare_clusterings_configs(types = "h", k = 2L:3L,
+                                        preprocs = pdc_configs(
+                                            "preproc",
+                                            none = list()
+                                        ),
+                                        distances = pdc_configs(
+                                            "distance",
+                                            dtw_basic = list(window.size = 20L)
+                                        ),
+                                        centroids = pdc_configs(
+                                            "centroid",
+                                            DBA = list(window.size = 20L,
+                                                       max.iter = 5L)
+                                        )
+)
+
+cfgs_mats <- compare_clusterings_configs(types = "h", k = 2L:3L,
+                                         preprocs = pdc_configs(
+                                             "preproc",
+                                             none = list()
+                                         ),
+                                         distances = pdc_configs(
+                                             "distance",
+                                             gak = list(window.size = 20L,
+                                                        sigma = 100)
+                                         ),
+                                         centroids = pdc_configs(
+                                             "centroid",
+                                             DBA = list(window.size = 20L,
+                                                        max.iter = 5L)
+                                         )
+)
+
 # =================================================================================================
 # Compare clusterings
 # =================================================================================================
 
 test_that("Compare clusterings works for the minimum set with all possibilities.", {
+    expect_warning(errorpass_comp <- compare_clusterings(data_subset, c("p", "h", "f"),
+                                                         configs = compare_clusterings_configs(k = 2L:3L),
+                                                         seed = 932L, return.objects = TRUE,
+                                                         .errorhandling = "pass"),
+                   "names")
+
+    expect_true(inherits(errorpass_comp$objects.fuzzy[[1L]], "error"))
+
+    expect_warning(errorrm_comp <- compare_clusterings(data_subset, c("p", "h", "f"),
+                                                       configs = compare_clusterings_configs(),
+                                                       seed = 932L, return.objects = TRUE,
+                                                       .errorhandling = "remove"))
+
+    expect_null(errorrm_comp$objects.fuzzy)
+
     expect_warning(no_score <- compare_clusterings(data_reinterpolated_subset, c("f"),
-                                                   configs = cfgs, seed = 392L))
+                                                   configs = cfgs, seed = 392L,
+                                                   return.objects = TRUE,
+                                                   score.clus = function(...) stop("NO!")),
+                   "score.clus")
     expect_null(no_score$scores)
 
     expect_warning(no_pick <- compare_clusterings(data_reinterpolated_subset, c("f"),
                                                   configs = cfgs, seed = 392L,
                                                   score.clus = score_fun,
-                                                  lbls = labels_subset))
+                                                  pick.clus = function(...) stop("NO!"),
+                                                  lbls = labels_subset),
+                   "pick.clus")
     expect_null(no_pick$pick)
     expect_true(!is.null(no_pick$scores))
 
-    expect_warning(type_score <- compare_clusterings(data_reinterpolated_subset, c("f"),
-                                                     configs = cfgs, seed = 392L,
-                                                     score.clus = type_score_fun,
-                                                     lbls = labels_subset))
-
+    type_score <- compare_clusterings(data_reinterpolated_subset, c("f"),
+                                      configs = cfgs, seed = 392L,
+                                      score.clus = type_score_fun,
+                                      lbls = labels_subset)
     expect_identical(no_pick$results, type_score$results)
 
     mute <- capture.output(all_comparisons <- compare_clusterings(data_reinterpolated_subset,
@@ -131,15 +204,50 @@ test_that("Compare clusterings works for the minimum set with all possibilities.
                                                                   trace = TRUE,
                                                                   score.clus = score_fun,
                                                                   pick.clus = pick_fun,
+                                                                  return.objects = TRUE,
                                                                   shuffle.configs = TRUE,
                                                                   lbls = labels_subset))
+
+    gak_comparison <- compare_clusterings(data_subset, "p",
+                                          configs = cfgs_gak, seed = 190L,
+                                          score.clus = score_fun,
+                                          lbls = labels_subset)
+
+    dba_comparison <- compare_clusterings(data_multivariate, "h",
+                                          configs = cfgs_dba, seed = 294L,
+                                          score.clus = score_fun,
+                                          lbls = labels_subset)
+
+    N <- max(lengths(data_subset)) + 1L
+    logs <- matrix(0, N, 3L)
+    gcm <- matrix(0, N, N)
+    mats_comparison <- compare_clusterings(data_subset, "h",
+                                           configs = cfgs_mats, seed = 9430L,
+                                           logs = logs,
+                                           gcm = gcm,
+                                           return.objects = TRUE)
+
+    expect_true(all(c("gcm", "logs") %in% names(mats_comparison$objects.hierarchical$config1_1@dots)))
+
+    if (foreach::getDoParWorkers() == 1L) {
+        expect_false(all(logs == 0))
+        expect_false(all(gcm == 0))
+    }
 
     ## rds
     all_comparisons$pick <- reset_nondeterministic(all_comparisons$pick)
     all_comparisons$pick@call <- call("zas", foo = "bar")
     all_comparisons$proc_time <- NULL
+    all_comparisons$objects.partitional <- NULL
+    all_comparisons$objects.hierarchical <- NULL
+    all_comparisons$objects.fuzzy <- NULL
+    all_comparisons$objects.tadpole <- NULL
+    gak_comparison$proc_time <- NULL
+    dba_comparison$proc_time <- NULL
 
-    assign("all_comp", all_comparisons, persistent)
+    assign("comp_all", all_comparisons, persistent)
+    assign("comp_gak", gak_comparison, persistent)
+    assign("comp_dba", dba_comparison, persistent)
 })
 
 # =================================================================================================

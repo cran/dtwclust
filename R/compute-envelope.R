@@ -1,21 +1,21 @@
-#' Time series warping envelops
+#' Time series warping envelopes
 #'
-#' This function computes the envelops for DTW lower bound calculations with a Sakoe-Chiba band for
+#' This function computes the envelopes for DTW lower bound calculations with a Sakoe-Chiba band for
 #' a given univariate time series using the streaming algorithm proposed by Lemire (2009).
 #'
 #' @export
 #'
 #' @param x A univariate time series.
-#' @param window.size Window size for envelop calculation. See details.
-#' @param error.check Check data inconsistencies?
+#' @param window.size Window size for envelope calculation. See details.
+#' @template error-check
 #'
 #' @template window
 #'
-#' @return A list with two elements (lower and upper envelops): `lower` and `upper`.
+#' @return A list with two elements (lower and upper envelopes): `lower` and `upper`.
 #'
 #' @note
 #'
-#' This envelop is calculated assuming a Sakoe-Chiba constraint for DTW.
+#' This envelope is calculated assuming a Sakoe-Chiba constraint for DTW.
 #'
 #' @references
 #'
@@ -28,16 +28,14 @@
 #'
 #' data(uciCT)
 #'
-#' H <- compute_envelop(CharTraj[[1L]], 18L)
+#' H <- compute_envelope(CharTraj[[1L]], 18L)
 #'
 #' matplot(do.call(cbind, H), type = "l", col = 2:3)
 #' lines(CharTraj[[1L]])
 #'
-compute_envelop <- function(x, window.size, error.check = TRUE) {
+compute_envelope <- function(x, window.size, error.check = TRUE) {
     if (error.check) {
-        if (is_multivariate(list(x)))
-            stop("The envelop can conly be computed for univariate series.")
-
+        if (NCOL(x) > 1L) stop("The envelope can conly be computed for univariate series.")
         check_consistency(x, "ts")
     }
 
@@ -45,8 +43,16 @@ compute_envelop <- function(x, window.size, error.check = TRUE) {
     window.size <- window.size * 2L + 1L
 
     ## NOTE: window.size is now window.size*2 + 1, thus the 2L below
-    if (window.size > (2L * length(x)))
+    if (window.size > (2L * NROW(x)))
         stop("Window cannot be greater or equal than the series' length.")
 
-    .Call(C_envelop, x, window.size, PACKAGE = "dtwclust")
+    .Call(C_envelope, x, window.size, PACKAGE = "dtwclust")
+}
+
+#' @rdname compute_envelope
+#' @export
+#'
+compute_envelop <- function(x, window.size, error.check = TRUE) {
+    .Deprecated("compute_envelope", "dtwclust")
+    compute_envelope(x, window.size, error.check)
 }

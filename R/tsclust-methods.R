@@ -12,41 +12,6 @@ NULL
 # Custom initialize
 # ==================================================================================================
 
-## for tsclustFamily
-setMethod("initialize", "tsclustFamily",
-          function(.Object, dist, allcent, ..., distmat = NULL, control = list(), fuzzy = FALSE) {
-              dots <- list(...)
-              dots$.Object <- .Object
-
-              if (!missing(dist)) {
-                  if (is.character(dist))
-                      dots$dist <- ddist2(dist, control)
-                  else
-                      dots$dist <- dist
-              }
-
-              if (fuzzy) {
-                  dots$cluster <- fcm_cluster # fuzzy.R
-                  if (!missing(allcent) && is.character(allcent))
-                      allcent <- match.arg(allcent, c("fcm", "fcmdd"))
-              }
-
-              if (!missing(allcent)) {
-                  if (is.character(allcent))
-                      dots$allcent <- all_cent2(allcent,
-                                                distmat = distmat,
-                                                distfun = dots$dist,
-                                                control = control,
-                                                fuzzy = fuzzy)
-                  else if (is.function(allcent))
-                      dots$allcent <- allcent
-                  else
-                      stop("Centroid definition must be either a function or a character")
-              }
-
-              do.call(callNextMethod, dots)
-          })
-
 #' @rdname tsclusters-methods
 #' @aliases initialize,TSClusters
 #'
@@ -104,7 +69,6 @@ setMethod("initialize", "tsclustFamily",
 #'
 setMethod("initialize", "TSClusters", function(.Object, ..., override.family = TRUE) {
     tic <- proc.time()
-
     dots <- list(...)
 
     ## some minor checks
@@ -131,7 +95,7 @@ setMethod("initialize", "TSClusters", function(.Object, ..., override.family = T
                                      dist = .Object@dots,
                                      cent = .Object@dots)
     else
-        .Object@args <- lapply(.Object@args, function(args) { c(args, .Object@dots) })
+        .Object@args <- adjust_args(.Object@args, .Object@dots) ## utils.R
 
     ## more helpful for hierarchical/tadpole
     if (override.family) {
@@ -144,10 +108,7 @@ setMethod("initialize", "TSClusters", function(.Object, ..., override.family = T
             datalist <- .Object@datalist
 
             if (.Object@type == "partitional" && length(.Object@centroid))
-                allcent <- all_cent2(.Object@centroid,
-                                     distmat = .Object@distmat,
-                                     control = .Object@control,
-                                     fuzzy = isTRUE(.Object@type == "fuzzy"))
+                allcent <- all_cent2(.Object@centroid, .Object@control)
             else if (.Object@type == "hierarchical" && length(formals(.Object@family@allcent)))
                 allcent <- .Object@family@allcent
             else if (.Object@type == "hierarchical" && length(centroids))
@@ -165,11 +126,8 @@ setMethod("initialize", "TSClusters", function(.Object, ..., override.family = T
                                   dist = .Object@distance,
                                   allcent = allcent,
                                   preproc = .Object@family@preproc,
-                                  distmat = NULL,
                                   control = .Object@control,
                                   fuzzy = isTRUE(.Object@type == "fuzzy"))
-
-            assign("distfun", .Object@family@dist, environment(.Object@family@allcent))
 
             if (.Object@type == "partitional" && .Object@centroid == "shape") {
                 .Object@family@preproc <- zscore
@@ -201,7 +159,8 @@ setMethod("initialize", "PartitionalTSClusters",
                                        .Object@centroids,
                                        dots = .Object@args$dist))
 
-                  .Object@cldist <- as.matrix(dm[cbind(1L:length(.Object@datalist), .Object@cluster)])
+                  .Object@cldist <- base::as.matrix(dm[cbind(1L:length(.Object@datalist),
+                                                             .Object@cluster)])
 
                   dimnames(.Object@cldist) <- NULL
               }
@@ -210,9 +169,9 @@ setMethod("initialize", "PartitionalTSClusters",
                   ## no clusinfo available, but cluster and cldist can be used to calculate it
                   size <- as.vector(table(.Object@cluster))
                   clusinfo <- data.frame(size = size, av_dist = 0)
-                  clusinfo[clusinfo$size > 0L, "av_dist"] <-
-                      as.vector(tapply(.Object@cldist[ , 1L], .Object@cluster, mean))
-
+                  clusinfo[clusinfo$size > 0L, "av_dist"] <- as.vector(tapply(.Object@cldist[ , 1L],
+                                                                              .Object@cluster,
+                                                                              mean))
                   .Object@clusinfo <- clusinfo
               }
 
@@ -227,7 +186,7 @@ setMethod("initialize", "HierarchicalTSClusters",
               ## Replace distmat with NULL so that, if the distance function is called again,
               ## it won't subset it
               if (length(formals(.Object@family@dist)))
-                eval(quote(control$distmat <- NULL), environment(.Object@family@dist))
+                  eval(quote(control$distmat <- NULL), environment(.Object@family@dist))
 
               if (!nrow(.Object@cldist) && length(formals(.Object@family@dist)) && length(.Object@cluster)) {
                   ## no cldist available, but dist and cluster can be used to calculate it
@@ -236,7 +195,8 @@ setMethod("initialize", "HierarchicalTSClusters",
                                        .Object@centroids,
                                        dots = .Object@args$dist))
 
-                  .Object@cldist <- as.matrix(dm[cbind(1L:length(.Object@datalist), .Object@cluster)])
+                  .Object@cldist <- base::as.matrix(dm[cbind(1L:length(.Object@datalist),
+                                                             .Object@cluster)])
 
                   dimnames(.Object@cldist) <- NULL
               }
@@ -295,9 +255,6 @@ setMethod("initialize", "FuzzyTSClusters",
 #'
 setMethod("show", "TSClusters",
           function(object) {
-              print(object@call)
-              cat("\n")
-
               cat(object@type, "clustering with", object@k, "clusters\n")
               cat("Using", object@distance, "distance\n")
               cat("Using", object@centroid, "centroids\n")
@@ -337,18 +294,29 @@ setMethod("show", "TSClusters",
 #'
 #' The `update` method takes the original function call, replaces any provided argument and
 #' optionally evaluates the call again. Use `evaluate = FALSE` if you want to get the unevaluated
-#' call.
+#' call. If no arguments are provided, the object is updated to a new version if necessary (this is
+#' due to changes in the internal functions of the package, here for backward compatibility).
 #'
 update.TSClusters <- function(object, ..., evaluate = TRUE) {
     args <- as.pairlist(list(...))
 
     if (length(args) == 0L) {
-        message("Nothing to be updated")
+        if (evaluate) {
+            ## all_cent2 changed in v4.0.0, update here for backward compatibility
+            if (object@type %in% c("partitional", "fuzzy")) {
+                if (object@centroid %in% c("pam", "fcmdd") &&
+                    !is.null(object@control$distmat) &&
+                    !inherits(object@control$distmat, "Distmat"))
+                {
+                    object@control$distmat <- Distmat$new(distmat = object@control$distmat)
+                }
 
-        if (evaluate)
+                object@family@allcent <- all_cent2(object@centroid, object@control)
+            }
+
             return(object)
-        else
-            return(object@call)
+
+        } else return(object@call)
     }
 
     new_call <- object@call
@@ -366,7 +334,7 @@ update.TSClusters <- function(object, ..., evaluate = TRUE) {
 #' @aliases update,TSClusters
 #' @exportMethod update
 #'
-setMethod("update", signature(object = "TSClusters"), update.TSClusters)
+setMethod("update", methods::signature(object = "TSClusters"), update.TSClusters)
 
 # ==================================================================================================
 # predict from stats
@@ -422,7 +390,7 @@ predict.TSClusters <- function(object, newdata = NULL, ...) {
 #' @aliases predict,TSClusters
 #' @exportMethod predict
 #'
-setMethod("predict", signature(object = "TSClusters"), predict.TSClusters)
+setMethod("predict", methods::signature(object = "TSClusters"), predict.TSClusters)
 
 # ==================================================================================================
 # Plot
@@ -488,7 +456,7 @@ plot.TSClusters <- function(x, y, ...,
 
     ## plot dendrogram?
     if (inherits(x, "HierarchicalTSClusters") && type == "dendrogram") {
-        x <- S3Part(x, strictS3 = TRUE)
+        x <- methods::S3Part(x, strictS3 = TRUE)
         if (plot) graphics::plot(x, ...)
         return(invisible(NULL))
 
@@ -529,14 +497,11 @@ plot.TSClusters <- function(x, y, ...,
             L <- max(len, NROW(centroids[[id_clus]]))
             trail <- L - len
 
-            clusters[[id_clus]] <- mapply(cluster, trail,
-                                          SIMPLIFY = FALSE,
-                                          FUN = function(mvs, trail) {
-                                              rbind(mvs, matrix(NA, trail, nc))
-                                          })
+            clusters[[id_clus]] <- Map(cluster, trail, f = function(mvs, trail) {
+                rbind(mvs, matrix(NA, trail, nc))
+            })
 
             trail <- L - NROW(centroids[[id_clus]])
-
             centroids[[id_clus]] <- rbind(centroids[[id_clus]], matrix(NA, trail, nc))
         }
 
@@ -566,7 +531,6 @@ plot.TSClusters <- function(x, y, ...,
 
     ## time, cluster and colour indices
     color_ids <- integer(x@k)
-
     dfm_tcc <- mapply(x@cluster, L1, USE.NAMES = FALSE, SIMPLIFY = FALSE,
                       FUN = function(clus, len) {
                           t <- if (is.null(time)) seq_len(len) else time[1L:len]
@@ -577,7 +541,6 @@ plot.TSClusters <- function(x, y, ...,
 
                           data.frame(t = t, cl = cl, color = color)
                       })
-
     dfcm_tc <- mapply(1L:x@k, L2, USE.NAMES = FALSE, SIMPLIFY = FALSE,
                       FUN = function(clus, len) {
                           t <- if (is.null(time)) seq_len(len) else time[1L:len]
@@ -601,9 +564,9 @@ plot.TSClusters <- function(x, y, ...,
                                      value = numeric(),
                                      cl = factor(),
                                      color = factor()),
-                          aes_string(x = "t",
-                                     y = "value",
-                                     group = "L1"))
+                          ggplot2::aes_string(x = "t",
+                                              y = "value",
+                                              group = "L1"))
 
     ## add centroids first if appropriate, so that they are at the very back
     if (type %in% c("sc", "centroids")) {
@@ -628,7 +591,7 @@ plot.TSClusters <- function(x, y, ...,
 
         gg <- gg + ggplot2::geom_vline(data = ggdata[ggdata$cl %in% clus, , drop = FALSE],
                                        colour = "black", linetype = "longdash",
-                                       aes_string(xintercept = "vbreaks"))
+                                       ggplot2::aes_string(xintercept = "vbreaks"))
     }
 
     ## add facets, remove legend, apply kinda black-white theme
@@ -645,7 +608,6 @@ plot.TSClusters <- function(x, y, ...,
 
     ## plot without warnings in case I added NAs for multivariate cases
     if (plot) suppressWarnings(graphics::plot(gg))
-
     invisible(gg)
 }
 
@@ -653,7 +615,7 @@ plot.TSClusters <- function(x, y, ...,
 #' @aliases plot,TSClusters,missing
 #' @exportMethod plot
 #'
-setMethod("plot", signature(x = "TSClusters", y = "missing"), plot.TSClusters)
+setMethod("plot", methods::signature(x = "TSClusters", y = "missing"), plot.TSClusters)
 
 # ==================================================================================================
 # Cluster validity indices
@@ -719,14 +681,12 @@ cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
             }
         }
 
-        ## are valid indices still left?
-        if (length(type) == 0L)
-            return(CVIs)
+        ## are no valid indices left?
+        if (length(type) == 0L) return(CVIs)
 
         ## calculate some values that both Davies-Bouldin indices use
         if (any(type %in% c("DB", "DBstar"))) {
             S <- a@clusinfo$av_dist
-
             ## distance between centroids
             distcent <- do.call(a@family@dist,
                                 args = enlist(x = a@centroids,
@@ -766,9 +726,7 @@ cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
 
                        ab <- lapply(unique(a@cluster), function(k) {
                            idx <- a@cluster == k
-
                            this_a <- rowSums(distmat[idx, idx, drop = FALSE]) / c_k[idx]
-
                            this_b <- apply(distmat[idx, !idx, drop = FALSE], 1L, function(row) {
                                ret <- row / c_k[!idx]
                                ret <- min(tapply(ret, a@cluster[!idx], sum))
@@ -779,7 +737,6 @@ cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
                        })
 
                        ab <- do.call(rbind, ab)
-
                        sum((ab$b - ab$a) / apply(ab, 1L, max)) / nrow(distmat)
                    },
 
@@ -851,13 +808,13 @@ cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
 #' @aliases cvi,PartitionalTSClusters
 #' @exportMethod cvi
 #'
-setMethod("cvi", signature(a = "PartitionalTSClusters"), cvi_TSClusters)
+setMethod("cvi", methods::signature(a = "PartitionalTSClusters"), cvi_TSClusters)
 
 #' @rdname cvi
 #' @aliases cvi,HierarchicalTSClusters
 #' @exportMethod cvi
 #'
-setMethod("cvi", signature(a = "HierarchicalTSClusters"), cvi_TSClusters)
+setMethod("cvi", methods::signature(a = "HierarchicalTSClusters"), cvi_TSClusters)
 
 # ==================================================================================================
 # Functions to support package 'clue'
@@ -881,7 +838,7 @@ n_of_objects.TSClusters <- function(x) {
 #' @export
 #'
 cl_class_ids.TSClusters <- function(x) {
-    as.cl_class_ids(x@cluster)
+    clue::as.cl_class_ids(x@cluster)
 }
 
 #' @method as.cl_membership TSClusters
@@ -941,10 +898,10 @@ setAs("dtwclust", "TSClusters",
                        partitional = {
                            to <- methods::new("PartitionalTSClusters", base, override.family = FALSE)
 
-                           for (sl in slotNames(to)) {
+                           for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
 
-                               slot(to, sl) <- slot(from, sl)
+                               slot(to, sl) <- methods::slot(from, sl)
                            }
 
                            to@control <- partitional_control(pam.precompute = from@control@pam.precompute,
@@ -960,10 +917,10 @@ setAs("dtwclust", "TSClusters",
                        hierarchical = {
                            to <- methods::new("HierarchicalTSClusters", base, override.family = FALSE)
 
-                           for (sl in slotNames(to)) {
+                           for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
 
-                               slot(to, sl) <- slot(from, sl)
+                               slot(to, sl) <- methods::slot(from, sl)
                            }
 
                            to@control <- hierarchical_control(symmetric = from@control@symmetric,
@@ -978,10 +935,10 @@ setAs("dtwclust", "TSClusters",
                        fuzzy = {
                            to <- methods::new("FuzzyTSClusters", base, override.family = FALSE)
 
-                           for (sl in slotNames(to)) {
+                           for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
 
-                               slot(to, sl) <- slot(from, sl)
+                               slot(to, sl) <- methods::slot(from, sl)
                            }
 
                            to@control <- fuzzy_control(fuzziness = from@control@fuzziness,
@@ -995,10 +952,10 @@ setAs("dtwclust", "TSClusters",
                        tadpole = {
                            to <- methods::new("PartitionalTSClusters", base, override.family = FALSE)
 
-                           for (sl in slotNames(to)) {
+                           for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
 
-                               slot(to, sl) <- slot(from, sl)
+                               slot(to, sl) <- methods::slot(from, sl)
                            }
 
                            lb <- if (is.null(from@dots$lb)) "lbk" else from@dots$lb
@@ -1010,11 +967,13 @@ setAs("dtwclust", "TSClusters",
                            to
                        })
 
-          to@family <- methods::new("tsclustFamily",
-                                    preproc = from@family@preproc,
-                                    cluster = from@family@cluster,
-                                    dist = ifelse(from@type == "tadpole", "dtw_lb", from@distance),
-                                    allcent = if (is.null(from@call$centroid)) from@centroid else from@call$centroid)
+          to@family <- new("tsclustFamily",
+                           control = to@control,
+                           fuzzy = isTRUE(to@type == "fuzzy"),
+                           preproc = from@family@preproc,
+                           cluster = from@family@cluster,
+                           dist = if (from@type == "tadpole") "dtw_lb" else from@distance,
+                           allcent = if (is.null(from@call$centroid)) from@centroid else from@call$centroid)
 
           centroids <- from@centroids
           datalist <- from@datalist
@@ -1025,9 +984,6 @@ setAs("dtwclust", "TSClusters",
               }
           else if (to@type == "tadpole" && length(centroids))
               to@family@allcent <- function(dummy) { centroids[1L] } # for CVI's global_cent
-
-          assign("control", to@control, environment(to@family@dist))
-          assign("control", to@control, environment(to@family@allcent))
 
           to@args <- tsclust_args()
           to@args$preproc <- subset_dots(from@dots, to@family@preproc)
@@ -1041,10 +997,10 @@ setAs("dtwclust", "TSClusters",
               to@args$dist$window.type <- if (is.null(to@args$dist$window.size)) "none" else "slantedband"
           }
 
-          pr_entry <- pr_DB$get_entry(ifelse(from@type == "tadpole", "dtw_lb", from@distance))
+          pr_entry <- pr_DB$get_entry(if (from@type == "tadpole") "dtw_lb" else from@distance)
 
           if (is.function(pr_entry$FUN))
-            to@args$dist <- c(to@args$dist, subset_dots(from@dots, pr_entry$FUN))
+              to@args$dist <- c(to@args$dist, subset_dots(from@dots, pr_entry$FUN))
 
           if (tolower(to@centroid) == "dba") {
               to@args$cent <- list(window.size = from@control@window.size,
@@ -1053,6 +1009,22 @@ setAs("dtwclust", "TSClusters",
                                    delta = from@control@delta)
           }
 
+          if (to@type %in% c("partitional", "fuzzy") && to@centroid %in% c("pam", "fcmdd")) {
+              ## see Distmat.R
+              if (is.null(from@distmat)) {
+                  to@control$distmat <- Distmat$new(series = to@datalist,
+                                                    distance = to@distance,
+                                                    control = to@control,
+                                                    dist_args = to@args$dist,
+                                                    error.check = FALSE)
+              } else {
+                  to@control$distmat <- Distmat$new(distmat = from@distmat)
+              }
+
+              assign("control", to@control, environment(to@family@allcent))
+          }
+
+          to@args <- adjust_args(to@args, to@dots)
           to@seed <- as.integer(from@call$seed)
 
           to

@@ -8,7 +8,7 @@
 #' @param x,y A matrix or data frame where rows are time series, or a list of time series.
 #' @param window.size Window size to use with the LB and DTW calculation. See details.
 #' @param norm Pointwise distance. Either `"L1"` for Manhattan distance or `"L2"` for Euclidean.
-#' @param error.check Should inconsistencies in the data be checked?
+#' @template error-check
 #' @param pairwise Calculate pairwise distances?
 #' @param dtw.func Which function to use for core DTW the calculations, either "dtw" or "dtw_basic".
 #'   See [dtw::dtw()] and [dtw_basic()].
@@ -118,7 +118,7 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
     dtw.func <- match.arg(dtw.func, c("dtw", "dtw_basic"))
 
     if (dtw.func == "dtw")
-        method <- ifelse(norm == "L1", "DTW", "DTW2")
+        method <- if (norm == "L1") "DTW" else "DTW2"
     else
         method <- toupper(dtw.func)
 
@@ -149,7 +149,6 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
 
         X <- split_parallel(X)
         Y <- split_parallel(Y)
-
         validate_pairwise(X, Y)
 
         D <- foreach(X = X, Y = Y,
@@ -205,7 +204,6 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
                                                  dots = dots))
 
                          distmat[id_mat[id_changed, , drop = FALSE]] <- d_sub
-
                          id_nn <- apply(distmat, 1L, which.min)
                          id_mat[ , 2L] <- id_nn
                      }
@@ -216,5 +214,6 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
     class(D) <- "crossdist"
     attr(D, "method") <- "DTW_LB"
 
+    ## return
     D
 }

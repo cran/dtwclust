@@ -6,10 +6,10 @@
 \alias{dtwclustControl}
 \title{Class definition for \code{dtwclustControl}}
 \description{
-Formal S4 class with several control parameters used in \code{\link[=dtwclust]{dtwclust()}}.
+\strong{Deprecated} S4 class with several control parameters used in \code{\link[=dtwclust]{dtwclust()}}.
 }
 \details{
-Default values are shown at the end.
+Please refer to \link{tsclust-controls} for the new interfaces.
 }
 \section{Slots}{
 

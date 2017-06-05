@@ -12,21 +12,22 @@ lb_improved(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
 
 \item{y}{A time series with the same length as \code{x} (query).}
 
-\item{window.size}{Window size for envelop calculation. See details.}
+\item{window.size}{Window size for envelope calculation. See details.}
 
 \item{norm}{Vector norm. Either \code{"L1"} for Manhattan distance or \code{"L2"} for Euclidean.}
 
-\item{lower.env}{Optionally, a pre-computed lower envelop for \strong{\code{y}} can be provided (non-proxy
+\item{lower.env}{Optionally, a pre-computed lower envelope for \strong{\code{y}} can be provided (non-proxy
 version only).}
 
-\item{upper.env}{Optionally, a pre-computed upper envelop for \strong{\code{y}} can be provided (non-proxy
+\item{upper.env}{Optionally, a pre-computed upper envelope for \strong{\code{y}} can be provided (non-proxy
 version only).}
 
 \item{force.symmetry}{If \code{TRUE}, a second lower bound is calculated by swapping \code{x} and \code{y}, and
 whichever result has a \emph{higher} distance value is returned. The proxy version can only work if
 a square matrix is obtained, but use carefully.}
 
-\item{error.check}{Check data inconsistencies?}
+\item{error.check}{Logical indicating whether the function should try to detect inconsistencies
+and give more informative errors messages. Also used internally to avoid repeating checks.}
 }
 \value{
 The improved lower bound for the DTW distance.
@@ -38,14 +39,19 @@ between two time series. It uses a Sakoe-Chiba constraint.
 \details{
 The reference time series should go in \code{x}, whereas the query time series should go in \code{y}.
 
+If the envelopes are provided, they should be provided together. If either one is missing, both
+will be computed.
+
 The windowing constraint uses a centered window. The calculations expect a value in
 \code{window.size} that represents the distance between the point considered and one of the edges
 of the window. Therefore, if, for example, \code{window.size = 10}, the warping for an
 observation \eqn{x_i} considers the points between \eqn{x_{i-10}} and \eqn{x_{i+10}}, resulting
 in \code{10(2) + 1 = 21} observations falling within the window.
 }
-\note{
-The lower bound is defined for time series of equal length only and is \strong{not} symmetric.
+\section{Note}{
+
+
+The lower bound is only defined for time series of equal length and is \strong{not} symmetric.
 
 If you wish to calculate the lower bound between several time series, it would be better to use
 the version registered with the \code{proxy} package, since it includes some small optimizations. The
@@ -55,6 +61,7 @@ The proxy version of \code{force.symmetry} should only be used when only \code{x
 and \code{y} are identical. It compares the lower and upper triangular of the resulting distance
 matrix and forces symmetry in such a way that the tightest lower bound is obtained.
 }
+
 \examples{
 
 # Sample data

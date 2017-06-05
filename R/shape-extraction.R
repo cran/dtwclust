@@ -12,6 +12,8 @@
 #'   if `NULL`. For multivariate series, this should be a matrix with the same characteristics as
 #'   the matrices in `X`. **It will be z-normalized**.
 #' @param znorm Logical flag. Should z-scores be calculated for `X` before processing?
+#' @param ... Further arguments for [zscore()].
+#' @template error-check
 #'
 #' @details
 #'
@@ -55,29 +57,23 @@
 #'         type = "l", col = 1:5)
 #' points(C)
 #'
-shape_extraction <- function(X, centroid = NULL, znorm = FALSE) {
+shape_extraction <- function(X, centroid = NULL, znorm = FALSE, ..., error.check = TRUE) {
     X <- any2list(X)
-
-    check_consistency(X, "vltslist")
+    if (error.check) {
+        check_consistency(X, "vltslist")
+        if (!is.null(centroid)) check_consistency(centroid, "ts")
+    }
 
     ## utils.R
     if (is_multivariate(X)) {
-        ## multivariate
-        mv <- reshape_multviariate(X, centroid) # utils.R
-
-        new_c <- mapply(mv$series, mv$cent,
-                        SIMPLIFY = FALSE,
-                        FUN = function(xx, cc) {
-                            new_c <- shape_extraction(xx, cc, znorm = znorm)
-                        })
-
+        mv <- reshape_multivariate(X, centroid) # utils.R
+        new_c <- Map(mv$series, mv$cent, f = function(xx, cc, ...) {
+            new_c <- shape_extraction(xx, cc, znorm = znorm, ..., error.check = FALSE)
+        })
         return(do.call(cbind, new_c))
     }
 
-    if (znorm)
-        Xz <- zscore(X)
-    else
-        Xz <- X
+    Xz <- if (znorm) zscore(X, ...) else X
 
     ## make sure at least one series is not just a flat line at zero
     if (all(sapply(Xz, sum) == 0)) {
@@ -93,41 +89,25 @@ shape_extraction <- function(X, centroid = NULL, znorm = FALSE) {
 
         } else {
             centroid <- Xz[[sample(length(Xz), 1L)]] # random choice as reference
-
             A <- lapply(Xz, function(a) { SBD(centroid, a)$yshift })
-
             A <- do.call(rbind, A)
         }
 
     } else {
-        check_consistency(centroid, "ts")
-
-        centroid <- zscore(centroid) # use given reference
-
+        centroid <- zscore(centroid, ...) # use given reference
         A <- lapply(Xz, function(a) { SBD(centroid, a)$yshift })
-
         A <- do.call(rbind, A)
     }
 
-    Y <- zscore(A)
-
-    if (is.matrix(Y))
-        S <- t(Y) %*% Y
-    else
-        S <- Y %*% t(Y)
-
+    Y <- zscore(A, ...)
+    S <- if (is.matrix(Y)) t(Y) %*% Y else Y %*% t(Y)
     nc <- ncol(A)
     P <- diag(nc) - 1 / nc * matrix(1, nc, nc)
     M <- P %*% S %*% P
-
-    ksc <- Re(eigen(M)$vectors[ , 1L, drop = TRUE])
-
+    ksc <- Re(RSpectra::eigs_sym(M, 1L)$vectors[ , 1L, drop = TRUE])
     d1 <- lnorm(A[1L, , drop = TRUE] - ksc, 2)
     d2 <- lnorm(A[1L, , drop = TRUE] + ksc, 2)
-
     if (d1 >= d2) ksc <- -ksc
-
-    ksc <- zscore(ksc)
-
+    ksc <- zscore(ksc, ...)
     ksc
 }

@@ -2,66 +2,42 @@
 # Custom functions to calculate centroids
 # ==================================================================================================
 
-all_cent2 <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FALSE) {
+all_cent2 <- function(case = NULL, control) {
     ## ---------------------------------------------------------------------------------------------
     ## pam
-    pam_cent <- function(x, x_split, cent, cl_id, id_changed, ...) {
-        if (is.null(distmat)) {
-            new_cent <- lapply(x_split, function(xsub) {
-                distmat <- distfun(xsub, xsub, ...)
-
-                d <- apply(distmat, 1L, sum)
-
-                i_cent <- xsub[[which.min(d)]]
-
-                ## update indices, aggregated at the end of main allcent function
-                attr(i_cent, "id_cent") <- pmatch(names(xsub[which.min(d)]), names(x))
-
-                i_cent
-            })
-
-        } else {
-            id_x <- lapply(id_changed, function(cl_num) which(cl_id == cl_num))
-
-            new_cent <- lapply(id_x, function(i_x) {
-                d <- apply(distmat[i_x, i_x, drop = FALSE], 1L, sum)
-
-                i_cent <- x[[i_x[which.min(d)]]]
-
-                ## update indices, aggregated at the end of main allcent function
-                attr(i_cent, "id_cent") <- i_x[which.min(d)]
-
-                i_cent
-            })
-        }
+    pam_cent <- function(x, x_split, cent, id_changed, cl_id, ...) {
+        id_x <- lapply(id_changed, function(cl_num) { which(cl_id == cl_num) })
 
         ## return
-        new_cent
+        Map(id_x, id_changed, f = function(i_x, i_cl) {
+            d <- control$distmat[i_x, i_x, drop = FALSE]
+            d <- rowSums(d)
+            id_cent <- i_x[which.min(d)]
+            i_cent <- x[[id_cent]]
+            if (inherits(control$distmat, "Distmat")) control$distmat$id_cent[i_cl] <- id_cent
+            i_cent
+        })
     }
 
     ## ---------------------------------------------------------------------------------------------
     ## shape
-    shape_cent <- function(x_split, cent, ...) {
+    shape_cent <- function(x, x_split, cent, id_changed, cl_id, ...) {
+        ## not all arguments are used, but I want them to be isolated from ellipsis
+        dots <- list(...)
+        dots$error.check <- FALSE
         x_split <- split_parallel(x_split)
         cent <- split_parallel(cent)
 
-        new_cent <- foreach(x_split = x_split,
-                            cent = cent,
-                            .combine = c,
-                            .multicombine = TRUE,
-                            .packages = "dtwclust") %op% {
-                                mapply(x_split, cent,
-                                       SIMPLIFY = FALSE,
-                                       FUN = function(x, c) {
-                                           new_c <- shape_extraction(x, c)
-
-                                           ## return
-                                           new_c
-                                       })
-                            }
-
         ## return
-        new_cent
+        foreach(x_split = x_split, cent = cent,
+                .combine = c,
+                .multicombine = TRUE,
+                .packages = "dtwclust",
+                .export = c("enlist")) %op% {
+                    Map(x_split, cent, f = function(x, cent) {
+                        do.call(shape_extraction, enlist(X = x, centroid = cent, dots = dots))
+                    })
+                }
     }
 
     ## ---------------------------------------------------------------------------------------------
@@ -70,79 +46,57 @@ all_cent2 <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FAL
         ## not all arguments are used, but I want them to be isolated from ellipsis
         dots <- list(...)
         dots$error.check <- FALSE
-
         x_split <- split_parallel(x_split)
         cent <- split_parallel(cent)
 
-        new_cent <- foreach(x_split = x_split,
-                            cent = cent,
-                            .combine = c,
-                            .multicombine = TRUE,
-                            .packages = "dtwclust",
-                            .export = c("enlist")) %op% {
-                                mapply(x_split, cent,
-                                       SIMPLIFY = FALSE,
-                                       FUN = function(x, c) {
-                                           new_c <- do.call(DBA,
-                                                            enlist(X = x,
-                                                                   centroid = c,
-                                                                   dots = dots))
-
-                                           ## return
-                                           new_c
-                                       })
-                            }
-
         ## return
-        new_cent
+        foreach(x_split = x_split, cent = cent,
+                .combine = c,
+                .multicombine = TRUE,
+                .packages = "dtwclust",
+                .export = c("enlist")) %op% {
+                    Map(x_split, cent, f = function(x, cent) {
+                        do.call(DBA, enlist(X = x, centroid = cent, dots = dots))
+                    })
+                }
     }
 
     ## ---------------------------------------------------------------------------------------------
     ## mean
     mean_cent <- function(x_split, ...) {
-        new_cent <- lapply(x_split, function(xx) {
+        ## return
+        lapply(x_split, function(xx) {
             if (is_multivariate(xx)) {
-                ## multivariate
                 ncols <- ncol(xx[[1L]]) # number of dimensions should be equal
                 ncols <- rep(1L:ncols, length(xx))
-
                 xx <- do.call(cbind, xx)
                 xx <- split.data.frame(t(xx), ncols)
                 do.call(cbind, lapply(xx, colMeans))
 
             } else {
-                ## univariate
-                xx <- do.call(rbind, xx)
-                colMeans(xx) # utils.R
+                xx <- do.call(cbind, xx)
+                rowMeans(xx)
             }
         })
-
-        ## return
-        new_cent
     }
 
     ## ---------------------------------------------------------------------------------------------
     ## median
     median_cent <- function(x_split, ...) {
-        new_cent <- lapply(x_split, function(xx) {
+        ## return
+        lapply(x_split, function(xx) {
             if (is_multivariate(xx)) {
-                ## multivariate
                 ncols <- ncol(xx[[1L]]) # number of dimensions should be equal
                 ncols <- rep(1L:ncols, length(xx))
-
                 xx <- do.call(cbind, xx)
                 xx <- split.data.frame(t(xx), ncols)
                 do.call(cbind, lapply(xx, colMedians))
 
             } else {
-                ## univariate
                 xx <- do.call(rbind, xx)
                 colMedians(xx) # utils.R
             }
         })
-
-        ## return
-        new_cent
     }
 
     ## ---------------------------------------------------------------------------------------------
@@ -150,14 +104,13 @@ all_cent2 <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FAL
     fcm_cent <- function(x, u, k, ...) {
         ## utils.R
         if (is_multivariate(x)) {
-            mv <- reshape_multviariate(x, NULL)
+            mv <- reshape_multivariate(x, NULL)
 
             cent <- lapply(mv$series, fcm_cent, u = u)
             cent <- lapply(1L:k, function(idc) {
                 sapply(cent, function(cent) { cent[idc, , drop = TRUE] })
             })
             cent <- lapply(cent, "dimnames<-", NULL)
-
             cent
 
         } else {
@@ -169,18 +122,16 @@ all_cent2 <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FAL
     ## ---------------------------------------------------------------------------------------------
     ## fcmdd
     fcmdd_cent <- function(x, u, k, ...) {
-        q <- distmat %*% u
+        q <- control$distmat$distmat %*% u
         idc <- apply(q, 2L, which.min)
-
         cent <- x[idc]
-        attr(cent, "id_cent") <- idc
-
+        control$distmat$id_cent <- idc
         cent
     }
 
     ## ---------------------------------------------------------------------------------------------
     ## allcent
-    if (fuzzy) {
+    if (case %in% c("fcm", "fcmdd")) {
         ## function created here to capture objects of this environment (closure)
         allcent <- function(x, cl_id, k, cent, cl_old, ...) {
             ## cent and cl_old are unused here, but R complains if signatures don't match
@@ -206,9 +157,7 @@ all_cent2 <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FAL
                 id_changed <- union(cl_id[id_changed], cl_old[id_changed])
             }
 
-            if (length(id_changed) == 0L) {
-                return(cent)
-            }
+            if (length(id_changed) == 0L) return(cent)
 
             ## Split data according to cluster memebership
             x_split <- split(x, factor(cl_id, levels = 1L:k))
@@ -233,12 +182,10 @@ all_cent2 <- function(case = NULL, distmat = NULL, distfun, control, fuzzy = FAL
 
             ## If so, initialize new clusters
             if (num_empty > 0L)
-                cent[empty_clusters] <- reinitalize_clusters(x, cent, case, num_empty)
+                cent[empty_clusters] <- reinit_clusters(x, cent, case, num_empty,
+                                                        empty_clusters, control)
 
-            ## aggregate updated indices
-            if (case == "pam")
-                attr(cent, "id_cent") <- sapply(cent, attr, which = "id_cent")
-
+            ## return
             cent
         }
     }

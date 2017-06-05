@@ -11,7 +11,7 @@
 #'   if `NULL`. For multivariate series, this should be a matrix with the same characteristics as
 #'   the matrices in `X`.
 #' @param ... Further arguments for [dtw_basic()]. However, the following are already pre-
-#'   specified: `window.size`, `norm` (passed along), `backtrack` and `gcm`.
+#'   specified: `window.size`, `norm` (passed along), and `backtrack`.
 #' @param window.size Window constraint for the DTW calculations. `NULL` means no constraint. A
 #'   slanted band is used by default.
 #' @param norm Norm for the local cost matrix of DTW. Either "L1" for Manhattan distance or "L2" for
@@ -19,8 +19,12 @@
 #' @param max.iter Maximum number of iterations allowed.
 #' @param delta At iteration `i`, if `all(abs(centroid_{i}` `-` `centroid_{i-1})` `< delta)`,
 #'   convergence is assumed.
-#' @param error.check Should inconsistencies in the data be checked?
+#' @template error-check
 #' @param trace If `TRUE`, the current iteration is printed to output.
+#' @param gcm Optional matrix to pass to [dtw_basic()] (for the case when `backtrack = TRUE`). To
+#'   define the matrix size, it should be assumed that `x` is the *longest* series in `X`, and `y`
+#'   is the `centroid` if provided or `x` otherwise. Ignored in parallel computations.
+#' @param mv.ver Multivariate version to use. See below.
 #'
 #' @details
 #'
@@ -35,11 +39,24 @@
 #'
 #' @return The average time series.
 #'
-#' @template parallel
+#' @section Multivariate series:
+#'
+#'   There are currently 2 versions of DBA implemented for multivariate series:
+#'
+#'   - If `mv.ver = "by-variable"`, then each variable of `X` and `centroid` are extracted, and the
+#'     univariate version of the algorithm is applied to each set of variables, binding the results
+#'     by column. Therefore, the DTW backtracking is different for each variable.
+#'   - If `mv.ver = "by-series"`, then all variables are considered at the same time, so the DTW
+#'     backtracking is computed based on each multivariate series as a whole. This version was
+#'     implemented in version 4.0.0 of \pkg{dtwclust}, and it might be faster.
 #'
 #' @note
 #'
 #' The indices of the DTW alignment are obtained by calling [dtw_basic()] with `backtrack = TRUE`.
+#'
+#' The new \code{C++} implementation (v4.0.0) has slightly different numerical accuracy (in the
+#' order of 10^-16, at least in x64 systems), and no longer supports parallelization directly. The
+#' calls through [tsclust()] can still perform different DBA calculations in parallel.
 #'
 #' @references
 #'
@@ -66,32 +83,15 @@
 #' # Same result?
 #' all(dtw.avg == dtw.avg2)
 #'
-#' \dontrun{
-#' #### Running DBA with parallel support
-#' # For such a small dataset, this is probably slower in parallel
-#' require(doParallel)
-#'
-#' # Create parallel workers
-#' cl <- makeCluster(detectCores())
-#' invisible(clusterEvalQ(cl, library(dtwclust)))
-#' registerDoParallel(cl)
-#'
-#' # DTW Average
-#' cen <- DBA(CharTraj[1:5], CharTraj[[1]], trace = TRUE)
-#'
-#' # Stop parallel workers
-#' stopCluster(cl)
-#'
-#' # Return to sequential computations
-#' registerDoSEQ()
-#' }
-#'
 DBA <- function(X, centroid = NULL, ...,
                 window.size = NULL, norm = "L1",
                 max.iter = 20L, delta = 1e-3,
-                error.check = TRUE, trace = FALSE)
+                error.check = TRUE, trace = FALSE,
+                gcm = NULL, mv.ver = "by-variable")
 {
     X <- any2list(X)
+    mv.ver <- match.arg(mv.ver, c("by-variable", "by-series"))
+    mv.ver <- switch(mv.ver, "by-variable" = 1L, "by-series" = 2L)
 
     if (is.null(centroid)) centroid <- X[[sample(length(X), 1L)]] # Random choice
 
@@ -100,100 +100,51 @@ DBA <- function(X, centroid = NULL, ...,
         check_consistency(centroid, "ts")
     }
 
-    ## utils.R
-    if (is_multivariate(X)) {
-        mv <- reshape_multviariate(X, centroid) # utils.R
+    if (is.null(window.size))
+        window.size <- -1L
+    else
+        window.size <- check_consistency(window.size, "window")
 
-        new_c <- mapply(mv$series, mv$cent, SIMPLIFY = FALSE,
-                        FUN = function(xx, cc) {
-                            DBA(xx, cc, ...,
-                                norm = norm,
-                                window.size = window.size,
-                                max.iter = max.iter,
-                                delta = delta,
-                                error.check = FALSE,
-                                trace = trace)
-                        })
-
-        return(do.call(cbind, new_c))
-    }
-
-    norm <- match.arg(norm, c("L1", "L2"))
-
-    if (!is.null(window.size)) window.size <- check_consistency(window.size, "window")
+    if (max.iter < 1L)
+        stop("Maximum iterations must be positive.")
+    else
+        max.iter <- as.integer(max.iter)[1L]
 
     dots <- list(...)
+    step.pattern <- dots$step.pattern
 
-    ## maximum length of considered series
-    L <- max(lengths(X))
+    if (is.null(step.pattern) || identical(step.pattern, symmetric2))
+        step.pattern <- 2
+    else if (identical(step.pattern, symmetric1))
+        step.pattern <- 1
+    else
+        stop("step.pattern must be either symmetric1 or symmetric2 (without quotes)")
 
-    Xs <- split_parallel(X)
+    if (length(delta) > 1L) delta <- delta[1L]
+    trace <- isTRUE(trace)
+    norm <- match.arg(norm, c("L1", "L2"))
+    norm <- switch(norm, "L1" = 1, "L2" = 2)
+    L <- max(sapply(X, NROW)) + 1L ## maximum length of considered series + 1L
+    mv <- is_multivariate(c(X, list(centroid)))
+    nr <- NROW(centroid) + 1L
 
-    ## pre-allocate local cost matrices
-    GCM <- NULL # for CHECK
-    GCMs <- lapply(Xs, function(dummy) { list(matrix(0, L + 1L, length(centroid) + 1L)) })
+    ## pre-allocate cost matrices
+    if (is.null(gcm))
+        gcm <- matrix(0, L, nr)
+    else if (!is.matrix(gcm) || nrow(gcm) < L || ncol(gcm) < nr)
+        stop("DBA: Dimension inconsistency in 'gcm'")
+    else if (storage.mode(gcm) != "double")
+        stop("DBA: If provided, 'gcm' must have 'double' storage mode.")
 
-    ## Iterations
-    iter <- 1L
-    centroid_old <- centroid
+    ## All parameters for dtw_basic()
+    dots <- list(window.size = window.size,
+                 norm = norm,
+                 gcm = gcm,
+                 step.pattern = step.pattern,
+                 backtrack = TRUE)
 
-    if (trace) cat("\tDBA Iteration:")
-
-    while(iter <= max.iter) {
-        ## Return the coordinates of each series in X grouped by the coordinate they match to in the
-        ## centroid time series.
-        ## Also return the number of coordinates used in each case (for averaging below).
-        xg <- foreach(X = Xs, GCM = GCMs,
-                      .combine = c,
-                      .multicombine = TRUE,
-                      .export = "enlist",
-                      .packages = c("dtwclust", "stats")) %op% {
-                          mapply(X, GCM, SIMPLIFY = FALSE, FUN = function(x, gcm) {
-                              d <- do.call(dtw_basic,
-                                           enlist(x = x, y = centroid,
-                                                  window.size = window.size, norm = norm,
-                                                  backtrack = TRUE, gcm = gcm,
-                                                  dots = dots))
-
-                              x.sub <- stats::aggregate(x[d$index1],
-                                                        by = list(ind = d$index2),
-                                                        sum)
-
-                              n.sub <- stats::aggregate(x[d$index1],
-                                                        by = list(ind = d$index2),
-                                                        length)
-
-                              cbind(sum = x.sub$x, n = n.sub$x)
-                          })
-                      }
-
-        ## Put everything in one big data frame
-        xg <- reshape2::melt(xg)
-
-        ## Aggregate according to index of centroid time series (Var1) and the variable type (Var2)
-        xg <- stats::aggregate(xg$value, by = list(xg$Var1, xg$Var2), sum)
-
-        ## Average
-        centroid <- xg$x[xg$Group.2 == "sum"] / xg$x[xg$Group.2 == "n"]
-
-        if (isTRUE(all.equal(centroid, centroid_old, tolerance = delta))) {
-            if (trace) cat("", iter ,"- Converged!\n")
-
-            break
-
-        } else {
-            centroid_old <- centroid
-
-            if (trace) {
-                cat(" ", iter, ",", sep = "")
-                if (iter %% 10 == 0) cat("\n\t\t")
-            }
-
-            iter <- iter + 1L
-        }
-    }
-
-    if (iter > max.iter && trace) cat(" Did not 'converge'\n")
-
-    as.numeric(centroid)
+    ## C++ code
+    new_cent <- .Call(C_dba, X, centroid, max.iter, delta, trace, mv, mv.ver, dots, PACKAGE = "dtwclust")
+    if (mv) dimnames(new_cent) <- dimnames(centroid)
+    new_cent
 }

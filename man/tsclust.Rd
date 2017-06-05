@@ -7,7 +7,7 @@
 tsclust(series = NULL, type = "partitional", k = 2L, ...,
   preproc = NULL, distance = "dtw_basic", centroid = ifelse(type ==
   "fuzzy", "fcm", "pam"), control = do.call(paste0(type, "_control"), list()),
-  args = tsclust_args(), seed = NULL, trace = FALSE)
+  args = tsclust_args(), seed = NULL, trace = FALSE, error.check = TRUE)
 }
 \arguments{
 \item{series}{A list of series, a numeric matrix or a data frame. Matrices and data frames are
@@ -38,6 +38,9 @@ See \code{\link[=tsclust_args]{tsclust_args()}}}
 \item{seed}{Random seed for reproducibility.}
 
 \item{trace}{Logical flag. If \code{TRUE}, more output regarding the progress is printed to screen.}
+
+\item{error.check}{Logical indicating whether the function should try to detect inconsistencies
+and give more informative errors messages. Also used internally to avoid repeating checks.}
 }
 \value{
 An object with an appropriate class from \linkS4class{TSClusters}.
@@ -169,9 +172,9 @@ Only \code{dtw}, \code{dtw2}, \code{sbd} and \code{gak} support series of differ
 probably unsuitable for direct clustering unless series are very easily distinguishable.
 
 If you know that the distance function is symmetric, and you use a hierarchical algorithm, or a
-partitional algorithm with PAM centroids and \code{pam.precompute} = \code{TRUE}, some time can be saved
-by calculating only half the distance matrix. Therefore, consider setting the symmetric control
-parameter to \code{TRUE} if this is the case.
+partitional algorithm with PAM centroids, some time can be saved by calculating only half the
+distance matrix. Therefore, consider setting the symmetric control parameter to \code{TRUE} if this
+is the case.
 }
 
 \section{Preprocessing}{
@@ -286,7 +289,8 @@ plot(hc.l2[[which.min(sapply(hc.l2, cvi, b = labels, type = "VI"))]])
 mv <- CharTrajMV[1L:20L]
 
 # Using GAK distance
-mvc <- tsclust(mv, k = 4L, distance = "gak", seed = 390)
+mvc <- tsclust(mv, k = 4L, distance = "gak", seed = 390,
+               args = tsclust_args(dist = list(sigma = 100)))
 
 # Note how the variables of each series are appended one after the other in the plot
 plot(mvc)

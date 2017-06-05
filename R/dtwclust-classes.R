@@ -1,43 +1,21 @@
 #' Class definition for `dtwclustFamily`
 #'
-#' Formal S4 class with a family of functions used in [dtwclust()].
+#' **Deprecated** S4 class with a family of functions used in [dtwclust()].
 #'
 #' @name dtwclustFamily-class
 #' @rdname dtwclustFamily-class
+#' @include tsclust-classes.R
 #' @aliases dtwclustFamily
 #' @exportClass dtwclustFamily
 #'
 #' @details
 #'
-#' The custom implementations also handle parallelization.
-#'
-#' Since the distance function makes use of `proxy`, it also supports any extra [proxy::dist()]
-#' parameters in `...`.
-#'
-#' The prototype includes the `cluster` function for partitional methods, as well as a pass-through
-#' `preproc` function.
+#' Please refer to [tsclustFamily-class] for the new class.
 #'
 #' @slot dist The function to calculate the distance matrices.
 #' @slot allcent The function to calculate centroids on each iteration.
 #' @slot cluster The function used to assign a series to a cluster.
 #' @slot preproc The function used to preprocess the data (relevant for [stats::predict()]).
-#'
-#' @examples
-#'
-#' # The dist() function in dtwclustFamily works like proxy::dist() but supports
-#' # parallelization and optimized symmetric calculations. If you like, you can
-#' # use the function more or less directly, but provide a control argument when
-#' # creating the family.
-#'
-#' \dontrun{
-#' data(uciCT)
-#' fam <- new("dtwclustFamily", dist = "gak",
-#'            control = list(symmetric = TRUE, window.size = 18L))
-#' fam@dist(CharTraj)
-#' }
-#'
-#' # If you want the fuzzy family, use fuzzy = TRUE
-#' ffam <- new("dtwclustFamily", control = new("dtwclustControl"), fuzzy = TRUE)
 #'
 setClass("dtwclustFamily",
          slots = c(dist = "function",
@@ -59,7 +37,7 @@ methods::setClassUnion("intORnull", c("integer", "NULL"))
 
 #' Class definition for `dtwclustControl`
 #'
-#' Formal S4 class with several control parameters used in [dtwclust()].
+#' **Deprecated** S4 class with several control parameters used in [dtwclust()].
 #'
 #' @name dtwclustControl-class
 #' @rdname dtwclustControl-class
@@ -68,7 +46,7 @@ methods::setClassUnion("intORnull", c("integer", "NULL"))
 #'
 #' @details
 #'
-#' Default values are shown at the end.
+#' Please refer to [tsclust-controls] for the new interfaces.
 #'
 #' @slot window.size Integer or `NULL`. Window constraint for GAK, DTW, DBA and LB calculations.
 #'   `NULL` means no constraint.
@@ -149,18 +127,9 @@ setClass("dtwclustControl",
                                packages = character(0))
 )
 
-## For dtwclust class
-methods::setClass("proc_time4", contains = "numeric", slots = c(names = "character"))
-methods::setOldClass("proc_time", S4Class = "proc_time4")
-methods::removeClass("proc_time4")
-
-methods::setClass("hclust4", contains = "list", slots = c(names = "character"))
-methods::setOldClass("hclust", S4Class = "hclust4")
-methods::removeClass("hclust4")
-
 #' Class definition for `dtwclust`
 #'
-#' Formal S4 class.
+#' **Deprecated** S4 class.
 #'
 #' @name dtwclust-class
 #' @rdname dtwclust-class
@@ -168,13 +137,7 @@ methods::removeClass("hclust4")
 #'
 #' @details
 #'
-#' This class contains [stats::hclust()] as superclass and supports all its methods. Plot is a
-#' special case (see [dtwclust-methods]).
-#'
-#' Please note that not all slots will contain valid information for all clustering types. In some
-#' cases, for example for fuzzy and hierarchical clustering, some results are computed assuming a
-#' hard partition is created based on the fuzzy memberships or dendrogram tree, and the provided
-#' value of `k`.
+#' Please refer to [TSClusters-class] for the new class.
 #'
 #' If you want to transform a dtwclust-class object to [TSClusters-class], just use:
 #'

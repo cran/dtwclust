@@ -43,6 +43,12 @@
 #'
 #' @note
 #'
+#' The \pkg{methods} [package][methods::methods-package] must be attached in order for some internal
+#' functions to work properly. This is usually done automatically by `R`, with [utils::Rscript()]
+#' being an exception. As of \pkg{dtwclust} version 3.2.0, attaching the \pkg{methods} package is
+#' also done when attaching \pkg{dtwclust} (via [base::library()]), so please always attach the
+#' package before using its functionality.
+#'
 #' This software package was developed independently of any organization or institution that is or
 #' has been associated with the author.
 #'
@@ -58,23 +64,60 @@
 #'
 #' @useDynLib dtwclust, .registration = TRUE
 #'
-#' @import clue
 #' @import foreach
-#' @import ggplot2
-#' @import methods
+#'
+#' @importFrom clue as.cl_class_ids
+#' @importFrom clue as.cl_membership
+#' @importFrom clue cl_class_ids
+#' @importFrom clue cl_membership
+#' @importFrom clue is.cl_dendrogram
+#' @importFrom clue is.cl_hard_partition
+#' @importFrom clue is.cl_hierarchy
+#' @importFrom clue is.cl_partition
+#' @importFrom clue n_of_classes
+#' @importFrom clue n_of_objects
 #'
 #' @importFrom dtw dtw
 #' @importFrom dtw symmetric1
 #' @importFrom dtw symmetric2
 #'
-#' @importFrom caTools runmin
-#' @importFrom caTools runmax
-#'
-#' @importFrom flexclust randIndex
 #' @importFrom flexclust clusterSim
 #' @importFrom flexclust comPart
+#' @importFrom flexclust randIndex
+#'
+#' @importFrom ggplot2 aes_string
+#' @importFrom ggplot2 facet_wrap
+#' @importFrom ggplot2 geom_line
+#' @importFrom ggplot2 geom_vline
+#' @importFrom ggplot2 ggplot
+#' @importFrom ggplot2 guides
+#' @importFrom ggplot2 labs
+#' @importFrom ggplot2 theme_bw
 #'
 #' @importFrom graphics plot
+#'
+#' @importClassesFrom Matrix sparseMatrix
+#' @importFrom Matrix forceSymmetric
+#' @importFrom Matrix rowSums
+#' @importFrom Matrix sparseMatrix
+#' @importFrom Matrix summary
+#'
+#' @importFrom methods S3Part
+#' @importFrom methods as
+#' @importFrom methods callNextMethod
+#' @importFrom methods initialize
+#' @importFrom methods new
+#' @importFrom methods setAs
+#' @importFrom methods setClass
+#' @importFrom methods setClassUnion
+#' @importFrom methods setGeneric
+#' @importFrom methods setValidity
+#' @importFrom methods show
+#' @importFrom methods signature
+#' @importFrom methods slot
+#' @importFrom methods slot<-
+#' @importFrom methods slotNames
+#' @importFrom methods validObject
 #'
 #' @importFrom parallel splitIndices
 #'
@@ -82,6 +125,8 @@
 #'
 #' @importFrom proxy dist
 #' @importFrom proxy pr_DB
+#'
+#' @importFrom RSpectra eigs_sym
 #'
 #' @importFrom Rcpp evalCpp
 #'
@@ -92,20 +137,41 @@
 #'
 #' @importFrom stats aggregate
 #' @importFrom stats approx
+#' @importFrom stats as.dist
+#' @importFrom stats as.hclust
 #' @importFrom stats convolve
 #' @importFrom stats cutree
 #' @importFrom stats fft
 #' @importFrom stats hclust
 #' @importFrom stats median
 #' @importFrom stats nextn
-#' @importFrom stats update
 #' @importFrom stats predict
 #' @importFrom stats runif
-#' @importFrom stats as.dist
-#' @importFrom stats as.hclust
+#' @importFrom stats update
 #'
-#' @importFrom utils packageVersion
 #' @importFrom utils head
+#' @importFrom utils packageVersion
+#'
+NULL ## remember to check methods imports after removing dtwclust()
+
+#' Deprecated functionality in \pkg{dtwclust}
+#'
+#' @name dtwclust-deprecated
+#' @aliases dtwclust-deprecated
+#'
+#' @description
+#'
+#' The following functions and/or classes are deprecated and will be eventually removed:
+#'
+#' - [dtwclust()]
+#' - [dtwclustFamily-class]
+#' - [dtwclustControl-class]
+#' - [dtwclust-class]
+#' - [dtwclust-methods]
+#' - [randIndex()]
+#' - [clusterSim()]
+#' - [create_dtwclust()]
+#' - [compute_envelop()]
 #'
 NULL
 
@@ -126,7 +192,7 @@ NULL
                                description = "Basic and maybe faster DTW distance",
                                PACKAGE = "dtwclust", PREFUN = proxy_prefun)
 
-    ## Register LB_Keogh with the 'proxy' package for distance matrix calculation
+    ## Register LB_Keogh
     if (!check_consistency("LB_Keogh", "dist", silent = TRUE))
         proxy::pr_DB$set_entry(FUN = lb_keogh_proxy, names=c("LBK", "LB_Keogh", "lbk"),
                                loop = FALSE, type = "metric", distance = TRUE,
@@ -134,7 +200,7 @@ NULL
                                PACKAGE = "dtwclust", PREFUN = proxy_prefun)
 
 
-    ## Register LB_Improved with the 'proxy' package for distance matrix calculation
+    ## Register LB_Improved
     if (!check_consistency("LB_Improved", "dist", silent = TRUE))
         proxy::pr_DB$set_entry(FUN = lb_improved_proxy, names=c("LBI", "LB_Improved", "lbi"),
                                loop = FALSE, type = "metric", distance = TRUE,
@@ -167,15 +233,16 @@ NULL
     RNGkind("L'Ecuyer")
 
     ## avoids default message if no backend exists
-    if (is.null(foreach::getDoParName()))
-        foreach::registerDoSEQ()
+    if (is.null(foreach::getDoParName())) foreach::registerDoSEQ()
 
-    packageStartupMessage("\ndtwclust: Setting random number generator to L'Ecuyer-CMRG (see RNGkind()).\n",
-                          'To read the included vignette, type: vignette("dtwclust").\n',
-                          'Please see news(package = "dtwclust") for important information.\n')
+    packageStartupMessage("\ndtwclust:\n",
+                          "Setting random number generator to L'Ecuyer-CMRG (see RNGkind()).\n",
+                          'To read the included vignette type: vignette("dtwclust").\n',
+                          'Please see news(package = "dtwclust") for important information.')
 
     if (grepl("\\.9000$", utils::packageVersion("dtwclust")))
-        packageStartupMessage("This is a developer version of 'dtwclust'. Using devtools::test() is currently broken.")
+        packageStartupMessage("\nThis is a developer version of 'dtwclust'.\n",
+                              "Using devtools::test() is currently broken, see tests/testthat.R")
 }
 
 .onUnload <- function(libpath) {
@@ -185,6 +252,7 @@ NULL
 release_questions <- function() {
     c(
         "Changed .Rbuildignore to exclude test rds files?",
-        "Built the binary with --compact-vignettes?"
+        "Built the binary with --compact-vignettes?",
+        "Set vignette's cache to FALSE?"
     )
 }

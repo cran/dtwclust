@@ -26,11 +26,12 @@ that these are \emph{not} characters. See \link[dtw:stepPattern]{dtw::stepPatter
 \item{...}{Currently ignored.}
 
 \item{gcm}{Optionally, a matrix to use for the global cost matrix calculations. It should have
-\code{NROW(y)+1} columns and \code{NROW(x)+1} rows for \code{backtrack = TRUE} \strong{or} \code{2} rows for \code{backtrack = FALSE}. Used internally for memory optimization. If provided, it \strong{will} be modified \emph{in
+\code{NROW(y)+1} columns, and \code{NROW(x)+1} rows for \code{backtrack = TRUE} \strong{or} \code{2} rows for \code{backtrack = FALSE}. Used internally for memory optimization. If provided, it \strong{will} be modified \emph{in
 place} by \code{C} code, except in the parallel version in \code{\link[proxy:dist]{proxy::dist()}} which ignores it for
 thread-safe reasons.}
 
-\item{error.check}{Check data inconsistencies?}
+\item{error.check}{Logical indicating whether the function should try to detect inconsistencies
+and give more informative errors messages. Also used internally to avoid repeating checks.}
 }
 \value{
 The DTW distance. For \code{backtrack} \code{=} \code{TRUE}, a list with:

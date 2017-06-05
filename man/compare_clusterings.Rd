@@ -6,9 +6,10 @@
 \usage{
 compare_clusterings(series = NULL, types = c("p", "h", "f", "t"), ...,
   configs = compare_clusterings_configs(types), seed = NULL,
-  trace = FALSE, packages = character(0L), score.clus = function(...)
-  stop("No scoring"), pick.clus = function(...) stop("No picking"),
-  shuffle.configs = FALSE, return.objects = FALSE)
+  trace = FALSE, score.clus = function(...) stop("No scoring"),
+  pick.clus = function(...) stop("No picking"), shuffle.configs = FALSE,
+  return.objects = FALSE, packages = character(0L),
+  .errorhandling = "stop")
 }
 \arguments{
 \item{series}{A list of series, a numeric matrix or a data frame. Matrices and data frames are
@@ -26,21 +27,22 @@ hierarchical, fuzzy, tadpole.}
 
 \item{trace}{Logical indicating that more output should be printed to screen.}
 
-\item{packages}{A character vector with the names of any packages needed for any functions used
-(distance, centroid, preprocessing, etc.). The name "dtwclust" is added automatically. Relevant
-for parallel computation.}
-
 \item{score.clus}{A function that gets the list of results (and \code{...}) and scores each one. It
 may also be a named list of functions, one for each type of clustering. See Scoring section.}
 
-\item{pick.clus}{A function that gets the result from \code{score.clus} as first argument, as well as
-the objects returned by \code{\link[=tsclust]{tsclust()}} (and elements of \code{...}) and picks the best result.}
+\item{pick.clus}{A function that to pick the best result. See Picking section.}
 
 \item{shuffle.configs}{Randomly shuffle the order of configs, which can be useful to balance load
 when using parallel computation.}
 
-\item{return.objects}{Logical indicating whether the objects from returned by \code{\link[=tsclust]{tsclust()}} should
-be given in the result.}
+\item{return.objects}{Logical indicating whether the objects returned by \code{\link[=tsclust]{tsclust()}} should be
+given in the result.}
+
+\item{packages}{A character vector with the names of any packages needed for any functions used
+(distance, centroid, preprocessing, etc.). The name "dtwclust" is added automatically. Relevant
+for parallel computation.}
+
+\item{.errorhandling}{This will be passed to \code{\link[foreach:foreach]{foreach::foreach()}}. See Parallel section below.}
 }
 \value{
 A list with:
@@ -50,6 +52,7 @@ returned by \code{score.clus}.
 \item \code{scores}: The scores given by \code{score.clus}.
 \item \code{pick}: The object returned by \code{pick.clus}.
 \item \code{proc_time}: The measured execution time, using \code{\link[base:proc.time]{base::proc.time()}}.
+\item \code{seeds}: A list of lists with the random seeds computed for each configuration.
 }
 
 The cluster objects are also returned if \code{return.objects} \code{=} \code{TRUE}.
@@ -66,6 +69,20 @@ Parameters specified in \code{configs} whose values are \code{NA} will be ignore
 The scoring and picking functions are for convenience, if they are not specified, the \code{scores}
 and \code{pick} elements of the result will be \code{NULL}.
 }
+\section{Parallel computation}{
+
+
+The configurations for each clustering type can be evaluated in parallel with the \pkg{foreach}
+package. A parallel backend can be registered, e.g., with \pkg{doParallel}.
+
+If the \code{.errorhandling} parameter is changed to "pass" and a custom \code{score.clus} function is
+used, said function should be able to deal with possible error objects.
+
+If it is changed to "remove", it might not be possible to attach the scores to the results data
+frame, or it may be inconsistent. Additionally, if \code{return.objects} is \code{TRUE}, the names given
+to the objects might also be inconsistent.
+}
+
 \section{Scoring}{
 
 
@@ -103,8 +120,35 @@ so that \code{score.clus$partitional} is used to score \code{list_of_lists$parti
 \code{\link[base:mapply]{base::mapply()}} with \code{SIMPLIFY} \code{=} \code{FALSE}).
 
 Therefore, the scores returned shall always be a list of lists with first-level names as above.
-These scores and the list of clustering results are given to \code{pick.clus} as first and second
-arguments respectively, followed by \code{...}.
+}
+
+\section{Picking}{
+
+
+\strong{Please note that this functionality was slightly modified in version 4.0.0 of dtwclust.}
+
+If \code{return.objects} is \code{TRUE}, the scores and the list of clustering results are given to
+\code{pick.clus} as first and second arguments respectively, followed by \code{...}. Otherwise,
+\code{pick.clus} will receive only the scores and the contents of \code{...} (since the results will not
+be returned by the preceding step).
+}
+
+\section{Limitations}{
+
+
+Note that the configurations returned by the helper functions assign special names to
+preprocessing/distance/centroid arguments, and these names are used internally to recognize
+them.
+
+If some of these arguments are more complicated (e.g. matrices) and should \emph{not} be expanded,
+consider passing them directly via the ellipsis (\code{...}) instead of using \code{\link[=pdc_configs]{pdc_configs()}}. This
+assumes that it doesn't matter if said arguments can be passed to all functions without
+affecting their results.
+
+The distance matrices (if calculated) are not re-used across configurations. Given the way the
+configurations are created, this shouldn't matter, because clusterings with arguments that can
+use the same distance matrix are already grouped together by \code{\link[=pdc_configs]{pdc_configs()}} and
+\code{\link[=compare_clusterings_configs]{compare_clusterings_configs()}}.
 }
 
 \examples{
@@ -116,67 +160,69 @@ acf_fun <- function(dat, ...) {
 }
 
 ## Define overall configuration
-cfgs <- compare_clusterings_configs(c("p", "h", "f", "t"), k = 19L:20L,
-                                    controls = list(
-                                        partitional = partitional_control(
-                                            iter.max = 30L,
-                                            nrep = 1L
-                                        ),
-                                        hierarchical = hierarchical_control(
-                                            method = "all"
-                                        ),
-                                        fuzzy = fuzzy_control(
-                                            ## notice the vector
-                                            fuzziness = c(2, 2.5),
-                                            iter.max = 30L
-                                        ),
-                                        tadpole = tadpole_control(
-                                            ## notice the vectors
-                                            dc = c(1.5, 2),
-                                            window.size = 19L:20L
-                                        )
-                                    ),
-                                    preprocs = pdc_configs(
-                                        type = "preproc",
-                                        ## shared
-                                        none = list(),
-                                        zscore = list(center = c(FALSE)),
-                                        ## only for fuzzy
-                                        fuzzy = list(
-                                            acf_fun = list()
-                                        ),
-                                        ## only for tadpole
-                                        tadpole = list(
-                                            reinterpolate = list(new.length = 205L)
-                                        ),
-                                        ## specify which should consider the shared ones
-                                        share.config = c("p", "h")
-                                    ),
-                                    distances = pdc_configs(
-                                        type = "distance",
-                                        sbd = list(),
-                                        fuzzy = list(
-                                            L2 = list()
-                                        ),
-                                        share.config = c("p", "h")
-                                    ),
-                                    centroids = pdc_configs(
-                                        type = "centroid",
-                                        partitional = list(
-                                            pam = list()
-                                        ),
-                                        ## special name 'default'
-                                        hierarchical = list(
-                                            default = list()
-                                        ),
-                                        fuzzy = list(
-                                            fcmdd = list()
-                                        ),
-                                        tadpole = list(
-                                            default = list(),
-                                            shape_extraction = list(znorm = TRUE)
-                                        )
-                                    )
+cfgs <- compare_clusterings_configs(
+    types = c("p", "h", "f", "t"),
+    k = 19L:20L,
+    controls = list(
+        partitional = partitional_control(
+            iter.max = 30L,
+            nrep = 1L
+        ),
+        hierarchical = hierarchical_control(
+            method = "all"
+        ),
+        fuzzy = fuzzy_control(
+            ## notice the vector
+            fuzziness = c(2, 2.5),
+            iter.max = 30L
+        ),
+        tadpole = tadpole_control(
+            ## notice the vectors
+            dc = c(1.5, 2),
+            window.size = 19L:20L
+        )
+    ),
+    preprocs = pdc_configs(
+        type = "preproc",
+        ## shared
+        none = list(),
+        zscore = list(center = c(FALSE)),
+        ## only for fuzzy
+        fuzzy = list(
+            acf_fun = list()
+        ),
+        ## only for tadpole
+        tadpole = list(
+            reinterpolate = list(new.length = 205L)
+        ),
+        ## specify which should consider the shared ones
+        share.config = c("p", "h")
+    ),
+    distances = pdc_configs(
+        type = "distance",
+        sbd = list(),
+        fuzzy = list(
+            L2 = list()
+        ),
+        share.config = c("p", "h")
+    ),
+    centroids = pdc_configs(
+        type = "centroid",
+        partitional = list(
+            pam = list()
+        ),
+        ## special name 'default'
+        hierarchical = list(
+            default = list()
+        ),
+        fuzzy = list(
+            fcmdd = list()
+        ),
+        tadpole = list(
+            default = list(),
+            shape_extraction = list(znorm = TRUE)
+        )
+    )
 )
 
 ## Number of configurations is returned as attribute
@@ -281,7 +327,8 @@ comparison_majority <- compare_clusterings(CharTraj, types = c("p", "h", "f", "t
                                            configs = cfgs,
                                            seed = 84L, trace = TRUE,
                                            score.clus = score_external,
-                                           pick.clus = pick_majority)
+                                           pick.clus = pick_majority,
+                                           return.objects = TRUE)
 
 plot(comparison_majority$pick)
 
@@ -325,7 +372,7 @@ p_cfgs <- compare_clusterings_configs(types = "p", k = 19L:21L,
 )
 
 # Remove redundant (shape centroid always uses zscore preprocessing)
-id_redundant <- p_cfgs$partitional$preproc == "zscore" &
+id_redundant <- p_cfgs$partitional$preproc == "none" &
     p_cfgs$partitional$centroid == "shape"
 p_cfgs$partitional <- p_cfgs$partitional[!id_redundant, ]
 
@@ -335,7 +382,8 @@ comparison_partitional <- compare_clusterings(CharTraj, types = "p",
                                               seed = 32903L, trace = TRUE,
                                               score.clus = score_fun,
                                               pick.clus = pick_fun,
-                                              shuffle.configs = TRUE)
+                                              shuffle.configs = TRUE,
+                                              return.objects = TRUE)
 }
 }
 \seealso{
