@@ -2,8 +2,8 @@ Package: dtwclust
 Type: Package
 Title: Time Series Clustering Along with Optimizations for the Dynamic
         Time Warping Distance
-Version: 4.0.0
-Date: 2017-06-05
+Version: 4.0.1
+Date: 2017-06-08
 Depends: R (>= 3.2.0), methods, proxy (>= 0.4-16), clue, dtw, ggplot2
 Imports: parallel, stats, utils, flexclust, foreach, Matrix, plyr,
         RSpectra, Rcpp, reshape2, rngtools
@@ -34,6 +34,6 @@ Collate: 'DBA.R' 'Distmat.R' 'GAK.R' 'NCCc.R' 'SBD.R' 'SparseDistmat.R'
         'shape-extraction.R' 'tsclust-controls.R' 'tsclust-methods.R'
         'tsclust.R' 'uciCT.R' 'zscore.R'
 VignetteBuilder: knitr
-Packaged: 2017-06-05 16:16:55 UTC; oso
+Packaged: 2017-06-08 05:59:54 UTC; oso
 Repository: CRAN
-Date/Publication: 2017-06-05 17:40:28 UTC
+Date/Publication: 2017-06-08 12:10:09 UTC
