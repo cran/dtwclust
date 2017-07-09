@@ -34,6 +34,13 @@
 #'   - `index1`: `x` indices for the matched elements in the warping path.
 #'   - `index2`: `y` indices for the matched elements in the warping path.
 #'
+#' @template proxy
+#' @template symmetric
+#' @section Proxy version:
+#'
+#'   In order for symmetry to apply here, the following must be true: no window constraint is used
+#'   (`window.size` is `NULL`) or, if one is used, all series have the same length.
+#'
 #' @note
 #'
 #' The DTW algorithm (and the functions that depend on it) might return different values in 32 bit
@@ -106,13 +113,15 @@ dtw_basic <- function(x, y, window.size = NULL, norm = "L1",
     d
 }
 
+# ==================================================================================================
+# Wrapper for proxy::dist
+# ==================================================================================================
+
 dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pairwise = FALSE) {
     x <- any2list(x)
     if (error.check) check_consistency(x, "vltslist")
 
     dots <- list(...)
-    dots$backtrack <- FALSE
-    dots$error.check <- FALSE
     retclass <- "crossdist"
 
     if (is.null(y)) {
@@ -127,80 +136,115 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
 
     ## pre-allocate gcm
     if(is.null(gcm)) gcm <- matrix(0, 2L, max(sapply(y, NROW)) + 1L)
+    pairwise <- isTRUE(pairwise)
+    dim_out <- c(length(x), length(y))
+    dim_names <- list(names(x), names(y))
+    D <- allocate_distmat(length(x), length(y), pairwise, symmetric) ## utils.R
 
-    ## Calculate distance matrix
+    ## Wrap as needed for foreach
     if (pairwise) {
-        X <- split_parallel(x)
-        Y <- split_parallel(y)
-        validate_pairwise(X, Y)
-
-        D <- foreach(x = X, y = Y,
-                     .combine = c,
-                     .multicombine = TRUE,
-                     .packages = "dtwclust",
-                     .export = "enlist") %op% {
-                         mapply(x, y, FUN = function(x, y) {
-                             do.call("dtw_basic",
-                                     enlist(x = x,
-                                            y = y,
-                                            gcm = gcm,
-                                            dots = dots))
-                         })
-                     }
-
-        names(D) <- NULL
-        retclass <- "pairdist"
+        x <- split_parallel(x)
+        y <- split_parallel(y)
+        validate_pairwise(x, y)
+        endpoints <- attr(x, "endpoints")
 
     } else if (symmetric) {
-        pairs <- call_pairs(length(x), lower = FALSE)
-        pairs <- split_parallel(pairs, 1L)
-        dots$pairwise <- TRUE
-
-        d <- foreach(pairs = pairs,
-                     .combine = c,
-                     .multicombine = TRUE,
-                     .packages = "dtwclust",
-                     .export = "enlist") %op% {
-                         do.call(proxy::dist,
-                                 enlist(x = x[pairs[ , 1L]],
-                                        y = x[pairs[ , 2L]],
-                                        method = "dtw_basic",
-                                        gcm = gcm,
-                                        dots = dots))
-                     }
-
-        rm("pairs")
-        D <- matrix(0, nrow = length(x), ncol = length(x))
-        D[upper.tri(D)] <- d
-        D <- t(D)
-        D[upper.tri(D)] <- d
-        attr(D, "dimnames") <- list(names(x), names(x))
+        endpoints <- symmetric_loop_endpoints(length(x)) ## utils.R
+        x <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { x })
+        y <- x
 
     } else {
-        Y <- split_parallel(y)
-
-        D <- foreach(y = Y,
-                     .combine = cbind,
-                     .multicombine = TRUE,
-                     .packages = "dtwclust",
-                     .export = "enlist") %op% {
-                         ret <- lapply(y, x = x, FUN = function(y, x) {
-                             sapply(x, y = y, FUN = function(x, y) {
-                                 do.call("dtw_basic",
-                                         enlist(x = x,
-                                                y = y,
-                                                gcm = gcm,
-                                                dots = dots))
-                             })
-                         })
-
-                         do.call(cbind, ret)
-                     }
+        x <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { x })
+        y <- split_parallel(y)
+        endpoints <- attr(y, "endpoints")
     }
 
-    class(D) <- retclass
-    attr(D, "method") <- "DTW_BASIC"
+    if (bigmemory::is.big.matrix(D)) {
+        D_desc <- bigmemory::describe(D)
+        noexport <- "D"
 
+    } else {
+        D_desc <- NULL
+        noexport <- ""
+    }
+
+    ## Calculate distance matrix
+    foreach(x = x, y = y, endpoints = endpoints,
+            .combine = c,
+            .multicombine = TRUE,
+            .packages = c("dtwclust", "bigmemory"),
+            .export = c("dtwb_loop", "enlist"),
+            .noexport = noexport) %op% {
+                bigmat <- !is.null(D_desc)
+                d <- if (bigmat) bigmemory::attach.big.matrix(D_desc)@address else D
+                do.call(dtwb_loop,
+                        enlist(d = d,
+                               x = x,
+                               y = y,
+                               symmetric = symmetric,
+                               pairwise = pairwise,
+                               endpoints = endpoints,
+                               bigmat = bigmat,
+                               gcm = gcm,
+                               dots = dots))
+            }
+
+    D <- D[,]
+    if (pairwise) {
+        class(D) <- "pairdist"
+
+    } else {
+        if (is.null(dim(D))) dim(D) <- dim_out
+        dimnames(D) <- dim_names
+        class(D) <- "crossdist"
+    }
+
+    attr(D, "method") <- "DTW_BASIC"
     ## return
     D
+}
+
+# ==================================================================================================
+# Wrapper for C++
+# ==================================================================================================
+
+dtwb_loop <- function(d, x, y, symmetric, pairwise, endpoints, bigmat, ..., normalize = FALSE,
+                      window.size = NULL, norm = "L1", step.pattern = symmetric2, gcm = NULL)
+{
+    if (is.null(window.size))
+        window.size <- -1L
+    else
+        window.size <- check_consistency(window.size, "window")
+
+    if (identical(step.pattern, symmetric1))
+        step.pattern <- 1
+    else if (identical(step.pattern, symmetric2))
+        step.pattern <- 2
+    else
+        stop("step.pattern must be either symmetric1 or symmetric2 (without quotes)")
+
+    normalize <- isTRUE(normalize)
+    if (normalize && step.pattern == 1) stop("Unable to normalize with chosen step pattern.")
+    norm <- match.arg(norm, c("L1", "L2"))
+    norm <- switch(norm, "L1" = 1, "L2" = 2)
+    mv <- is_multivariate(c(x, y))
+    backtrack <- FALSE
+
+    nc <- max(sapply(y, NROW)) + 1L
+    if (is.null(gcm))
+        gcm <- matrix(0, 2L, nc)
+    else if (!is.matrix(gcm) || nrow(gcm) < 2L || ncol(gcm) < nc)
+        stop("dtw_basic: Dimension inconsistency in 'gcm'")
+    if (storage.mode(gcm) != "double")
+        stop("dtw_basic: If provided, 'gcm' must have 'double' storage mode.")
+
+    distargs <- list(window.size = window.size,
+                     norm = norm,
+                     step.pattern = step.pattern,
+                     backtrack = backtrack,
+                     gcm = gcm)
+
+    .Call(C_dtwb_loop,
+          d, x, y, symmetric, pairwise, bigmat, normalize, mv, distargs, endpoints,
+          PACKAGE = "dtwclust")
 }

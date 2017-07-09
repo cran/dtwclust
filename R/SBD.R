@@ -25,6 +25,14 @@
 #'   - `dist`: The shape-based distance between `x` and `y`.
 #'   - `yshift`: A shifted version of `y` so that it optimally matches `x` (based on [NCCc()]).
 #'
+#' @template proxy
+#' @template symmetric
+#' @section Proxy version:
+#'
+#'   In some situations, e.g. for relatively small distance matrices, the overhead introduced by the
+#'   logic that computes only half the distance matrix can be bigger than just calculating the whole
+#'   matrix.
+#'
 #' @note
 #'
 #' If you wish to calculate the distance between several time series, it would be better to use the
@@ -113,91 +121,107 @@ SBD <- function(x, y, znorm = FALSE, error.check = TRUE) {
 # Wrapper for proxy::dist
 # ==================================================================================================
 
-SBD.proxy <- function(x, y = NULL, znorm = FALSE, ..., error.check = TRUE, pairwise = FALSE) {
+SBD_proxy <- function(x, y = NULL, znorm = FALSE, ..., error.check = TRUE, pairwise = FALSE) {
     x <- any2list(x)
 
     if (error.check) check_consistency(x, "vltslist")
     if (znorm) x <- zscore(x)
+
     if (is.null(y)) {
+        symmetric <- TRUE
         y <- x
+
+        ## Precompute FFTs, padding with zeros as necessary, which will be compensated later
+        L <- max(lengths(x)) * 2L - 1L
+        fftlen <- stats::nextn(L, 2L)
+        fftx <- lapply(x, function(u) { stats::fft(c(u, rep(0, fftlen - length(u)))) })
+        ffty <- lapply(fftx, Conj)
+
     } else {
+        symmetric <- FALSE
         y <- any2list(y)
         if (error.check) check_consistency(y, "vltslist")
         if (znorm) y <- zscore(y)
+
+        ## Precompute FFTs, padding with zeros as necessary, which will be compensated later
+        L <- max(lengths(x)) + max(lengths(y)) - 1L
+        fftlen <- stats::nextn(L, 2L)
+        fftx <- lapply(x, function(u) { stats::fft(c(u, rep(0, fftlen - length(u)))) })
+        ffty <- lapply(y, function(v) { Conj(stats::fft(c(v, rep(0, fftlen - length(v))))) })
     }
 
     if (is_multivariate(x) || is_multivariate(y)) stop("SBD does not support multivariate series.")
+    pairwise <- isTRUE(pairwise)
+    dim_out <- c(length(x), length(y))
+    dim_names <- list(names(x), names(y))
+    D <- allocate_distmat(length(x), length(y), pairwise, symmetric) ## utils.R
 
-    retclass <- "crossdist"
-
-    ## Precompute FFTs, padding with zeros as necessary, which will be compensated later
-    L <- max(lengths(x)) + max(lengths(y)) - 1L
-    fftlen <- stats::nextn(L, 2L)
-    fftx <- lapply(x, function(u) { stats::fft(c(u, rep(0, fftlen - length(u)))) })
-    ffty <- lapply(y, function(v) { stats::fft(c(v, rep(0, fftlen - length(v)))) })
-    y <- split_parallel(y)
-    ffty <- split_parallel(ffty)
-
-    ## Calculate distance matrix
+    ## Wrap as needed for foreach
     if (pairwise) {
         x <- split_parallel(x)
+        y <- split_parallel(y)
         fftx <- split_parallel(fftx)
+        ffty <- split_parallel(ffty)
         validate_pairwise(x, y)
+        endpoints <- attr(x, "endpoints")
 
-        D <- foreach(x = x, fftx = fftx, y = y, ffty = ffty,
-                     .combine = c,
-                     .multicombine = TRUE,
-                     .export = "lnorm",
-                     .packages = "stats") %op% {
-                         mapply(y, ffty, x, fftx,
-                                FUN = function(y, ffty, x, fftx) {
-                                    ## Manually normalize by length
-                                    CCseq <- Re(stats::fft(fftx * Conj(ffty), inverse = TRUE)) /
-                                        length(fftx)
-                                    ## Truncate to correct length
-                                    CCseq <- c(CCseq[(length(ffty) - length(y) + 2L):length(CCseq)],
-                                               CCseq[1L:length(x)])
-                                    CCseq <- CCseq / (lnorm(x, 2) * lnorm(y, 2))
-                                    dd <- 1 - max(CCseq)
-                                    dd
-                                })
-                     }
-
-        retclass <- "pairdist"
+    } else if (symmetric) {
+        endpoints <- symmetric_loop_endpoints(length(x)) ## utils.R
+        x <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { x })
+        y <- x
+        fftx <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { fftx })
+        ffty <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { ffty })
 
     } else {
-        D <- foreach(y = y, ffty = ffty,
-                     .combine = cbind,
-                     .multicombine = TRUE,
-                     .export = "lnorm",
-                     .packages = "stats") %op% {
-                         ret <- mapply(y, ffty,
-                                       MoreArgs = list(x = x, fftx = fftx),
-                                       SIMPLIFY = FALSE,
-                                       FUN = function(y, ffty, x, fftx) {
-                                           mapply(x, fftx,
-                                                  MoreArgs = list(y = y, ffty = ffty),
-                                                  FUN = function(x, fftx, y, ffty) {
-                                                      ## Manually normalize by length
-                                                      CCseq <- Re(stats::fft(fftx * Conj(ffty),
-                                                                             inverse = TRUE)) /
-                                                          length(fftx)
-                                                      ## Truncate to correct length
-                                                      CCseq <- c(CCseq[(length(ffty) - length(y) + 2L):length(CCseq)],
-                                                                 CCseq[1L:length(x)])
-                                                      CCseq <- CCseq / (lnorm(x, 2) * lnorm(y, 2))
-                                                      dd <- 1 - max(CCseq)
-                                                      dd
-                                                  })
-                                       })
-
-                         do.call(cbind, ret)
-                     }
+        x <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { x })
+        y <- split_parallel(y)
+        fftx <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { fftx })
+        ffty <- split_parallel(ffty)
+        endpoints <- attr(y, "endpoints")
     }
 
-    class(D) <- retclass
-    attr(D, "method") <- "SBD"
+    if (bigmemory::is.big.matrix(D)) {
+        D_desc <- bigmemory::describe(D)
+        noexport <- "D"
 
+    } else {
+        D_desc <- NULL
+        noexport <- ""
+    }
+
+    ## Calculate distance matrix
+    foreach(x = x, y = y, fftx = fftx, ffty = ffty, endpoints = endpoints,
+            .combine = c,
+            .multicombine = TRUE,
+            .packages = c("dtwclust", "bigmemory"),
+            .export = "sbd_loop",
+            .noexport = noexport) %op% {
+                bigmat <- !is.null(D_desc)
+                d <- if (bigmat) bigmemory::attach.big.matrix(D_desc)@address else D
+                sbd_loop(d, x, y, fftx, ffty, fftlen, symmetric, pairwise, endpoints, bigmat)
+            }
+
+    D <- D[,]
+    if (pairwise) {
+        class(D) <- "pairdist"
+
+    } else {
+        if (is.null(dim(D))) dim(D) <- dim_out
+        dimnames(D) <- dim_names
+        class(D) <- "crossdist"
+    }
+
+    attr(D, "method") <- "SBD"
     ## return
     D
+}
+
+# ==================================================================================================
+# Wrapper for C++
+# ==================================================================================================
+
+sbd_loop <- function(d, x, y, fftx, ffty, fftlen, symmetric, pairwise, endpoints, bigmat) {
+    .Call(C_sbd_loop,
+          d, x, y, fftx, ffty, fftlen, symmetric, pairwise, endpoints, bigmat,
+          PACKAGE = "dtwclust")
 }

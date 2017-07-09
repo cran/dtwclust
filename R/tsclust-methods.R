@@ -17,10 +17,9 @@ NULL
 #'
 #' @param .Object A `TSClusters` prototype. You shouldn't use this, see Initialize section and the
 #'   examples.
-#' @param ... For `initialize`, any valid slots. For `plot`, further arguments to pass to
-#'   [ggplot2::geom_line()] for the plotting of the *cluster centroids*, or to
-#'   [stats::plot.hclust()]. See Plotting section. For `update`, any supported argument. Otherwise
-#'   ignored.
+#' @param ... For `initialize`, any valid slots. For `plot`, passed to [ggplot2::geom_line()] for
+#'   the plotting of the *cluster centroids*, or to [stats::plot.hclust()]. See Plotting section.
+#'   For `update`, any supported argument. Otherwise ignored.
 #' @param override.family Logical. Attempt to substitute the default family with one that conforms
 #'   to the provided elements? See Initialize section.
 #'
@@ -107,6 +106,8 @@ setMethod("initialize", "TSClusters", function(.Object, ..., override.family = T
             centroids <- .Object@centroids
             datalist <- .Object@datalist
 
+            preproc <- if (.Object@preproc == "none") .Object@family@preproc else match.fun(.Object@preproc)
+
             if (.Object@type == "partitional" && length(.Object@centroid))
                 allcent <- all_cent2(.Object@centroid, .Object@control)
             else if (.Object@type == "hierarchical" && length(formals(.Object@family@allcent)))
@@ -125,7 +126,7 @@ setMethod("initialize", "TSClusters", function(.Object, ..., override.family = T
             .Object@family <- new("tsclustFamily",
                                   dist = .Object@distance,
                                   allcent = allcent,
-                                  preproc = .Object@family@preproc,
+                                  preproc = preproc,
                                   control = .Object@control,
                                   fuzzy = isTRUE(.Object@type == "fuzzy"))
 
@@ -302,16 +303,17 @@ update.TSClusters <- function(object, ..., evaluate = TRUE) {
 
     if (length(args) == 0L) {
         if (evaluate) {
-            ## all_cent2 changed in v4.0.0, update here for backward compatibility
-            if (object@type %in% c("partitional", "fuzzy")) {
-                if (object@centroid %in% c("pam", "fcmdd") &&
-                    !is.null(object@control$distmat) &&
-                    !inherits(object@control$distmat, "Distmat"))
-                {
-                    object@control$distmat <- Distmat$new(distmat = object@control$distmat)
-                }
+            if (object@type != "tadpole") {
+                ## update dist closure
+                object@family@dist <- ddist2(object@distance, object@control)
 
-                object@family@allcent <- all_cent2(object@centroid, object@control)
+                ## update allcent closure
+                if (object@centroid %in% centroids_included)
+                    object@family@allcent <- all_cent2(object@centroid, object@control)
+
+                ## update distmat in allcent environment with internal class?
+                if (object@centroid %in% c("pam", "fcmdd"))
+                    environment(object@family@allcent)$control$distmat <- object@control$distmat
             }
 
             return(object)
@@ -323,11 +325,9 @@ update.TSClusters <- function(object, ..., evaluate = TRUE) {
     new_call[names(args)] <- args
 
     if (evaluate)
-        ret <- eval.parent(new_call, n = 2L)
+        eval.parent(new_call, n = 2L)
     else
-        ret <- new_call
-
-    ret
+        new_call
 }
 
 #' @rdname tsclusters-methods
@@ -465,11 +465,6 @@ plot.TSClusters <- function(x, y, ...,
     }
 
     ## Obtain data, the priority is: provided data > included data list
-    if (length(x@datalist) < 1L)
-        stop("Provided object has no data. Please re-run the algorithm with save.data = TRUE ",
-             "or provide the data manually.")
-
-    ## Obtain data, the priority is: provided data > included data list
     if (!is.null(series)) {
         data <- any2list(series)
 
@@ -507,13 +502,13 @@ plot.TSClusters <- function(x, y, ...,
 
         ## split returns the result in order of the factor levels,
         ## but I want to keep the original order as returned from clustering
-        ido <- sort(sort(x@cluster, index.return=T)$ix, index.return = TRUE)$ix
+        ido <- sort(sort(x@cluster, index.return = TRUE)$ix, index.return = TRUE)$ix
         data <- unlist(clusters, recursive = FALSE)[ido]
     }
 
     ## helper values
-    L1 <- lengths(data)
-    L2 <- lengths(centroids)
+    L1 <- sapply(data, NROW)
+    L2 <- sapply(centroids, NROW)
 
     ## timestamp consistency
     if (!is.null(time) && length(time) < max(L1, L2))
@@ -536,16 +531,14 @@ plot.TSClusters <- function(x, y, ...,
                           t <- if (is.null(time)) seq_len(len) else time[1L:len]
                           cl <- rep(clus, len)
                           color <- rep(color_ids[clus], len)
-
                           color_ids[clus] <<- color_ids[clus] + 1L
-
                           data.frame(t = t, cl = cl, color = color)
                       })
+
     dfcm_tc <- mapply(1L:x@k, L2, USE.NAMES = FALSE, SIMPLIFY = FALSE,
                       FUN = function(clus, len) {
                           t <- if (is.null(time)) seq_len(len) else time[1L:len]
                           cl <- rep(clus, len)
-
                           data.frame(t = t, cl = cl)
                       })
 
@@ -890,7 +883,6 @@ is.cl_dendrogram.TSClusters <- function(x) {
 setAs("dtwclust", "TSClusters",
       function(from, to) {
           validObject(from)
-
           base <- methods::new(to, override.family = FALSE)
           exclude_slots <- c("control", "family", "args", "seed")
 
@@ -900,7 +892,6 @@ setAs("dtwclust", "TSClusters",
 
                            for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
-
                                slot(to, sl) <- methods::slot(from, sl)
                            }
 
@@ -910,7 +901,6 @@ setAs("dtwclust", "TSClusters",
                                                              symmetric = from@control@symmetric,
                                                              packages = from@control@packages,
                                                              distmat = from@call$distmat)
-
                            to
                        },
 
@@ -919,16 +909,13 @@ setAs("dtwclust", "TSClusters",
 
                            for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
-
                                slot(to, sl) <- methods::slot(from, sl)
                            }
 
                            to@control <- hierarchical_control(symmetric = from@control@symmetric,
                                                               packages = from@control@packages,
                                                               distmat = from@call$distmat)
-
                            to@method <- from@method
-
                            to
                        },
 
@@ -937,7 +924,6 @@ setAs("dtwclust", "TSClusters",
 
                            for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
-
                                slot(to, sl) <- methods::slot(from, sl)
                            }
 
@@ -945,7 +931,6 @@ setAs("dtwclust", "TSClusters",
                                                        iter.max = from@control@iter.max,
                                                        delta = from@control@delta,
                                                        packages = from@control@packages)
-
                            to
                        },
 
@@ -954,16 +939,13 @@ setAs("dtwclust", "TSClusters",
 
                            for (sl in methods::slotNames(to)) {
                                if (sl %in% exclude_slots) next
-
                                slot(to, sl) <- methods::slot(from, sl)
                            }
 
                            lb <- if (is.null(from@dots$lb)) "lbk" else from@dots$lb
-
                            to@control <- tadpole_control(dc = from@call$dc,
                                                          window.size = from@control@window.size,
                                                          lb = lb)
-
                            to
                        })
 
@@ -973,7 +955,7 @@ setAs("dtwclust", "TSClusters",
                            preproc = from@family@preproc,
                            cluster = from@family@cluster,
                            dist = if (from@type == "tadpole") "dtw_lb" else from@distance,
-                           allcent = if (is.null(from@call$centroid)) from@centroid else from@call$centroid)
+                           allcent = if (is.null(from@call$centroid)) from@centroid else from@family@allcent)
 
           centroids <- from@centroids
           datalist <- from@datalist
@@ -991,9 +973,7 @@ setAs("dtwclust", "TSClusters",
           if (tolower(to@distance) %in% c("dtw", "dtw2", "dtw_basic", "dtw_lb",
                                           "lbk", "lbi", "gak", "lb_keogh+dtw2"))
           {
-              to@args$dist <- list(window.size = from@control@window.size,
-                                   norm = from@control@norm)
-
+              to@args$dist <- list(window.size = from@control@window.size, norm = from@control@norm)
               to@args$dist$window.type <- if (is.null(to@args$dist$window.size)) "none" else "slantedband"
           }
 
@@ -1010,17 +990,8 @@ setAs("dtwclust", "TSClusters",
           }
 
           if (to@type %in% c("partitional", "fuzzy") && to@centroid %in% c("pam", "fcmdd")) {
-              ## see Distmat.R
-              if (is.null(from@distmat)) {
-                  to@control$distmat <- Distmat$new(series = to@datalist,
-                                                    distance = to@distance,
-                                                    control = to@control,
-                                                    dist_args = to@args$dist,
-                                                    error.check = FALSE)
-              } else {
-                  to@control$distmat <- Distmat$new(distmat = from@distmat)
-              }
-
+              ## Distmat.R
+              to@control$distmat <- Distmat$new(distmat = from@distmat)
               assign("control", to@control, environment(to@family@allcent))
           }
 

@@ -1,11 +1,11 @@
 # ==================================================================================================
-# Distmat RC and methods to transparently handle PAM's pam.precompute = FALSE non-sparse case
+# Distmat RC and methods to transparently handle PAM centroids
 # ==================================================================================================
 
 #' Distance matrix
 #'
 #' Reference class that is used internally for PAM centroids when both `pam.precompute` and
-#' `pam.sparse` are `FALSE`.
+#' `pam.sparse` are `FALSE` (see [tsclust-controls]).
 #'
 #' @field distmat A distance matrix.
 #' @field series Time series list.
@@ -26,6 +26,8 @@ Distmat <- setRefClass("Distmat",
                                "Initialization based on needed parameters"
 
                                if (missing(distmat)) {
+                                   if (tolower(distance) == "dtw_lb") distance <- "dtw_basic"
+
                                    if (error.check) {
                                        check_consistency(series, "vltslist")
                                        check_consistency(distance,
@@ -75,12 +77,11 @@ NULL
 #' Accessing matrix elements with `[]` first calculates the values if necessary.
 #'
 setMethod(`[`, "Distmat", function(x, i, j, ..., drop = TRUE) {
-    dm_exists <- !inherits(x$distmat, "uninitializedField")
-
-    if (!dm_exists) {
+    if (inherits(x$distmat, "uninitializedField")) {
+        centroids <- if (identical(i,j)) NULL else x$series[j]
         dm <- do.call(x$distfun,
                       enlist(x = x$series[i],
-                             centroids = x$series[j],
+                             centroids = centroids,
                              dots = x$dist_args))
     } else {
         dm <- x$distmat[i, j, drop = drop]
@@ -90,4 +91,4 @@ setMethod(`[`, "Distmat", function(x, i, j, ..., drop = TRUE) {
     dm
 })
 
-dim.Distmat <- function(x) { dim(x$distmat) }
+dim.Distmat <- function(x) { dim(x$distmat) } # nocov

@@ -44,6 +44,27 @@ This distance is calculated with help of the Fast Fourier Transform, so it can b
 numerical precision. Thus, this function (and the functions that depend on it) might return
 different values in 32 bit installations compared to 64 bit ones.
 }
+\section{Proxy version}{
+
+
+  The version registered with \code{\link[proxy]{dist}} is custom (\code{loop = FALSE} in
+  \code{\link[proxy]{pr_DB}}). The custom function handles parallelization directly (with
+  \code{\link[foreach]{foreach}}).
+
+
+
+  It also includes symmetric optimizations to calculate only half a distance matrix when
+  appropriate. Only one list of series should be provided. If you want to avoid this
+  optimization, call \code{\link[proxy]{dist}} by giving the same list of series in both \code{x}
+  and \code{y}.
+
+
+
+In some situations, e.g. for relatively small distance matrices, the overhead introduced by the
+logic that computes only half the distance matrix can be bigger than just calculating the whole
+matrix.
+}
+
 \examples{
 
 # load data

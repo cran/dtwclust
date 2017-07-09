@@ -10,7 +10,7 @@ namespace dtwclust {
 
 double kahan_sum(const Rcpp::NumericVector& x) {
     double sum = 0, c = 0;
-    for (double i : x) {
+    for (const double& i : x) {
         double y = i - c;
         double t = sum + y;
         c = (t - sum) - y;
@@ -24,9 +24,10 @@ double kahan_sum(const Rcpp::NumericVector& x) {
 /* LB_Keogh */
 // =================================================================================================
 
-SEXP lbk_cpp(const Rcpp::NumericVector& x, int p,
-             const Rcpp::NumericVector& lower_envelope, const Rcpp::NumericVector& upper_envelope,
-             Rcpp::NumericVector& H)
+double lbk_core(const Rcpp::NumericVector& x, const int p,
+                const Rcpp::NumericVector& lower_envelope,
+                const Rcpp::NumericVector& upper_envelope,
+                Rcpp::NumericVector& H)
 {
     double lb = 0;
     for (int i = 0; i < x.length(); i++) {
@@ -42,27 +43,35 @@ SEXP lbk_cpp(const Rcpp::NumericVector& x, int p,
 
     lb = kahan_sum(H);
     if (p > 1) lb = std::sqrt(lb);
-    return Rcpp::wrap(lb);
+    return lb;
+}
+
+double lbk_cpp(const Rcpp::NumericVector& x, const int p,
+               const Rcpp::NumericVector& lower_envelope, const Rcpp::NumericVector& upper_envelope)
+{
+    Rcpp::NumericVector H(x.length());
+    return lbk_core(x, p, lower_envelope, upper_envelope, H);
 }
 
 RcppExport SEXP lbk(SEXP X, SEXP P, SEXP L, SEXP U) {
-BEGIN_RCPP
-    Rcpp::NumericVector x(X), lower_envelope(L), upper_envelope(U);
-    Rcpp::NumericVector H(x.length());
-    return lbk_cpp(x, Rcpp::as<int>(P), lower_envelope, upper_envelope, H);
-END_RCPP
+    BEGIN_RCPP
+    return Rcpp::wrap(lbk_cpp(X, Rcpp::as<int>(P), L, U));
+    END_RCPP
 }
 
 // =================================================================================================
 /* LB_Improved */
 // =================================================================================================
 
-SEXP lbi_cpp(const Rcpp::NumericVector& x, const Rcpp::NumericVector& y,
-             unsigned int window_size, int p,
-             const Rcpp::NumericVector& lower_envelope, const Rcpp::NumericVector& upper_envelope,
-             Rcpp::NumericVector& L2, Rcpp::NumericVector& U2, Rcpp::NumericVector&H)
+double lbi_core(const Rcpp::NumericVector& x, const Rcpp::NumericVector& y,
+                const unsigned int window_size, const int p,
+                const Rcpp::NumericVector& lower_envelope,
+                const Rcpp::NumericVector& upper_envelope,
+                Rcpp::NumericVector& L2,
+                Rcpp::NumericVector& U2,
+                Rcpp::NumericVector& H,
+                Rcpp::NumericVector& LB)
 {
-    Rcpp::NumericVector LB(x.length());
     double lb = 0;
     for (int i = 0; i < x.length(); i++) {
         if (x[i] > upper_envelope[i]) {
@@ -98,16 +107,44 @@ SEXP lbi_cpp(const Rcpp::NumericVector& x, const Rcpp::NumericVector& y,
 
     lb = kahan_sum(LB);
     if (p > 1) lb = std::sqrt(lb);
-    return Rcpp::wrap(lb);
+    return lb;
+}
+
+double lbi_cpp(const Rcpp::NumericVector& x, const Rcpp::NumericVector& y,
+               const unsigned int window_size, const int p,
+               const Rcpp::NumericVector& lower_envelope, const Rcpp::NumericVector& upper_envelope)
+{
+    Rcpp::NumericVector L2(x.length()), U2(x.length()), H(x.length());
+    Rcpp::NumericVector LB(x.length());
+    return lbi_core(x, y, window_size, p, lower_envelope, upper_envelope, L2, U2, H, LB);
 }
 
 RcppExport SEXP lbi(SEXP X, SEXP Y, SEXP WINDOW, SEXP P, SEXP L, SEXP U) {
-BEGIN_RCPP
-    Rcpp::NumericVector x(X), y(Y), lower_envelope(L), upper_envelope(U);
-    Rcpp::NumericVector L2(x.length()), U2(x.length()), H(x.length());
-    return lbi_cpp(x, y, Rcpp::as<unsigned int>(WINDOW), Rcpp::as<int>(P),
-                   lower_envelope, upper_envelope, L2, U2, H);
-END_RCPP
+    BEGIN_RCPP
+    return Rcpp::wrap(lbi_cpp(X, Y, Rcpp::as<unsigned int>(WINDOW), Rcpp::as<int>(P), L, U));
+    END_RCPP
+}
+
+// =================================================================================================
+/* Force symmetry helper */
+// =================================================================================================
+
+RcppExport SEXP force_lb_symmetry(SEXP X) {
+    BEGIN_RCPP
+    Rcpp::NumericMatrix matrix(X);
+    for (int i = 1; i < matrix.nrow(); i++) {
+        R_CheckUserInterrupt();
+        for (int j = 0; j < i; j++) {
+            double lb1 = matrix(i,j);
+            double lb2 = matrix(j,i);
+            if (lb1 > lb2)
+                matrix(j,i) = lb1;
+            else
+                matrix(i,j) = lb2;
+        }
+    }
+    return R_NilValue;
+    END_RCPP
 }
 
 } // namespace dtwclust

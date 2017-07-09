@@ -91,6 +91,7 @@ Most clustering strategies have not changed considerably since their initial def
 <<setup, include = FALSE, cache = FALSE>>=
 library("knitr")
 library("dtwclust")
+library("bigmemory.sri")
 
 data("uciCT")
 
@@ -110,7 +111,7 @@ opts_knit$set(self.contained = TRUE)
 \section{Introduction}
 \label{sec:introduction}
 
-\blankfootnote{This manuscript corresponds to \dtwclust{} version \Sexpr{packageVersion("dtwclust")}.}
+\blankfootnote{This manuscript was last updated in version 4.0.2 of \dtwclust{}.}
 Cluster analysis is a task which concerns itself with the creation of groups of objects,
 where each group is called a cluster.
 Ideally, all members of the same cluster are similar to each other,
@@ -1121,9 +1122,7 @@ since each distance calculation is usually very fast.
 This chunking is also performed by the distance functions used by \dtwclust{} which are registered with \pkg{proxy},
 specifically: \code{LB_Keogh}, \code{LB_Improved}, \code{SBD}, \code{dtw_basic}, \code{dtw_lb} and \code{GAK}.
 
-The included implementation of the TADPole algorithms also tries to create chunks when calculating DTW distances.
-The amount of calculations needed should be relatively small,
-so parallelization may not always be worth it in this case.
+The included implementation of the TADPole algorithm supports parallelization for different values of the cutoff distance.
 
 Finally, in the context of partitional clustering,
 calculating time-series prototypes is something that is done many times each iteration.
@@ -1411,13 +1410,14 @@ A very basic but surprisingly competitive algorithm is the 1-nearest-neighbor cl
 which could be implemented as follows.
 
 <<example-1nn-class, echo = TRUE>>=
-classify_series <- function(query) {
-    # Exclude a series as an example
-    database <- data[-100L]
+# Exclude a series as an example
+database <- data[-100L]
 
+classify_series <- function(query) {
     # Nearest neighbor
-    nn <- which.min(dtw_lb(query, database,
-                           window.size = 18L))
+    nn <- which.min(dtw_lb(database, query,
+                           window.size = 18L,
+                           nn.margin = 2L))
 
     # Return a label
     CharTrajLabels[nn]
@@ -1521,6 +1521,7 @@ pc_dtwlb <- tsclust(data, k = 4L,
                     distance = "dtw_lb", centroid = "dba",
                     trace = TRUE, seed = 8,
                     norm = "L2", window.size = 20L,
+                    control = partitional_control(pam.precompute = FALSE),
                     args = tsclust_args(cent = list(trace = TRUE)))
 
 pc_ks <- tsclust(data, k = 4L,
@@ -1589,7 +1590,7 @@ invisible(clusterEvalQ(workers, library("dtwclust")))
 # Register the backend; this step MUST be done
 registerDoParallel(workers)
 
-# Calling dtwclust
+# Calling tsclust
 pc_par <- tsclust(CharTraj[1L:20L], k = 4L,
                   distance = "dtw_basic", centroid = "dba",
                   window.size = 15L,

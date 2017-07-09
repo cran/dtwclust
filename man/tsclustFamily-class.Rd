@@ -14,7 +14,7 @@ Since the distance function makes use of \code{proxy}, it also supports any extr
 parameters in \code{...}.
 
 The prototype includes the \code{cluster} function for partitional methods, as well as a pass-through
-\code{preproc} function.
+\code{preproc} function. The initializer expects a control from \link{tsclust-controls}. See more below.
 }
 \section{Slots}{
 
@@ -28,19 +28,64 @@ The prototype includes the \code{cluster} function for partitional methods, as w
 \item{\code{preproc}}{The function used to preprocess the data (relevant for \code{\link[stats:predict]{stats::predict()}}).}
 }}
 
-\examples{
+\note{
+This class is meant to group together the relevant functions, but they are \strong{not} linked with
+each other automatically. In other words, neither \code{dist} nor \code{allcent} apply \code{preproc}. They
+essentially don't know of each other's existence.
+}
+\section{Distance function}{
 
-# The dist() function in tsclustFamily works like proxy::dist() but supports
-# parallelization and optimized symmetric calculations. If you like, you can
-# use the function more or less directly, but provide a control argument when
-# creating the family.
+
+The dist() function in here works like \code{\link[proxy:dist]{proxy::dist()}} but supports parallelization and
+optimized symmetric calculations. If you like, you can use the function more or less directly,
+but provide a control argument when creating the family. However, bear in mind the following
+considerations.
+\itemize{
+\item The second argument is call \code{centroids} (inconsistent with \code{\link[proxy:dist]{proxy::dist()}}).
+\item If \code{control$distmat} is \emph{not} \code{NULL}, the function will try to subset it.
+\item If \code{control$symmetric} is \code{TRUE}, \code{centroids} is \code{NULL}, \emph{and} there is no argument
+\code{pairwise} that is \code{TRUE}, only half the distance matrix will be computed.
+\itemize{
+\item If the distance was registered in \link[proxy:pr_DB]{proxy::pr_DB} with \code{loop = TRUE} and more than one
+parallel worker is detected, the computation will be in parallel, otherwise it will be
+sequential with \code{\link[proxy:dist]{proxy::dist()}}.
+}
+\item The function always returns a \code{crossdist} matrix.
+}
+
+Note that all distances implemented as part of \pkg{dtwclust} have custom proxy loops, so see
+their respective documentation to see what optimizations apply to each one.
+
+For distances not included in \pkg{dtwclust}, the symmetric, parallel case mentioned above
+makes chunks for parallel workers, but they are not perfectly balanced, so some workers might
+finish before the others.
+}
+
+\section{Centroid function}{
+
+
+The default partitional allcent() function is a closure with the implementations of the
+included centroids. The ones for \code{\link[=DBA]{DBA()}} and \code{\link[=shape_extraction]{shape_extraction()}} can use parallelization. Its
+formal arguments are described in the Centroid Calculation section from \code{\link[=tsclust]{tsclust()}}.
+}
+
+\examples{
 
 \dontrun{
 data(uciCT)
-fam <- new("tsclustFamily", dist = "gak",
-           control = partitional_control(symmetric = TRUE))
+fam <- new("tsclustFamily", dist = "gak")
 
+# This is done with symmetric optimizations, regardless of control$symmetric
 crossdist <- fam@dist(CharTraj, window.size = 18L)
+
+# This is done without symmetric optimizations, regardless of control$symmetric
+crossdist <- fam@dist(CharTraj, CharTraj, window.size = 18L)
+
+# For non-dtwclust distances, symmetric optimizations only apply
+# with an appropriate control AND a single data argument:
+fam <- new("tsclustFamily", dist = "dtw",
+           control = partitional_control(symmetric = TRUE))
+fam@dist(CharTraj[1L:5L])
 }
 
 # If you want the fuzzy family, use fuzzy = TRUE

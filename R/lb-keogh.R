@@ -10,6 +10,8 @@
 #' @inherit lb_improved details
 #' @inheritSection lb_improved Note
 #'
+#' @template proxy
+#'
 #' @return A list with:
 #'
 #'   - `d`: The lower bound of the DTW distance.
@@ -31,7 +33,7 @@
 #'
 #' # Corresponding true DTW distance
 #' d.dtw <- dtw(CharTraj[[1]], CharTraj[[2]],
-#'              window.type = "slantedband", window.size = 20)$distance
+#'              window.type = "sakoechiba", window.size = 20)$distance
 #'
 #' d.lbk <= d.dtw
 #'
@@ -41,9 +43,8 @@
 #'                      window.size = 20, norm = "L2")
 #'
 #' # Corresponding true DTW distance
-#' # (see dtwclust-package description for an explanation of DTW2)
-#' D.dtw <- proxy::dist(CharTraj[1], CharTraj[2:5], method = "DTW2",
-#'                      window.type = "slantedband", window.size = 20)
+#' D.dtw <- proxy::dist(CharTraj[1], CharTraj[2:5], method = "dtw_basic",
+#'                      norm = "L2", window.size = 20)
 #'
 #' D.lbk <= D.dtw
 #'
@@ -111,76 +112,88 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
     if (is_multivariate(x) || is_multivariate(y))
         stop("lb_keogh does not support multivariate series.")
 
+    pairwise <- isTRUE(pairwise)
+    dim_out <- c(length(x), length(y))
+    dim_names <- list(names(x), names(y))
+    D <- allocate_distmat(length(x), length(y), pairwise, FALSE) ## utils.R
+
     envelopes <- lapply(y, function(s) { compute_envelope(s, window.size, error.check = FALSE) })
     lower.env <- lapply(envelopes, "[[", "lower")
     upper.env <- lapply(envelopes, "[[", "upper")
     lower.env <- split_parallel(lower.env)
     upper.env <- split_parallel(upper.env)
 
-
+    ## Wrap as needed for foreach
     if (pairwise) {
-        X <- split_parallel(x)
-        validate_pairwise(X, lower.env)
-        retclass <- "pairdist"
-
-        D <- foreach(x = X, lower.env = lower.env, upper.env = upper.env,
-                     .packages = "dtwclust",
-                     .combine = c,
-                     .multicombine = TRUE) %op% {
-                         mapply(upper.env, lower.env, x,
-                                FUN = function(u, l, x) {
-                                    lb_keogh(x,
-                                             norm = norm,
-                                             lower.env = l,
-                                             upper.env = u,
-                                             error.check = FALSE)$d
-                                })
-                     }
+        x <- split_parallel(x)
+        validate_pairwise(x, lower.env)
+        validate_pairwise(x, upper.env)
+        endpoints <- attr(x, "endpoints")
 
     } else {
-        retclass <- "crossdist"
+        x <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { x })
+        endpoints <- attr(lower.env, "endpoints")
+    }
 
-        D <- foreach(lower.env = lower.env, upper.env = upper.env,
-                     .packages = "dtwclust",
-                     .combine = cbind,
-                     .multicombine = TRUE) %op% {
-                         d <- mapply(U = upper.env, L = lower.env,
-                                     MoreArgs = list(x = x),
-                                     SIMPLIFY = FALSE,
-                                     FUN = function(U, L, x) {
-                                         ## This will return one column of the distance matrix
-                                         sapply(x, u = U, l = L,
-                                                FUN = function(x, u, l) {
-                                                    lb_keogh(x,
-                                                             norm = norm,
-                                                             lower.env = l,
-                                                             upper.env = u,
-                                                             error.check = FALSE)$d
-                                                })
-                                     })
+    if (bigmemory::is.big.matrix(D)) {
+        D_desc <- bigmemory::describe(D)
+        noexport <- "D"
 
-                         do.call(cbind, d)
-                     }
+    } else {
+        D_desc <- NULL
+        noexport <- ""
+    }
+
+    ## Calculate distance matrix
+    foreach(x = x, lower.env = lower.env, upper.env = upper.env, endpoints = endpoints,
+            .combine = c,
+            .multicombine = TRUE,
+            .packages = c("dtwclust", "bigmemory"),
+            .export = c("lbk_loop", "enlist"),
+            .noexport = noexport) %op% {
+                bigmat <- !is.null(D_desc)
+                d <- if (bigmat) bigmemory::attach.big.matrix(D_desc)@address else D
+                do.call(lbk_loop,
+                        enlist(d = d,
+                               x = x,
+                               lower.env = lower.env,
+                               upper.env = upper.env,
+                               pairwise = pairwise,
+                               endpoints = endpoints,
+                               bigmat = bigmat,
+                               norm = norm))
+            }
+
+    D <- D[,]
+    if (pairwise) {
+        class(D) <- "pairdist"
+
+    } else {
+        if (is.null(dim(D))) dim(D) <- dim_out
+        dimnames(D) <- dim_names
+        class(D) <- "crossdist"
     }
 
     if (force.symmetry && !pairwise) {
-        if (nrow(D) != ncol(D)) {
+        if (nrow(D) != ncol(D))
             warning("Unable to force symmetry. Resulting distance matrix is not square.")
-
-        } else {
-            ind_tri <- lower.tri(D)
-            new_low_tri_vals <- t(D)[ind_tri]
-            ind_correct <- D[ind_tri] > new_low_tri_vals
-            new_low_tri_vals[ind_correct] <- D[ind_tri][ind_correct]
-            D[ind_tri] <- new_low_tri_vals
-            D <- t(D)
-            D[ind_tri] <- new_low_tri_vals
-        }
+        else
+            .Call(C_force_lb_symmetry, D, PACKAGE = "dtwclust")
     }
 
-    class(D) <- retclass
     attr(D, "method") <- "LB_Keogh"
-
     ## return
     D
+}
+
+# ==================================================================================================
+# Wrapper for C++
+# ==================================================================================================
+
+lbk_loop <- function(d, x, lower.env, upper.env, pairwise, endpoints, bigmat, ..., norm = "L1") {
+    p <- switch(norm, "L1" = 1L, "L2" = 2L)
+    len <- length(x[[1L]])
+    .Call(C_lbk_loop,
+          d, x, lower.env, upper.env, pairwise, bigmat, p, len, endpoints,
+          PACKAGE = "dtwclust")
 }

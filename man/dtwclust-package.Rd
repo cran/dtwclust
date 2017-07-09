@@ -6,10 +6,7 @@
 \title{Time series clustering along with optimizations for the Dynamic Time Warping distance}
 \description{
 Time series clustering with a wide variety of strategies and a series of optimizations specific
-to the Dynamic Time Warping (DTW) distance and its corresponding lower bounds (LBs). There are
-implementations of both traditional clustering algorithms, and more recent procedures such as
-k-Shape and TADPole clustering. Functionality can be easily extended with custom distance
-measures and centroid definitions.
+to the Dynamic Time Warping (DTW) distance and its corresponding lower bounds (LBs).
 }
 \details{
 Many of the algorithms implemented in this package are specifically tailored to DTW, hence its
@@ -28,9 +25,6 @@ length. DTW itself does not require this, but it is relatively expensive to comp
 distance definitions may be used, or series could be reinterpolated to a matching length
 (Ratanamahatana and Keogh 2004).
 
-Other packages that are particularly leveraged here are the \pkg{proxy} package for distance
-matrix calculations and the \pkg{dtw} package for some of the core DTW calculations.
-
 The main clustering function and entry point for this package is \code{\link[=tsclust]{tsclust()}}, with a convenience
 wrapper for multiple tests in \code{\link[=compare_clusterings]{compare_clusterings()}}.
 
@@ -42,14 +36,16 @@ For more information, please read the included package vignette, which can be ac
 \code{vignette("dtwclust")}.
 }
 \note{
-The \pkg{methods} \link[methods:methods-package]{package} must be attached in order for some internal
-functions to work properly. This is usually done automatically by \code{R}, with \code{\link[utils:Rscript]{utils::Rscript()}}
-being an exception. As of \pkg{dtwclust} version 3.2.0, attaching the \pkg{methods} package is
-also done when attaching \pkg{dtwclust} (via \code{\link[base:library]{base::library()}}), so please always attach the
-package before using its functionality.
-
 This software package was developed independently of any organization or institution that is or
 has been associated with the author.
+
+There are a couple of reasons why this package will \strong{not} work if it is not attached (via
+\code{\link[base:library]{base::library()}}). For the specifics, see below.
+
+The \pkg{methods} \link[methods:methods-package]{package} must be attached in order for some internal
+inheritance to work properly. This is usually done automatically by \code{R}, with \code{\link[utils:Rscript]{utils::Rscript()}}
+being an exception. This is why this package is a dependency of \pkg{dtwclust}. Additionally, the
+included distance functions are registered with \pkg{proxy} during attachment.
 }
 \references{
 Please refer to the package vignette references.

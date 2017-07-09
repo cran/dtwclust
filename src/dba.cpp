@@ -22,38 +22,38 @@ bool trace;
 
 void uv_set_alignment(const Rcpp::NumericVector& x, const Rcpp::NumericVector& y)
 {
-    SEXP X = PROTECT(Rcpp::wrap(x));
-    SEXP Y = PROTECT(Rcpp::wrap(y));
     SEXP NX = PROTECT(Rcpp::wrap(nx));
     SEXP NY = PROTECT(Rcpp::wrap(ny));
     SEXP NV = PROTECT(Rcpp::wrap(nv));
-    Rcpp::List alignment(dtw_basic(X, Y, window, NX, NY, NV, norm, step, backtrack, gcm));
+    Rcpp::List alignment(dtw_basic(x, y, window, NX, NY, NV, norm, step, backtrack, gcm));
     index1 = alignment["index1"];
     index2 = alignment["index2"];
     begin = alignment["path"];
-    UNPROTECT(5);
+    UNPROTECT(3);
 }
 
 void mv_set_alignment(const Rcpp::NumericMatrix& x, const Rcpp::NumericMatrix& y)
 {
-    SEXP X = PROTECT(Rcpp::wrap(x));
-    SEXP Y = PROTECT(Rcpp::wrap(y));
     SEXP NX = PROTECT(Rcpp::wrap(nx));
     SEXP NY = PROTECT(Rcpp::wrap(ny));
     SEXP NV = PROTECT(Rcpp::wrap(nv));
-    Rcpp::List alignment(dtw_basic(X, Y, window, NX, NY, NV, norm, step, backtrack, gcm));
+    Rcpp::List alignment(dtw_basic(x, y, window, NX, NY, NV, norm, step, backtrack, gcm));
     index1 = alignment["index1"];
     index2 = alignment["index2"];
     begin = alignment["path"];
-    UNPROTECT(5);
+    UNPROTECT(3);
 }
 
 // =================================================================================================
 /* sum step for vectors and matrices */
 // =================================================================================================
 
-void uv_sum_step(const Rcpp::NumericVector& x, Rcpp::NumericVector& cent, Rcpp::IntegerVector& n,
-                 Rcpp::NumericVector& kahan_c, Rcpp::NumericVector& kahan_y, Rcpp::NumericVector& kahan_t)
+void uv_sum_step(const Rcpp::NumericVector& x,
+                 Rcpp::NumericVector& cent,
+                 Rcpp::IntegerVector& n,
+                 Rcpp::NumericVector& kahan_c,
+                 Rcpp::NumericVector& kahan_y,
+                 Rcpp::NumericVector& kahan_t)
 {
     for (int i = begin - 1; i >= 0; i--) {
         int i1 = index1[i] - 1;
@@ -66,8 +66,12 @@ void uv_sum_step(const Rcpp::NumericVector& x, Rcpp::NumericVector& cent, Rcpp::
     }
 }
 
-void mv_sum_step(const Rcpp::NumericMatrix& x, Rcpp::NumericMatrix& cent, Rcpp::IntegerMatrix& n,
-                 Rcpp::NumericMatrix& kahan_c, Rcpp::NumericMatrix& kahan_y, Rcpp::NumericMatrix& kahan_t)
+void mv_sum_step(const Rcpp::NumericMatrix& x,
+                 Rcpp::NumericMatrix& cent,
+                 Rcpp::IntegerMatrix& n,
+                 Rcpp::NumericMatrix& kahan_c,
+                 Rcpp::NumericMatrix& kahan_y,
+                 Rcpp::NumericMatrix& kahan_t)
 {
     for (int j = 0; j < nv; j++) {
         for (int i = begin - 1; i >= 0; i--) {
@@ -87,7 +91,7 @@ void mv_sum_step(const Rcpp::NumericMatrix& x, Rcpp::NumericMatrix& cent, Rcpp::
 // =================================================================================================
 
 bool uv_average_step(Rcpp::NumericVector& new_cent,
-                     Rcpp::IntegerVector& num_vals,
+                     const Rcpp::IntegerVector& num_vals,
                      Rcpp::NumericVector& ref_cent)
 {
     bool converged = true;
@@ -100,7 +104,7 @@ bool uv_average_step(Rcpp::NumericVector& new_cent,
 }
 
 bool mv_average_step(Rcpp::NumericMatrix& new_cent,
-                     Rcpp::IntegerMatrix& num_vals,
+                     const Rcpp::IntegerMatrix& num_vals,
                      Rcpp::NumericMatrix& ref_cent)
 {
     bool converged = true;
@@ -118,7 +122,7 @@ bool mv_average_step(Rcpp::NumericMatrix& new_cent,
 /* helper functions for all */
 // =================================================================================================
 
-int max_lengths(bool mv)
+int max_lengths(const bool mv)
 {
     int max_length = 0;
     for (int i = 0; i < series.length(); i++) {
@@ -155,14 +159,7 @@ void reset_matrices(Rcpp::NumericMatrix& mat_cent,
     kahan_c.fill(0);
 }
 
-void Rflush()
-{
-    R_FlushConsole();
-    R_ProcessEvents();
-    R_CheckUserInterrupt();
-}
-
-void print_trace(bool converged, int iter)
+void print_trace(const bool converged, const int iter)
 {
     if (trace) {
         if (converged) {
@@ -216,7 +213,7 @@ SEXP dba_uv(const Rcpp::NumericVector& centroid)
         Rflush();
     }
 
-    return PROTECT(Rcpp::wrap(new_cent));
+    return new_cent;
 }
 
 // =================================================================================================
@@ -266,7 +263,7 @@ SEXP dba_mv_by_variable(const Rcpp::NumericMatrix& mv_ref_cent)
         mat_cent(Rcpp::_, j) = new_cent;
     }
 
-    return PROTECT(Rcpp::wrap(mat_cent));
+    return mat_cent;
 }
 
 // =================================================================================================
@@ -307,7 +304,7 @@ SEXP dba_mv_by_series(const Rcpp::NumericMatrix& centroid)
         Rflush();
     }
 
-    return PROTECT(Rcpp::wrap(mat_cent));
+    return mat_cent;
 }
 
 // =================================================================================================
@@ -318,7 +315,7 @@ RcppExport SEXP dba(SEXP X, SEXP CENT,
                     SEXP MAX_ITER, SEXP DELTA, SEXP TRACE,
                     SEXP multivariate, SEXP mv_ver, SEXP DOTS)
 {
-BEGIN_RCPP
+    BEGIN_RCPP
     series = Rcpp::List(X);
 
     max_iter = Rcpp::as<int>(MAX_ITER);
@@ -347,10 +344,8 @@ BEGIN_RCPP
         new_cent = dba_uv(centroid);
     }
 
-    // new_cent is protected by dba_*(centroid)
-    UNPROTECT(1);
     return new_cent;
-END_RCPP
+    END_RCPP
 }
 
 } // namespace dtwclust

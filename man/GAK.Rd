@@ -29,8 +29,8 @@ ignores it for thread-safe reasons.}
 and give more informative errors messages. Also used internally to avoid repeating checks.}
 }
 \value{
-The logarithm of the GAK if \code{normalize = FALSE}, otherwise 1 minus the normalized GAK.
-The value of \code{sigma} is assigned as an attribute of the result.
+The logarithm of the GAK if \code{normalize = FALSE}, otherwise 1 minus the normalized GAK. The value
+of \code{sigma} is assigned as an attribute of the result.
 }
 \description{
 Distance based on (triangular) global alignment kernels.
@@ -51,14 +51,32 @@ is returned as an attribute of the result). See the examples.
 For more information, refer to the package vignette and the referenced article.
 }
 \note{
+The estimation of \code{sigma} does \emph{not} depend on \code{window.size}.
+
 If \code{normalize} is set to \code{FALSE}, the returned value is \strong{not} a distance, rather a similarity.
-The \code{\link[proxy:dist]{proxy::dist()}} version is thus always normalized.
+The \code{\link[proxy:dist]{proxy::dist()}} version is thus always normalized. Use \code{\link[proxy:simil]{proxy::simil()}} with \code{method} set to
+"uGAK" if you want the unnormalized similarities.
 
 A constrained unnormalized calculation (i.e. with \code{window.size > 0} and \code{normalize = FALSE}) will
 return negative infinity if \code{abs(NROW(x)} \code{-} \code{NROW(y))} \code{>} \code{window.size}. Since the function
 won't perform calculations in that case, it might be faster, but if this behavior is not desired,
 consider reinterpolating the time series (see \code{\link[=reinterpolate]{reinterpolate()}}) or increasing the window size.
 }
+\section{Proxy version}{
+
+
+  The version registered with \code{\link[proxy]{dist}} is custom (\code{loop = FALSE} in
+  \code{\link[proxy]{pr_DB}}). The custom function handles parallelization directly (with
+  \code{\link[foreach]{foreach}}).
+
+
+
+  It also includes symmetric optimizations to calculate only half a distance matrix when
+  appropriate. Only one list of series should be provided. If you want to avoid this
+  optimization, call \code{\link[proxy]{dist}} by giving the same list of series in both \code{x}
+  and \code{y}.
+}
+
 \examples{
 
 \dontrun{
@@ -78,6 +96,9 @@ tsclust(CharTraj, k = 20L,
         args = tsclust_args(dist = list(sigma = sigma,
                                         window.size = 18L)))
 }
+
+# Unnormalized similarities
+proxy::simil(CharTraj[1L:5L], method = "ugak")
 
 }
 \references{

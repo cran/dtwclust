@@ -1,10 +1,7 @@
 #' Time series clustering along with optimizations for the Dynamic Time Warping distance
 #'
 #' Time series clustering with a wide variety of strategies and a series of optimizations specific
-#' to the Dynamic Time Warping (DTW) distance and its corresponding lower bounds (LBs). There are
-#' implementations of both traditional clustering algorithms, and more recent procedures such as
-#' k-Shape and TADPole clustering. Functionality can be easily extended with custom distance
-#' measures and centroid definitions.
+#' to the Dynamic Time Warping (DTW) distance and its corresponding lower bounds (LBs).
 #'
 #' @docType package
 #' @name dtwclust-package
@@ -28,9 +25,6 @@
 #' distance definitions may be used, or series could be reinterpolated to a matching length
 #' (Ratanamahatana and Keogh 2004).
 #'
-#' Other packages that are particularly leveraged here are the \pkg{proxy} package for distance
-#' matrix calculations and the \pkg{dtw} package for some of the core DTW calculations.
-#'
 #' The main clustering function and entry point for this package is [tsclust()], with a convenience
 #' wrapper for multiple tests in [compare_clusterings()].
 #'
@@ -43,14 +37,16 @@
 #'
 #' @note
 #'
-#' The \pkg{methods} [package][methods::methods-package] must be attached in order for some internal
-#' functions to work properly. This is usually done automatically by `R`, with [utils::Rscript()]
-#' being an exception. As of \pkg{dtwclust} version 3.2.0, attaching the \pkg{methods} package is
-#' also done when attaching \pkg{dtwclust} (via [base::library()]), so please always attach the
-#' package before using its functionality.
-#'
 #' This software package was developed independently of any organization or institution that is or
 #' has been associated with the author.
+#'
+#' There are a couple of reasons why this package will **not** work if it is not attached (via
+#' [base::library()]). For the specifics, see below.
+#'
+#' The \pkg{methods} [package][methods::methods-package] must be attached in order for some internal
+#' inheritance to work properly. This is usually done automatically by `R`, with [utils::Rscript()]
+#' being an exception. This is why this package is a dependency of \pkg{dtwclust}. Additionally, the
+#' included distance functions are registered with \pkg{proxy} during attachment.
 #'
 #' @author Alexis Sarda-Espinosa
 #'
@@ -65,6 +61,11 @@
 #' @useDynLib dtwclust, .registration = TRUE
 #'
 #' @import foreach
+#'
+#' @importFrom bigmemory attach.big.matrix
+#' @importFrom bigmemory big.matrix
+#' @importFrom bigmemory describe
+#' @importFrom bigmemory is.big.matrix
 #'
 #' @importFrom clue as.cl_class_ids
 #' @importFrom clue as.cl_membership
@@ -163,15 +164,15 @@ NULL ## remember to check methods imports after removing dtwclust()
 #'
 #' The following functions and/or classes are deprecated and will be eventually removed:
 #'
-#' - [dtwclust()]
-#' - [dtwclustFamily-class]
-#' - [dtwclustControl-class]
-#' - [dtwclust-class]
-#' - [dtwclust-methods]
-#' - [randIndex()]
+#' - [dtwclust()] - see [tsclust()]
+#' - [dtwclustFamily-class] - see [tsclustFamily-class]
+#' - [dtwclustControl-class] - see [tsclust-controls]
+#' - [dtwclust-class] - see [TSClusters-class]
+#' - [dtwclust-methods] - see [tsclusters-methods]
+#' - [randIndex()] - see [cvi()]
 #' - [clusterSim()]
-#' - [create_dtwclust()]
-#' - [compute_envelop()]
+#' - [create_dtwclust()] - see [tsclusters-methods]
+#' - [compute_envelop()] - see [compute_envelope()]
 #'
 NULL
 
@@ -209,7 +210,7 @@ NULL
 
     ## Register SBD
     if (!check_consistency("SBD", "dist", silent = TRUE))
-        proxy::pr_DB$set_entry(FUN = SBD.proxy, names=c("SBD", "sbd"),
+        proxy::pr_DB$set_entry(FUN = SBD_proxy, names=c("SBD", "sbd"),
                                loop = FALSE, type = "metric", distance = TRUE,
                                description = "Paparrizos and Gravanos' shape-based distance for time series",
                                PACKAGE = "dtwclust", PREFUN = proxy_prefun,
@@ -226,9 +227,16 @@ NULL
     if (!check_consistency("GAK", "dist", silent = TRUE))
         proxy::pr_DB$set_entry(FUN = GAK_proxy, names=c("GAK", "gak"),
                                loop = FALSE, type = "metric", distance = TRUE,
-                               description = "Fast (triangular) global alignment kernel",
+                               description = "Fast (triangular) global alignment kernel distance",
                                PACKAGE = "dtwclust", PREFUN = proxy_prefun,
                                convert = function(d) { 1 - d })
+
+    ## Register uGAK
+    if (!check_consistency("uGAK", "dist", silent = TRUE))
+        proxy::pr_DB$set_entry(FUN = GAK_simil, names=c("uGAK", "ugak"),
+                               loop = FALSE, type = "metric", distance = FALSE,
+                               description = "Fast (triangular) global alignment kernel similarity",
+                               PACKAGE = "dtwclust", PREFUN = proxy_prefun)
 
     RNGkind("L'Ecuyer")
 
@@ -245,9 +253,7 @@ NULL
                               "Using devtools::test() is currently broken, see tests/testthat.R")
 }
 
-.onUnload <- function(libpath) {
-    library.dynam.unload("dtwclust", libpath)
-}
+.onUnload <- function(libpath) { library.dynam.unload("dtwclust", libpath) }
 
 release_questions <- function() {
     c(

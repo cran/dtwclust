@@ -1,14 +1,13 @@
 #' Time series clustering
 #'
-#' This is the new main function to perform time series clustering. It should provide the same
-#' functionality as [dtwclust()], but it is hopefully more coherent in general. See the details and
-#' the examples for more information, as well as the included package vignette (which can be loaded
-#' by typing `vignette("dtwclust")`). A convenience wrapper is available in [compare_clusterings()].
+#' This is the main function to perform time series clustering. See the details and the examples for
+#' more information, as well as the included package vignette (which can be loaded by typing
+#' `vignette("dtwclust")`). A convenience wrapper is available in [compare_clusterings()].
 #'
 #' @export
 #'
 #' @param series A list of series, a numeric matrix or a data frame. Matrices and data frames are
-#'   coerced to a list row-wise.
+#'   coerced to a list row-wise (see [tslist()]).
 #' @param type What type of clustering method to use: `"partitional"`, `"hierarchical"`, `"tadpole"`
 #'   or `"fuzzy"`.
 #' @param k Number of desired clusters. It may be a numeric vector with different values.
@@ -17,7 +16,7 @@
 #'   and to [stats::hclust()] if it contains the `members` parameter.
 #' @param preproc Function to preprocess data. Defaults to [zscore()] *only* if `centroid` `=`
 #'   `"shape"`, but will be replaced by a custom function if provided.
-#' @param distance A supported distance from [proxy::dist()]. Ignored for `type` `=` `"tadpole"`.
+#' @param distance A registered distance from [proxy::dist()]. Ignored for `type` `=` `"tadpole"`.
 #' @param centroid Either a supported string or an appropriate function to calculate centroids when
 #'   using partitional or prototypes for hierarchical/tadpole methods.
 #' @param control An appropriate list of controls. See [tsclust-controls]
@@ -34,7 +33,7 @@
 #' Specifying `type` = `"partitional"`, `preproc` = `zscore`, `distance` = `"sbd"` and `centroid` =
 #' `"shape"` is equivalent to the k-Shape algorithm (Paparrizos and Gravano 2015).
 #'
-#' The `series` may be porovided as a matrix, a data frame or a list. Matrices and data frames are
+#' The `series` may be provided as a matrix, a data frame or a list. Matrices and data frames are
 #' coerced to a list, both row-wise. Only lists can have series with different lengths or multiple
 #' dimensions. Most of the optimizations require series to have the same length, so consider
 #' reinterpolating them to save some time (see Ratanamahatana and Keogh 2004; [reinterpolate()]). No
@@ -42,11 +41,10 @@
 #'
 #' In the case of multivariate time series, they should be provided as a list of matrices, where
 #' time spans the rows of each matrix and the variables span the columns (see [CharTrajMV] for an
-#' example). At the moment, only `DTW`, `DTW2` and `GAK` suppport such series, which means only
-#' partitional and hierarchical procedures using those distances will work. You can of course create
-#' your own custom distances. All included centroid functions should work with the aforementioned
-#' format, although `shape` is **not** recommended. Note that the `plot` method will simply append
-#' all dimensions (columns) one after the other.
+#' example). At the moment, only `DTW`, `DTW2` and `GAK` support such series. You can of course
+#' create your own custom distances. All included centroid functions should work with the
+#' aforementioned format, although `shape` is *not* recommended. Note that the `plot` method will
+#' simply append all dimensions (columns) one after the other.
 #'
 #' @return
 #'
@@ -66,7 +64,7 @@
 #'   parentheses):
 #'
 #'   - `x`: The *whole* data list (`list(ts1, ts2, ts3)`)
-#'   - `cl_id`: A numeric vector with length equal to the number of series in `data`, indicating
+#'   - `cl_id`: An integer vector with length equal to the number of series in `data`, indicating
 #'     which cluster a series belongs to (`c(1L, 2L, 2L)`)
 #'   - `k`: The desired number of total clusters (`2L`)
 #'   - `cent`: The current centroids in order, in a list (`list(centroid1, centroid2)`)
@@ -90,7 +88,7 @@
 #'   - "pam": Partition around medoids (PAM). This basically means that the cluster centroids are
 #'     always one of the time series in the data. In this case, the distance matrix can be
 #'     pre-computed once using all time series in the data and then re-used at each iteration. It
-#'     usually saves overhead overall for small datasets.
+#'     usually saves overhead overall for small datasets (see [tsclust-controls]).
 #'   - "fcm": Fuzzy c-means. Only supported for fuzzy clustering and used by default in that case.
 #'   - "fcmdd": Fuzzy c-medoids. Only supported for fuzzy clustering. It **always** precomputes the
 #'     whole cross-distance matrix.
@@ -104,7 +102,7 @@
 #'   have this same length.
 #'
 #'   As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid
-#'   function that takes a list of series as only input and returns a single centroid series. These
+#'   function that takes a list of series as input and returns a single centroid series. These
 #'   centroids are returned in the `centroids` slot. By default, a type of PAM centroid function is
 #'   used.
 #'
@@ -121,16 +119,18 @@
 #'   - `"dtw"`: DTW, optionally with a Sakoe-Chiba/Slanted-band constraint.
 #'   - `"dtw2"`: DTW with L2 norm and optionally a Sakoe-Chiba/Slanted-band constraint. Read
 #'     details below.
-#'   - `"dtw_basic"`: A custom version of DTW with less functionality, but slightly faster. See
+#'   - `"dtw_basic"`: A custom version of DTW with less functionality, but faster. See
 #'     [dtw_basic()].
 #'   - `"dtw_lb"`: DTW with L1 or L2 norm and optionally a Sakoe-Chiba constraint. Some
 #'     computations are avoided by first estimating the distance matrix with Lemire's lower bound
 #'     and then iteratively refining with DTW. See [dtw_lb()]. Not suitable for `pam.precompute` =
-#'     `TRUE`.
-#'   - `"lbk"`: Keogh's lower bound with either L1 or L2 norm for the Sakoe-Chiba constraint.
-#'   - `"lbi"`: Lemire's lower bound with either L1 or L2 norm for the Sakoe-Chiba constraint.
-#'   - `"sbd"`: Shape-based distance. See [SBD()] for more details.
-#'   - `"gak"`: Global alignment kernels. See [GAK()] for more details..
+#'     `TRUE` nor hierarchical clustering.
+#'   - `"lbk"`: Keogh's lower bound with either L1 or L2 norm for the Sakoe-Chiba constraint. See
+#'     [lb_keogh()].
+#'   - `"lbi"`: Lemire's lower bound with either L1 or L2 norm for the Sakoe-Chiba constraint. See
+#'     [lb_improved()].
+#'   - `"sbd"`: Shape-based distance. See [SBD()].
+#'   - `"gak"`: Global alignment kernels. See [GAK()].
 #'
 #'   DTW2 is done with [dtw::dtw()], but it differs from the result you would obtain if you specify
 #'   `L2` as `dist.method`: with `DTW2`, pointwise distances (the local cost matrix) are calculated
@@ -138,13 +138,14 @@
 #'   [dtw::dtw()], which finds the optimum warping path. The square root of the resulting distance
 #'   is *then* computed. See [dtw2()].
 #'
-#'   Only `dtw`, `dtw2`, `sbd` and `gak` support series of different length. The lower bounds are
-#'   probably unsuitable for direct clustering unless series are very easily distinguishable.
+#'   Out of the aforementioned, only the distances based on DTW lower bounds *don't* support series
+#'   of different length. The lower bounds are probably unsuitable for direct clustering unless
+#'   series are very easily distinguishable.
 #'
 #'   If you know that the distance function is symmetric, and you use a hierarchical algorithm, or a
-#'   partitional algorithm with PAM centroids, some time can be saved by calculating only half the
-#'   distance matrix. Therefore, consider setting the symmetric control parameter to `TRUE` if this
-#'   is the case.
+#'   partitional algorithm with PAM centroids, or fuzzy c-medoids, some time can be saved by
+#'   calculating only half the distance matrix. Therefore, consider setting the symmetric control
+#'   parameter to `TRUE` if this is the case.
 #'
 #' @section Preprocessing:
 #'
@@ -173,21 +174,16 @@
 #'   clustering.
 #'
 #'   Repetitions are greatly optimized when PAM centroids are used and the whole distance matrix is
-#'   precomputed, since said matrix is reused for every repetition, and can be comptued in parallel
+#'   precomputed, since said matrix is reused for every repetition, and can be computed in parallel
 #'   (see Parallel section).
 #'
 #' @template parallel
 #'
 #' @section Parallel Computing:
 #'
-#'   Unless each repetition requires a few seconds, parallel computing probably isn't worth it. As
-#'   such, I would only use this feature with `shape` and `DBA` centroids, or an expensive distance
-#'   function like `DTW` or `GAK`.
-#'
 #'   If you register a parallel backend, the function will also try to do the calculation of the
-#'   distance matrices in parallel. This should work with any function registered with
-#'   [proxy::dist()] via [proxy::pr_DB()] whose `loop` flag is set to `TRUE`. If the function
-#'   requires special packages to be loaded, provide their names in the `packages` slot of
+#'   distance matrices in parallel. See the caveats in [tsclustFamily-class]. If the function
+#'   requires special packages to be loaded, provide their names in the `packages` element of
 #'   `control`. Note that "dtwclust" is always loaded in each parallel worker, so that doesn't need
 #'   to be included. Alternatively, you may want to pre-load \pkg{dtwclust} in each worker with
 #'   [parallel::clusterEvalQ()].
@@ -254,7 +250,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
         series <- do.call(zscore, enlist(series, dots = args$preproc))
 
     } else if (is.null(preproc)) {
-        preproc <- function(x, ...) { x }
+        preproc <- function(x, ...) { x } # nocov
         environment(preproc) <- .GlobalEnv
         preproc_char <- "none"
 
@@ -267,8 +263,10 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
     ## ---------------------------------------------------------------------------------------------
 
     ## after preprocessing!
+    distance_missing <- missing(distance)
     diff_lengths <- different_lengths(series)
     check_consistency(distance, "dist", trace = trace, diff_lengths = diff_lengths, silent = FALSE)
+    distance <- tolower(distance)
     cent_missing <- missing(centroid)
     cent_char <- check_consistency(centroid, "cent", clus_type = type,
                                    diff_lengths = diff_lengths, cent_missing = cent_missing)
@@ -281,23 +279,28 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             identical(args$dist$step.pattern, symmetric1) ||
             identical(args$dist$step.pattern, symmetric2)
 
-        if (tolower(distance) %in% c("dtw", "dtw2", "dtw_basic"))
+        if (distance %in% c("dtw", "dtw2", "dtw_basic"))
             control$symmetric <- symmetric_pattern && (is.null(args$dist$window.size) || !diff_lengths)
-        else if (tolower(distance) %in% c("lbk", "lbi"))
+        else if (distance %in% c("lbk", "lbi"))
             control$symmetric <- FALSE
-        else if (tolower(distance) %in% c("sbd", "gak"))
+        else if (distance %in% c("sbd", "gak"))
             control$symmetric <- TRUE
+
+        if (distance == "dtw_lb" && isTRUE(args$dist$nn.margin != 1L)) { # nocov start
+            warning("Using dtw_lb in tsclust() always uses row-wise nearest neighbors.")
+            args$dist$nn.margin <- 1L
+        } # nocov end
     }
 
     ## pre-allocate matrices for known distances
     matrices_allocated <- FALSE
     if (type != "tadpole") {
-        if (tolower(distance) %in% c("dtw_basic", "dtw_lb") && is.null(args$dist$gcm)) {
+        if (distance %in% c("dtw_basic", "dtw_lb") && is.null(args$dist$gcm)) {
             N <- max(sapply(series, NROW))
             args$dist$gcm <- matrix(0, 2L, N + 1L)
             matrices_allocated <- TRUE
 
-        } else if (tolower(distance) == "gak" && is.null(args$dist$logs)) {
+        } else if (distance == "gak" && is.null(args$dist$logs)) {
             N <- max(sapply(series, NROW))
             args$dist$logs <- matrix(0, N + 1L, 3L)
             matrices_allocated <- TRUE
@@ -328,7 +331,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                 control$distmat <- NULL
 
             ## -------------------------------------------------------------------------------------
-            ## Family creation, see initialization in tsclusters-methods.R
+            ## Family creation, see initialization in tsclust-family.R
             ## -------------------------------------------------------------------------------------
 
             family <- new("tsclustFamily",
@@ -347,76 +350,56 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             ## PAM precompute?
             ## -------------------------------------------------------------------------------------
 
-            ## for a check near the end, changed if appropriate
-            distmat_provided <- FALSE
-            distmat <- control$distmat
-
             ## precompute distance matrix?
             if (cent_char %in% c("pam", "fcmdd")) {
-                if (!is.null(distmat)) {
-                    if (nrow(distmat) != length(series) || ncol(distmat) != length(series))
-                        stop("Dimensions of provided cross-distance matrix don't correspond ",
-                             "to length of provided data")
-
-                    ## distmat was provided in call
-                    distmat_provided <- TRUE
-                    distmat <- control$distmat
-
-                    ## see Distmat.R
-                    if (!inherits(distmat, "Distmat"))
-                        distmat <- Distmat$new(distmat = distmat)
-
-                    if (trace) cat("\n\tDistance matrix provided...\n\n")
-
-                } else if (isTRUE(control$pam.precompute) || cent_char == "fcmdd") {
-                    if (tolower(distance) == "dtw_lb")
-                        warning("Using dtw_lb with control$pam.precompute = TRUE is not ",
-                                "advised.")
-
-                    if (trace) cat("\n\tPrecomputing distance matrix...\n\n")
-
-                    ## see Distmat.R
-                    distmat <- Distmat$new(distmat = do.call(
-                        family@dist,
-                        enlist(x = series,
-                               centroids = NULL,
-                               dots = args$dist))
-                    )
-
-                } else {
-                    if (isTRUE(control$pam.sparse) && tolower(distance) != "dtw_lb") {
-                        ## see SparseDistmat.R
-                        distmat <- SparseDistmat$new(series = series,
-                                                     distance = distance,
-                                                     control = control,
-                                                     dist_args = args$dist,
-                                                     error.check = FALSE)
-
-                    } else {
-                        ## see Distmat.R
-                        distmat <- Distmat$new(series = series,
-                                               distance = distance,
-                                               control = control,
-                                               dist_args = args$dist,
-                                               error.check = FALSE)
-                    }
-                }
+                ## utils.R
+                dm <- pam_distmat(series, control, distance, cent_char, family, args, trace)
+                distmat <- dm$distmat
+                distmat_provided <- dm$distmat_provided
 
                 ## Redefine new distmat
                 control$distmat <- distmat
                 environment(family@dist)$control$distmat <- distmat
                 environment(family@allcent)$control$distmat <- distmat
+
+            } else {
+                distmat <- NULL
+                distmat_provided <- FALSE
             }
 
             ## -------------------------------------------------------------------------------------
             ## Cluster
             ## -------------------------------------------------------------------------------------
 
-            if (length(k) == 1L && nrep == 1L) {
-                rngtools::setRNG(rngtools::RNGseq(1L, seed = seed, simplify = TRUE))
+            ## I need to re-register any custom distances in each parallel worker
+            dist_entry <- proxy::pr_DB$get_entry(distance)
+            export <- c("pfclust", "check_consistency", "enlist")
+            rng <- rngtools::RNGseq(length(k) * nrep, seed = seed, simplify = FALSE)
+            ## if %do% is used, the outer loop replaces values in this envir
+            rng0 <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) { rng[i] })
+            k0 <- k
+            ## sequential allows the matrix to be updated iteratively
+            `%this_op%` <- if(inherits(control$distmat, "SparseDistmat")) `%do%` else `%op%`
+            i <- integer() # CHECK complains about non-initialization
 
-                ## Just one repetition
-                pc_list <- list(do.call(pfclust,
+            pc_list <- foreach(k = k0, rng = rng0,
+                               .combine = c, .multicombine = TRUE,
+                               .packages = control$packages,
+                               .export = export) %:%
+                foreach(i = 1L:nrep,
+                        .combine = c, .multicombine = TRUE,
+                        .packages = control$packages,
+                        .export = export) %this_op%
+                        {
+                            if (trace) message("Repetition ", i, " for k = ", k)
+                            rngtools::setRNG(rng[[i]])
+
+                            if (!check_consistency(dist_entry$names[1L], "dist"))
+                                do.call(proxy::pr_DB$set_entry, dist_entry)
+
+                            ## return
+                            list(
+                                do.call(pfclust,
                                         enlist(x = series,
                                                k = k,
                                                family = family,
@@ -424,54 +407,9 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                                                fuzzy = isTRUE(type == "fuzzy"),
                                                cent = cent_char,
                                                trace = trace,
-                                               args = args)))
-
-            } else {
-                if ((foreach::getDoParName() != "doSEQ") && trace)
-                    message("Tracing of repetitions might not be available if done in ",
-                            "parallel.\n")
-
-                ## I need to re-register any custom distances in each parallel worker
-                dist_entry <- proxy::pr_DB$get_entry(distance)
-                export <- c("pfclust", "check_consistency", "enlist")
-                rng <- rngtools::RNGseq(length(k) * nrep, seed = seed, simplify = FALSE)
-                ## if %do% is used, the outer loop replaces values in this envir
-                rng0 <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) rng[i])
-                k0 <- k
-                ## sequential allows the matrix to be updated iteratively
-                `%this_op%` <- if(inherits(control$distmat, "SparseDistmat")) `%do%` else `%op%`
-                i <- integer() # CHECK complains about non-initialization now
-
-                pc_list <- foreach(k = k0, rng = rng0,
-                                   .combine = c, .multicombine = TRUE,
-                                   .packages = control$packages,
-                                   .export = export) %:%
-                    foreach(i = 1L:nrep,
-                            .combine = c, .multicombine = TRUE,
-                            .packages = control$packages,
-                            .export = export) %this_op%
-                            {
-                                if (trace) message("Repetition ", i, " for k = ", k)
-
-                                rngtools::setRNG(rng[[i]])
-
-                                if (!check_consistency(dist_entry$names[1L], "dist"))
-                                    do.call(proxy::pr_DB$set_entry, dist_entry)
-
-                                ## return
-                                list(
-                                    do.call(pfclust,
-                                            enlist(x = series,
-                                                   k = k,
-                                                   family = family,
-                                                   control = control,
-                                                   fuzzy = isTRUE(type == "fuzzy"),
-                                                   cent = cent_char,
-                                                   trace = trace,
-                                                   args = args))
-                                )
-                            }
-            }
+                                               args = args))
+                            )
+                        }
 
             ## -------------------------------------------------------------------------------------
             ## Prepare results
@@ -563,7 +501,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             distmat <- control$distmat
 
             if (!is.function(centroid)) centroid <- NA
-            if (tolower(distance) == "dtw_lb")
+            if (distance == "dtw_lb")
                 warning("Using dtw_lb with hierarchical clustering is not advised.")
 
             ## -------------------------------------------------------------------------------------
@@ -688,7 +626,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             ## =====================================================================================
 
             if (!inherits(control, "TpCtrl")) stop("Invalid control provided")
-            if (!missing(distance)) warning("The distance argument is ignored for TADPole.")
+            if (!distance_missing) warning("The distance argument is ignored for TADPole.")
 
             ## -------------------------------------------------------------------------------------
             ## Parameters
@@ -725,10 +663,8 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                                     seed = seed,
                                     simplify = FALSE)
 
-            ## mapply/Map were causing series to be (deeply?) copied into datalist!
-            RET <- lapply(1L:length(R), function(i) {
-                rngtools::setRNG(rng[[i]])
-                R <- R[[i]]
+            RET <- Map(R, rng, f = function(R, rng) {
+                rngtools::setRNG(rng)
                 k <- length(R$centroids)
 
                 if (is.function(centroid)) {

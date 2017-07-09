@@ -36,10 +36,11 @@ check_consistency <- function(obj, case, ..., clus_type,
         }
 
         if (diff_lengths) {
-            if ((obj %in% distances_included) && !(obj %in% distances_difflength))
+            obj <- tolower(obj)
+            if ((obj %in% distances_known) && !(obj %in% distances_difflength))
                 stop("Only the following distances are supported for series with different length:\n\t",
                      paste(distances_difflength, collapse = "\t"))
-            else if (!(obj %in% distances_included) && trace)
+            else if (!(obj %in% distances_known) && trace)
                 message("Series have different lengths. ",
                         "Please confirm that the provided distance function supports this.")
         }
@@ -190,6 +191,60 @@ get_from_callers <- function(obj_name, mode = "any") {
     stop("Could not find object '", obj_name, "' of mode '", mode, "'")
 }
 
+# Get an appropriate distance matrix object for internal use with PAM/FCMdd centroids
+pam_distmat <- function(series, control, distance, cent_char, family, args, trace) {
+    distmat <- control$distmat
+    distmat_provided <- FALSE
+
+    if (!is.null(distmat)) {
+        if (nrow(distmat) != length(series) || ncol(distmat) != length(series))
+            stop("Dimensions of provided cross-distance matrix don't correspond ",
+                 "to length of provided data")
+
+        ## see Distmat.R
+        if (!inherits(distmat, "Distmat")) distmat <- Distmat$new(distmat = distmat)
+        distmat_provided <- TRUE
+
+        if (trace) cat("\n\tDistance matrix provided...\n\n")
+
+    } else if (isTRUE(control$pam.precompute) || cent_char == "fcmdd") {
+        if (distance == "dtw_lb")
+            warning("Using dtw_lb with control$pam.precompute = TRUE is not ",
+                    "advised.")
+
+        if (trace) cat("\n\tPrecomputing distance matrix...\n\n")
+
+        ## see Distmat.R
+        distmat <- Distmat$new(distmat = do.call(
+            family@dist,
+            enlist(x = series,
+                   centroids = NULL,
+                   dots = args$dist))
+        )
+
+    } else {
+        if (isTRUE(control$pam.sparse) && distance != "dtw_lb") {
+            ## see SparseDistmat.R
+            distmat <- SparseDistmat$new(series = series,
+                                         distance = distance,
+                                         control = control,
+                                         dist_args = args$dist,
+                                         error.check = FALSE)
+
+        } else {
+            ## see Distmat.R
+            distmat <- Distmat$new(series = series,
+                                   distance = distance,
+                                   control = control,
+                                   dist_args = args$dist,
+                                   error.check = FALSE)
+        }
+    }
+
+    ## return
+    list(distmat = distmat, distmat_provided = distmat_provided)
+}
+
 # ==================================================================================================
 # Helper C/C++ functions
 # ==================================================================================================
@@ -199,14 +254,14 @@ call_pairs <- function(n = 2L, lower = TRUE) {
     if (n < 2L) stop("At least two elements are needed to create pairs.")
     pairs <- try(.Call(C_pairs, n, lower, PACKAGE = "dtwclust"), silent = TRUE)
 
-    if (inherits(pairs, "try-error")) {
+    if (inherits(pairs, "try-error")) { # nocov start
         message("There was an error calculating the distance matrix. ",
                 "This usually indicates that the matrix is too big to fit in RAM.\n",
                 "If it applies, try using a non-hierarchical algorithm, ",
                 "or set pam.precompute = FALSE in the control.")
 
         stop(pairs, call. = FALSE)
-    }
+    } # nocov end
 
     pairs
 }
@@ -239,15 +294,10 @@ setnames_inplace <- function(vec, names) {
 # Split a given object into chunks for parallel workers
 split_parallel <- function(obj, margin = NULL) {
     num_workers <- foreach::getDoParWorkers()
+    if (num_workers == 1L) return(structure(list(obj), endpoints = 1L))
 
-    if (num_workers == 1L) return(list(obj))
-
-    if (is.null(margin))
-        num_tasks <- length(obj)
-    else
-        num_tasks <- dim(obj)[margin]
-
-    if (is.na(num_tasks)) stop("Invalid attempt to split an object into parallel tasks")
+    num_tasks <- if (is.null(margin)) length(obj) else dim(obj)[margin]
+    if (!is.integer(num_tasks)) stop("Invalid attempt to split an object into parallel tasks")
 
     num_tasks <- parallel::splitIndices(num_tasks, num_workers)
     num_tasks <- num_tasks[lengths(num_tasks, use.names = FALSE) > 0L]
@@ -259,6 +309,7 @@ split_parallel <- function(obj, margin = NULL) {
                       lapply(num_tasks, function(id) obj[id, , drop = FALSE]),
                       lapply(num_tasks, function(id) obj[ , id, drop = FALSE]))
 
+    attr(ret, "endpoints") <- lapply(num_tasks, function(ids) { ids[1L] })
     ret
 }
 
@@ -270,9 +321,120 @@ validate_pairwise <- function(x, y) {
     invisible(NULL)
 }
 
+# Function to split indices for the symmetric, parallel, proxy case
+split_parallel_symmetric <- function(n, num_workers, adjust = 0L) {
+    if (num_workers <= 2L || n <= 4L) {
+        mid_point <- as.integer(n / 2)
+        ## indices for upper part of the lower triangular
+        ul_trimat <- 1L:mid_point + adjust
+        ## indices for lower part of the lower triangular
+        ll_trimat <- (mid_point + 1L):n + adjust
+        ## put triangular parts together for load balance
+        trimat <- list(ul = ul_trimat, ll = ll_trimat)
+
+        attr(trimat, "trimat") <- TRUE
+        trimat <- list(trimat)
+
+        mid_point <- mid_point + adjust
+        attr(ul_trimat, "rows") <- ll_trimat
+        mat <- list(ul_trimat)
+
+        ids <- c(trimat, mat)
+
+    } else {
+        mid_point <- as.integer(n / 2)
+
+        ## recursion
+        rec1 <- split_parallel_symmetric(mid_point, as.integer(num_workers / 4), adjust)
+        rec2 <- split_parallel_symmetric(n - mid_point, as.integer(num_workers / 4), mid_point + adjust)
+
+        endpoints <- parallel::splitIndices(mid_point, max(length(rec1) + length(rec2), num_workers))
+        endpoints <- endpoints[lengths(endpoints) > 0L]
+        mat <- lapply(endpoints, function(ids) {
+            ids <- ids + adjust
+            attr(ids, "rows") <- (mid_point + 1L):n + adjust
+            ids
+        })
+
+        ids <- c(rec1, rec2, mat)
+    }
+
+    chunk_sizes <- unlist(lapply(ids, function(x) {
+        if (is.null(attr(x, "trimat"))) length(x) else median(lengths(x))
+    }))
+
+    ## return
+    ids[sort(chunk_sizes, index.return = TRUE)$ix]
+}
+
 # ==================================================================================================
 # Helper distance-related
 # ==================================================================================================
+
+# allocate distance matrix for custom proxy loops
+allocate_distmat <- function(x_len, y_len, pairwise, symmetric) {
+    if (foreach::getDoParWorkers() > 1L) {
+        seed <- get0(".Random.seed", .GlobalEnv, mode = "integer") ## undo big.matrix() seed change...
+        if (pairwise)
+            D <- bigmemory::big.matrix(x_len, 1L, "double", 0)
+        else if (symmetric)
+            D <- bigmemory::big.matrix(x_len, x_len, "double", 0)
+        else
+            D <- bigmemory::big.matrix(x_len, y_len, "double", 0)
+        assign(".Random.seed", seed, .GlobalEnv)
+
+    } else {
+        if (pairwise)
+            D <- matrix(0, x_len, 1L)
+        else if (symmetric)
+            D <- matrix(0, x_len, x_len)
+        else
+            D <- matrix(0, x_len, y_len)
+    }
+    ## return
+    D
+}
+
+# get endpoints for parallel symmetric distance matrix calculations based on number of workers
+symmetric_loop_endpoints <- function(n) {
+    if (n < 2L) stop("No symmetric calculations possible for a 1x1 distance matrix")
+    num_workers <- foreach::getDoParWorkers()
+    if (num_workers == 1L) return(list(list(
+        start = list(i = 2L, j = 1L), end = list(i = n, j = n - 1L))
+    ))
+
+    ## single to double index for symmetric matrices
+    s2d <- function(id, n) {
+        if (id < n) return(list(i = id + 1L, j = 1L))
+        ## start at second column
+        i <- 3L
+        j <- 2L
+        start_pair <- n
+        end_pair <- n * 2L - 3L
+        ## j is ready after this while loop finishes
+        while (!(id >= start_pair && id <= end_pair)) {
+            start_pair <- end_pair + 1L
+            end_pair <- start_pair + n - j - 2L
+            i <- i + 1L
+            j <- j + 1L
+        }
+        ## while loop for i
+        while (start_pair < id) {
+            i <- i + 1L
+            start_pair <- start_pair + 1L
+        }
+        ## return
+        list(i = i, j = j)
+    }
+
+    num_pairs <- as.integer(n * (n + 1L) / 2L - n)
+    if (num_pairs < num_workers) num_workers <- num_pairs
+    start_pairs <- cumsum(c(1L, rep(as.integer(num_pairs / num_workers), num_workers - 1L)))
+    end_pairs <- c(start_pairs[-1L] - 1L, num_pairs)
+    Map(start_pairs, end_pairs, f = function(start_pair, end_pair) {
+        list(start = s2d(start_pair, n), end = s2d(end_pair, n))
+    })
+}
 
 # column-wise medians
 colMedians <- function(mat) { apply(mat, 2L, stats::median) }
