@@ -61,14 +61,14 @@ TADPole <- function(data, k = 2L, dc, window.size, error.check = TRUE, lb = "lbk
     if (missing(dc)) stop("Please provide the 'dc' parameter")
     if (any(dc < 0)) stop("The cutoff distance 'dc' must be positive")
 
-    x <- any2list(data)
+    x <- tslist(data)
     n <- length(x)
 
     if (n < 2L) stop("data should have more than one time series")
     if (any(k > n)) stop("Number of clusters should be less than the number of time series")
     lb <- match.arg(lb, c("lbk", "lbi"))
 
-    if (trace) cat("\tComputing lower and upper bound matrices\n\n")
+    if (trace) cat("\tComputing lower and upper bound matrices\n")
 
     ## Calculate matrices with bounds (error check in lbk/lbi)
     LBM <- proxy::dist(x, x,

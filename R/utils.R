@@ -109,23 +109,12 @@ check_consistency <- function(obj, case, ..., clus_type,
 }
 
 # Coerce to list
-any2list <- function(obj) {
-    if (is.matrix(obj)) {
-        rnms <- rownames(obj)
-        obj <- lapply(seq_len(nrow(obj)), function(i) obj[i, ])
-        if (!is.null(rnms)) setnames_inplace(obj, rnms)
-
-    } else if (is.numeric(obj)) {
-        obj <- list(obj)
-
-    } else if (is.data.frame(obj)) {
-        obj <- any2list(base::as.matrix(obj))
-
-    } else if (!is.list(obj))
-        stop("Unsupported data type.")
-
-    obj
-}
+any2list <- function(obj) { # nocov start
+    warning("dtwclust: If you're seeing this, ",
+            "you're probably using an old dtwclust/TSClusters object. ",
+            "Try using update() on it.")
+    tslist(obj)
+} # nocov end
 
 # Check if list of series have different length
 different_lengths <- function(x) { any(diff(lengths(x)) != 0L) }
@@ -219,8 +208,9 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
             family@dist,
             enlist(x = series,
                    centroids = NULL,
-                   dots = args$dist))
-        )
+                   dots = args$dist),
+            TRUE
+        ))
 
     } else {
         if (isTRUE(control$pam.sparse) && distance != "dtw_lb") {

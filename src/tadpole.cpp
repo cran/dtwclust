@@ -2,7 +2,7 @@
 #include <algorithm> // std::stable_sort and std::sort
 #include <iomanip> // std::setprecision
 #include <vector>
-#include "dtwclustpp.h"
+#include "dtwclust++.h"
 
 namespace dtwclust {
 
@@ -206,7 +206,7 @@ std::vector<double> nn_dist_1(const std::vector<double>& rho, const int num_seri
     delta_ub[0] = max_delta;
 
     auto id_orig = stable_sort_ind(id_rho_sorted, false);
-    reorder(delta_ub, id_orig); // template in dtwclustpp.h
+    reorder(delta_ub, id_orig); // template in dtwclust++.h
     return delta_ub;
 }
 
@@ -369,7 +369,7 @@ SEXP tadpole_cpp(const Rcpp::List& series,
     Rflush();
     std::vector<double> delta_ub = nn_dist_1(rho, num_series, distmat, UBM);
 
-    // get indices of sorted rho (using template function from dtwclustpp.h)
+    // get indices of sorted rho (using template function from dtwclust++.h)
     std::vector<double> helper = rho;
     for (int i = 0; i < num_series; i++) helper[i] *= delta_ub[i];
     auto id_cl = stable_sort_ind(helper, true);
@@ -390,7 +390,7 @@ SEXP tadpole_cpp(const Rcpp::List& series,
 
     if (trace) {
         Rcpp::Rcout << "\tPruning percentage = " << std::setprecision(3) << 100 - dist_op_percent << "%\n";
-        Rcpp::Rcout << "\tPerforming cluster assignmnet\n\n";
+        Rcpp::Rcout << "\tPerforming cluster assignment\n\n";
         Rflush();
     }
     cluster_assignment(k, dc, id_cent, id_cl, nearest_neighbors, dist_op_percent, trace, list);

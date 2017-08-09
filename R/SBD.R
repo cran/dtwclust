@@ -8,6 +8,7 @@
 #' @param x,y Univariate time series.
 #' @param znorm Logical. Should each series be z-normalized before calculating the distance?
 #' @template error-check
+#' @param return.shifted Logical. Should the shifted version of `y` be returned? See details.
 #'
 #' @details
 #'
@@ -20,7 +21,7 @@
 #'
 #' The output values lie between 0 and 2, with 0 indicating perfect similarity.
 #'
-#' @return A list with:
+#' @return For `return.shifted = FALSE`, the numeric distance value, otherwise a list with:
 #'
 #'   - `dist`: The shape-based distance between `x` and `y`.
 #'   - `yshift`: A shifted version of `y` so that it optimally matches `x` (based on [NCCc()]).
@@ -64,7 +65,7 @@
 #' # cross-distance matrix for series subset (notice the two-list input)
 #' sbD <- proxy::dist(CharTraj[1:10], CharTraj[1:10], method = "SBD", znorm = TRUE)
 #'
-SBD <- function(x, y, znorm = FALSE, error.check = TRUE) {
+SBD <- function(x, y, znorm = FALSE, error.check = TRUE, return.shifted = TRUE) {
     if (is_multivariate(list(x, y))) stop("SBD does not support multivariate series.")
 
     if (error.check) {
@@ -91,6 +92,7 @@ SBD <- function(x, y, znorm = FALSE, error.check = TRUE) {
         CCseq <- NCCc(x,y)
 
     m <- max(CCseq)
+    if (!return.shifted) return(1 - m)
     shift <- which.max(CCseq) - max(nx, ny)
 
     if (is.null(flip)) {
@@ -122,7 +124,7 @@ SBD <- function(x, y, znorm = FALSE, error.check = TRUE) {
 # ==================================================================================================
 
 SBD_proxy <- function(x, y = NULL, znorm = FALSE, ..., error.check = TRUE, pairwise = FALSE) {
-    x <- any2list(x)
+    x <- tslist(x)
 
     if (error.check) check_consistency(x, "vltslist")
     if (znorm) x <- zscore(x)
@@ -139,7 +141,7 @@ SBD_proxy <- function(x, y = NULL, znorm = FALSE, ..., error.check = TRUE, pairw
 
     } else {
         symmetric <- FALSE
-        y <- any2list(y)
+        y <- tslist(y)
         if (error.check) check_consistency(y, "vltslist")
         if (znorm) y <- zscore(y)
 
@@ -183,17 +185,19 @@ SBD_proxy <- function(x, y = NULL, znorm = FALSE, ..., error.check = TRUE, pairw
     if (bigmemory::is.big.matrix(D)) {
         D_desc <- bigmemory::describe(D)
         noexport <- "D"
+        packages <- c("dtwclust", "bigmemory")
 
     } else {
         D_desc <- NULL
         noexport <- ""
+        packages <- c("dtwclust")
     }
 
     ## Calculate distance matrix
     foreach(x = x, y = y, fftx = fftx, ffty = ffty, endpoints = endpoints,
             .combine = c,
             .multicombine = TRUE,
-            .packages = c("dtwclust", "bigmemory"),
+            .packages = packages,
             .export = "sbd_loop",
             .noexport = noexport) %op% {
                 bigmat <- !is.null(D_desc)

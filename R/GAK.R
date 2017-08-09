@@ -162,7 +162,7 @@ GAK_proxy <- function(x, y = NULL, ..., sigma = NULL, window.size = NULL, normal
         normalize <- TRUE
     } # nocov end
 
-    x <- any2list(x)
+    x <- tslist(x)
     if (error.check) check_consistency(x, "vltslist")
 
     if (is.null(y)) {
@@ -171,7 +171,7 @@ GAK_proxy <- function(x, y = NULL, ..., sigma = NULL, window.size = NULL, normal
 
     } else {
         symmetric <- FALSE
-        y <- any2list(y)
+        y <- tslist(y)
         if (error.check) check_consistency(y, "vltslist")
     }
 
@@ -256,17 +256,19 @@ GAK_proxy <- function(x, y = NULL, ..., sigma = NULL, window.size = NULL, normal
     if (bigmemory::is.big.matrix(D)) {
         D_desc <- bigmemory::describe(D)
         noexport <- c("D", "gak_x", "gak_y")
+        packages <- c("dtwclust", "bigmemory")
 
     } else {
         D_desc <- NULL
         noexport <- c("gak_x", "gak_y")
+        packages <- c("dtwclust")
     }
 
     ## Calculate distance matrix
     foreach(x = x, y = y, endpoints = endpoints,
             .combine = c,
             .multicombine = TRUE,
-            .packages = c("dtwclust", "bigmemory"),
+            .packages = packages,
             .export = c("gak_loop"),
             .noexport = noexport) %op% {
                 bigmat <- !is.null(D_desc)
@@ -281,7 +283,8 @@ GAK_proxy <- function(x, y = NULL, ..., sigma = NULL, window.size = NULL, normal
                              bigmat = bigmat,
                              window.size = window.size,
                              sigma = sigma,
-                             logs = logs))
+                             logs = logs),
+                        TRUE)
             }
 
     D <- D[,]

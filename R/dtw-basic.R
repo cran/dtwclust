@@ -118,7 +118,7 @@ dtw_basic <- function(x, y, window.size = NULL, norm = "L1",
 # ==================================================================================================
 
 dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pairwise = FALSE) {
-    x <- any2list(x)
+    x <- tslist(x)
     if (error.check) check_consistency(x, "vltslist")
 
     dots <- list(...)
@@ -129,7 +129,7 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
         symmetric <- is.null(dots$window.size) || !different_lengths(x)
 
     } else {
-        y <- any2list(y)
+        y <- tslist(y)
         if (error.check) check_consistency(y, "vltslist")
         symmetric <- FALSE
     }
@@ -162,17 +162,19 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
     if (bigmemory::is.big.matrix(D)) {
         D_desc <- bigmemory::describe(D)
         noexport <- "D"
+        packages <- c("dtwclust", "bigmemory")
 
     } else {
         D_desc <- NULL
         noexport <- ""
+        packages <- c("dtwclust")
     }
 
     ## Calculate distance matrix
     foreach(x = x, y = y, endpoints = endpoints,
             .combine = c,
             .multicombine = TRUE,
-            .packages = c("dtwclust", "bigmemory"),
+            .packages = packages,
             .export = c("dtwb_loop", "enlist"),
             .noexport = noexport) %op% {
                 bigmat <- !is.null(D_desc)
@@ -186,7 +188,8 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
                                endpoints = endpoints,
                                bigmat = bigmat,
                                gcm = gcm,
-                               dots = dots))
+                               dots = dots),
+                        TRUE)
             }
 
     D <- D[,]

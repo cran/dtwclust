@@ -121,14 +121,14 @@ lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
 {
     norm <- match.arg(norm, c("L1", "L2"))
     window.size <- check_consistency(window.size, "window")
-    x <- any2list(x)
+    x <- tslist(x)
     if (error.check) check_consistency(x, "tslist")
 
     if (is.null(y)) {
         y <- x
 
     } else {
-        y <- any2list(y)
+        y <- tslist(y)
         if (error.check) check_consistency(y, "tslist")
     }
 
@@ -163,17 +163,19 @@ lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
     if (bigmemory::is.big.matrix(D)) {
         D_desc <- bigmemory::describe(D)
         noexport <- "D"
+        packages <- c("dtwclust", "bigmemory")
 
     } else {
         D_desc <- NULL
         noexport <- ""
+        packages <- c("dtwclust")
     }
 
     ## Calculate distance matrix
     foreach(x = x, y = y, lower.env = lower.env, upper.env = upper.env, endpoints = endpoints,
             .combine = c,
             .multicombine = TRUE,
-            .packages = c("dtwclust", "bigmemory"),
+            .packages = packages,
             .export = c("lbi_loop", "enlist"),
             .noexport = noexport) %op% {
                 bigmat <- !is.null(D_desc)
@@ -188,7 +190,8 @@ lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
                                endpoints = endpoints,
                                bigmat = bigmat,
                                window.size = window.size,
-                               norm = norm))
+                               norm = norm),
+                        TRUE)
             }
 
     D <- D[,]
