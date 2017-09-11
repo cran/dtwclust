@@ -15,11 +15,11 @@ NULL
 #' @rdname tsclusters-methods
 #' @aliases initialize,TSClusters
 #'
-#' @param .Object A `TSClusters` prototype. You shouldn't use this, see Initialize section and the
+#' @param .Object A `TSClusters` prototype. You *shouldn't* use this, see Initialize section and the
 #'   examples.
 #' @param ... For `initialize`, any valid slots. For `plot`, passed to [ggplot2::geom_line()] for
-#'   the plotting of the *cluster centroids*, or to [stats::plot.hclust()]. See Plotting section.
-#'   For `update`, any supported argument. Otherwise ignored.
+#'   the plotting of the *cluster centroids*, or to [stats::plot.hclust()]; see Plotting section and
+#'   the examples. For `update`, any supported argument. Otherwise ignored.
 #' @param override.family Logical. Attempt to substitute the default family with one that conforms
 #'   to the provided elements? See Initialize section.
 #'
@@ -58,13 +58,16 @@ NULL
 #'               control = partitional_control(),
 #'               args = tsclust_args(cent = list(window.size = 8L, norm = "L2")))
 #'
+#' plot(pc_obj, type = "c", linetype = "solid",
+#'      labs.arg = list(title = "Clusters' centroids"))
+#'
 #' fc_obj <- new("FuzzyTSClusters",
 #'               type = "fuzzy", datalist = CharTraj,
 #'               centroids = centroids, cluster = cluster,
 #'               distance = "sbd", centroid = "fcm",
 #'               control = fuzzy_control())
 #'
-#' fc_obj
+#' show(fc_obj)
 #'
 setMethod("initialize", "TSClusters", function(.Object, ..., override.family = TRUE) {
     tic <- proc.time()
@@ -349,13 +352,21 @@ setMethod("update", methods::signature(object = "TSClusters"), update.TSClusters
 #'
 #' @param newdata New data to be assigned to a cluster. It can take any of the supported formats of
 #'   [tsclust()]. Note that for multivariate series, this means that it **must** be a list of
-#'   matrices, even if the list has only one element.
+#'   matrices, even if the list has only one matrix.
 #'
-#' @details
+#' @section Prediction:
 #'
-#' The `predict` generic can take the usual `newdata` argument and it returns the cluster(s) to
-#' which the data belongs; if `NULL`, it simply returns the obtained cluster indices. It
-#' preprocesses the data with the corresponding function if available.
+#'   The `predict` generic can take the usual `newdata` argument. If `NULL`, the method simply
+#'   returns the obtained cluster indices. Otherwise, a nearest-neighbor classification based on the
+#'   centroids obtained from clustering is performed:
+#'
+#'   1. `newdata` is preprocessed with `object@family@preproc` using the parameters in
+#'      `object@args$preproc`.
+#'   2. A cross-distance matrix between the processed series and `object@centroids` is computed with
+#'      `object@family@dist` using the parameters in `object@args$dist`.
+#'   3. For non-fuzzy clustering, the series are assigned to their nearest centroid's cluster. For
+#'      fuzzy clustering, the fuzzy membership matrix for the series is calculated. In both cases,
+#'      `object@family@cluster` is used.
 #'
 predict.TSClusters <- function(object, newdata = NULL, ...) {
     if (is.null(newdata)) {
@@ -371,7 +382,8 @@ predict.TSClusters <- function(object, newdata = NULL, ...) {
 
         newdata <- do.call(object@family@preproc,
                            args = enlist(newdata,
-                                         dots = object@args$preproc),
+                                         dots = subset_dots(object@args$preproc,
+                                                            object@family@preproc)),
                            TRUE)
 
         distmat <- do.call(object@family@dist,
@@ -407,8 +419,8 @@ setMethod("predict", methods::signature(object = "TSClusters"), predict.TSCluste
 #'
 #' @param y Ignored.
 #' @param clus A numeric vector indicating which clusters to plot.
-#' @param labs.arg Arguments to change the title and/or axis labels. See [ggplot2::labs()] for more
-#'   information
+#' @param labs.arg A list with arguments to change the title and/or axis labels. See the examples
+#'   and [ggplot2::labs()] for more information.
 #' @param series Optionally, the data in the same format as it was provided to [tsclust()].
 #' @param time Optional values for the time axis. If series have different lengths, provide the time
 #'   values of the longest series.
@@ -422,11 +434,11 @@ setMethod("predict", methods::signature(object = "TSClusters"), predict.TSCluste
 #'
 #'   The default depends on whether a hierarchical method was used or not. In those cases, the
 #'   dendrogram is plotted by default; you can pass any extra parameters to [stats::plot.hclust()]
-#'   via `...`.
+#'   via the ellipsis (`...`).
 #'
 #'   Otherwise, the function plots the time series of each cluster along with the obtained centroid.
 #'   The default values for cluster centroids are: `linetype = "dashed"`, `size = 1.5`, `colour =
-#'   "black"`, `alpha = 0.5`. You can change this by means of `...`.
+#'   "black"`, `alpha = 0.5`. You can change this by means of the ellipsis (`...`).
 #'
 #'   You can choose what to plot with the `type` parameter. Possible options are:
 #'
@@ -440,7 +452,11 @@ setMethod("predict", methods::signature(object = "TSClusters"), predict.TSCluste
 #'
 #'   If you want to free the scale of the X axis, you can do the following:
 #'
-#'   `plot(object, plot = FALSE)` `+` `facet_wrap(~cl, scales = "free")`
+#'   `plot(x, plot = FALSE)` `+` `facet_wrap(~cl, scales = "free")`
+#'
+#'   For more complicated changes, you're better off looking at the source code at
+#'   \url{https://github.com/asardaes/dtwclust/blob/master/R/tsclust-methods.R} and creating your
+#'   own plotting function.
 #'
 #' @return
 #'
@@ -708,7 +724,11 @@ cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
                                                      dots = a@args$cent),
                                        TRUE)
             } else {
-                global_cent <- a@family@allcent(a@datalist)
+                global_cent <- do.call(a@family@allcent,
+                                       args = enlist(a@datalist,
+                                                     dots = subset_dots(a@args$cent,
+                                                                        a@family@allcent)),
+                                       TRUE)
             }
 
             dist_global_cent <- do.call(a@family@dist,
@@ -817,6 +837,135 @@ setMethod("cvi", methods::signature(a = "PartitionalTSClusters"), cvi_TSClusters
 #' @exportMethod cvi
 #'
 setMethod("cvi", methods::signature(a = "HierarchicalTSClusters"), cvi_TSClusters)
+
+#' @rdname cvi
+#' @aliases cvi,FuzzyTSClusters
+#' @exportMethod cvi
+#'
+setMethod("cvi", methods::signature(a = "FuzzyTSClusters", b = "missing"),
+          function(a, b = NULL, type = "valid", ...) {
+              type <- match.arg(type, several.ok = TRUE,
+                                c("MPC", "K", "T", "SC", "PBMF",
+                                  "valid", "internal"))
+
+              if (any(type %in% c("valid", "internal"))) {
+                  type <- c("MPC", "K", "T", "SC", "PBMF")
+              }
+
+              if (length(a@datalist) == 0L && any(type %in% c("K", "T" ,"SC", "PBMF"))) {
+                  warning("Fuzzy CVIs: the original series must be in the object to calculate ",
+                          "the following indices:\n",
+                          "\tK\tT\tSC\tPBMF")
+
+                  type <- setdiff(type, c("K", "T" ,"SC", "PBMF"))
+              }
+
+              ## are no valid indices left?
+              if (length(type) == 0L) return(numeric(0L))
+
+              ## calculate global centroids if needed
+              if (any(type %in% c("K", "SC", "PBMF"))) {
+                  N <- length(a@datalist)
+
+                  global_cent <- do.call(a@family@allcent,
+                                         args = enlist(x = a@datalist,
+                                                       cl_id = cbind(rep(1L, N)),
+                                                       k = 1L,
+                                                       dots = a@args$cent),
+                                         TRUE)
+                  dist_global_cent <- do.call(a@family@dist,
+                                              args = enlist(x = a@centroids,
+                                                            centroids = global_cent,
+                                                            dots = a@args$dist),
+                                              TRUE)
+                  dim(dist_global_cent) <- NULL
+              }
+
+              ## distance between centroids
+              if (any(type %in% c("K", "T", "PBMF"))) {
+                  distcent <- do.call(a@family@dist,
+                                      args = enlist(x = a@centroids,
+                                                    centroids = NULL,
+                                                    dots = a@args$dist),
+                                      TRUE)
+              }
+
+              ## distance between series and centroids
+              if (any(type %in% c("K", "T", "SC", "PBMF"))) {
+                  dsc <- do.call(a@family@dist,
+                                 args = enlist(x = a@datalist,
+                                               centroids = a@centroids,
+                                               dots = a@args$dist),
+                                 TRUE)
+              }
+
+              CVIs <- sapply(type, function(CVI) {
+                  switch(EXPR = CVI,
+                         # -------------------------------------------------------------------------
+                         "MPC" = {
+                             PC <- sum(a@fcluster ^ 2) / nrow(a@fcluster)
+                             1 - (a@k / (a@k - 1L)) * (1 - PC)
+                         },
+
+                         # -------------------------------------------------------------------------
+                         "K" = {
+                             numerator <- sum((a@fcluster ^ 2) * (dsc ^ 2)) +
+                                 sum(dist_global_cent ^ 2) / a@k
+                             denominator <- min(distcent[!diag(a@k)] ^ 2)
+                             numerator / denominator
+                         },
+
+                         # -------------------------------------------------------------------------
+                         "T" = {
+                             numerator <- sum((a@fcluster ^ 2) * (dsc ^ 2)) +
+                                 sum(distcent[!diag(a@k)] ^ 2) / (a@k * (a@k - 1L))
+                             denominator <- min(distcent[!diag(a@k)] ^ 2) + 1 / a@k
+                             numerator / denominator
+                         },
+
+                         # -------------------------------------------------------------------------
+                         "SC" = {
+                             u <- a@fcluster
+                             m <- a@control$fuzziness
+
+                             SC1_numerator <- sum((dist_global_cent ^ 2) / a@k)
+                             SC1_denominator <- sum(apply((u ^ m) * (dsc ^ 2), 2L, sum) /
+                                                        apply(u, 2L, sum))
+                             SC1 <- SC1_numerator / SC1_denominator
+
+                             SC2_numerator <- sum(sapply(1L:(a@k - 1L), function(i) {
+                                 sum(sapply(1L:(a@k - i), function(r) {
+                                     j <- r + i
+                                     temp <- apply(u[, c(i,j)], 1L, min)
+                                     sum(temp ^ 2) / sum(temp)
+                                 }))
+                             }))
+                             SC2_denominator <- apply(u, 1L, max)
+                             SC2_denominator <- sum(SC2_denominator ^ 2) / sum(SC2_denominator)
+                             SC2 <- SC2_numerator / SC2_denominator
+
+                             SC1 - SC2
+                         },
+
+                         # -------------------------------------------------------------------------
+                         "PBMF" = {
+                             u <- a@fcluster
+                             m <- a@control$fuzziness
+                             dsgc <- do.call(a@family@dist,
+                                             args = enlist(x = a@datalist,
+                                                           centroids = global_cent,
+                                                           dots = a@args$dist),
+                                             TRUE)
+                             factor1 <- 1 / a@k
+                             factor2 <- sum(dsgc) / sum(dsc * (u ^ m))
+                             factor3 <- max(distcent[!diag(a@k)])
+                             (factor1 * factor2 * factor3) ^ 2
+                         })
+              })
+
+              ## return
+              CVIs
+          })
 
 # ==================================================================================================
 # Functions to support package 'clue'

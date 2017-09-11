@@ -13,7 +13,7 @@ compare_clusterings(series = NULL, types = c("p", "h", "f", "t"), ...,
 }
 \arguments{
 \item{series}{A list of series, a numeric matrix or a data frame. Matrices and data frames are
-coerced to a list row-wise.}
+coerced to a list row-wise (see \code{\link[=tslist]{tslist()}}).}
 
 \item{types}{Clustering types. It must be any combination of (possibly abbreviated): partitional,
 hierarchical, fuzzy, tadpole.}
@@ -343,33 +343,34 @@ stopCluster(cl); registerDoSEQ()
 # A run with only partitional clusterings
 # ====================================================================================
 
-p_cfgs <- compare_clusterings_configs(types = "p", k = 19L:21L,
-                                      controls = list(
-                                          partitional = partitional_control(
-                                              iter.max = 20L,
-                                              nrep = 8L
-                                          )
-                                      ),
-                                      preprocs = pdc_configs(
-                                          "preproc",
-                                          none = list(),
-                                          zscore = list(center = c(FALSE, TRUE))
-                                      ),
-                                      distances = pdc_configs(
-                                          "distance",
-                                          sbd = list(),
-                                          dtw_basic = list(window.size = 19L:20L,
-                                                           norm = c("L1", "L2")),
-                                          gak = list(window.size = 19L:20L,
-                                                     sigma = 100)
-                                      ),
-                                      centroids = pdc_configs(
-                                          "centroid",
-                                          partitional = list(
-                                              pam = list(),
-                                              shape = list()
-                                          )
-                                      )
+p_cfgs <- compare_clusterings_configs(
+    types = "p", k = 19L:21L,
+    controls = list(
+        partitional = partitional_control(
+            iter.max = 20L,
+            nrep = 8L
+        )
+    ),
+    preprocs = pdc_configs(
+        "preproc",
+        none = list(),
+        zscore = list(center = c(FALSE, TRUE))
+    ),
+    distances = pdc_configs(
+        "distance",
+        sbd = list(),
+        dtw_basic = list(window.size = 19L:20L,
+                         norm = c("L1", "L2")),
+        gak = list(window.size = 19L:20L,
+                   sigma = 100)
+    ),
+    centroids = pdc_configs(
+        "centroid",
+        partitional = list(
+            pam = list(),
+            shape = list()
+        )
+    )
 )
 
 # Remove redundant (shape centroid always uses zscore preprocessing)

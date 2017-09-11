@@ -16,24 +16,28 @@
 #'   == `dist(y,x)`? If `TRUE`, only half the distance matrix needs to be computed. Automatically
 #'   detected and overridden for the distances included in \pkg{dtwclust}.
 #' @param packages Character vector with the names of any packages required for custom `proxy`
-#'   functions. Since the distance entries are re-registered in each parallel worker if needed, this
-#'   is probably useless, but just in case.
+#'   functions. Relevant for parallel computation, although since the distance entries are
+#'   re-registered in each parallel worker if needed, this is probably useless, but just in case.
 #' @param distmat If available, the cross-distance matrix can be provided here. Only relevant for
 #'   partitional with PAM centroids or hierarchical procedures.
 #' @param pam.sparse Attempt to use a sparse matrix for PAM centroids. See details.
+#' @param version Which version of partitional/fuzzy clustering to use. See details.
 #'
 #' @details
 #'
 #' The functions essentially return their function arguments in a classed list, although some checks
 #' are performed.
 #'
+#' Regarding parameter \code{version}: the first version of partitional/fuzzy clustering implemented
+#' in the package always performed an extra iteration, which is unnecessary. Use version 2 to avoid
+#' this, but bear in mind that the results may vary slightly due to the missing iteration.
+#'
 #' @section Partitional:
 #'
-#'   Using `pam.sparse = TRUE` defines a sparse matrix (see [Matrix::sparseMatrix()]) and updates it
-#'   every iteration (except for `"dtw_lb"` distance). For smaller datasets, precomputing the whole
-#'   distance matrix is still probably faster. Explicitly setting both `pam.precompute` and
-#'   `pam.sparse` to `FALSE` might be faster if the distance matrix is very big but the distance
-#'   function is very quick.
+#'   When `pam.precompute = FALSE`, using `pam.sparse = TRUE` defines a sparse matrix (see
+#'   [Matrix::sparseMatrix()]) and updates it every iteration (except for `"dtw_lb"` distance). For
+#'   most cases, precomputing the whole distance matrix is still probably faster. See the timing
+#'   experiments in `browseVignettes("dtwclust")`.
 #'
 #'   Parallel computations for PAM centroids have the following considerations:
 #'
@@ -52,10 +56,14 @@ partitional_control <- function(pam.precompute = TRUE,
                                 symmetric = FALSE,
                                 packages = character(0L),
                                 distmat = NULL,
-                                pam.sparse = FALSE)
+                                pam.sparse = FALSE,
+                                version = 1L)
 {
     if (any(iter.max <= 0L)) stop("Maximum iterations must be positive")
     if (any(nrep < 1L)) stop("Number of repetitions must be at least one")
+    if (any(version < 2L) && !isTRUE(getOption("dtwclust_no_version_warning")))
+        warning("Next dtwclust update will use version 2 of the partitional loop by default. ",
+                'See help("tsclust-controls")')
 
     structure(
         list(pam.precompute = as.logical(pam.precompute),
@@ -64,7 +72,8 @@ partitional_control <- function(pam.precompute = TRUE,
              nrep = as.integer(nrep)[1L],
              symmetric = as.logical(symmetric)[1L],
              packages = unique(c("dtwclust", as.character(packages))),
-             distmat = distmat),
+             distmat = distmat,
+             version = as.integer(version)),
         "class" = c(control_classes[["partitional"]])
     )
 }
@@ -128,18 +137,23 @@ fuzzy_control <- function(fuzziness = 2,
                           iter.max = 100L,
                           delta = 1e-3,
                           packages = character(0L),
-                          symmetric = FALSE)
+                          symmetric = FALSE,
+                          version = 1L)
 {
     if (any(fuzziness <= 1)) stop("Fuzziness exponent should be greater than one")
     if (any(iter.max <= 0L)) stop("Maximum iterations must be positive")
     if (any(delta < 0)) stop("Delta should be positive")
+    if (any(version < 2L) && !isTRUE(getOption("dtwclust_no_version_warning")))
+        warning("Next dtwclust update will use version 2 of the fuzzy loop by default. ",
+                'See help("tsclust-controls")')
 
     structure(
         list(fuzziness = fuzziness,
              iter.max = as.integer(iter.max),
              delta = delta,
              symmetric = as.logical(symmetric)[1L],
-             packages = unique(c("dtwclust", as.character(packages)))),
+             packages = unique(c("dtwclust", as.character(packages))),
+             version = as.integer(version)),
         "class" = c(control_classes[["fuzzy"]])
     )
 }
@@ -151,6 +165,11 @@ fuzzy_control <- function(fuzziness = 2,
 #' @param dc The cutoff distance for the TADPole algorithm.
 #' @param window.size The window.size specifically for the TADPole algorithm.
 #' @param lb The lower bound to use with TADPole. Either `"lbk"` or `"lbi"`.
+#'
+#' @section TADPole:
+#'
+#'   When using TADPole, the `dist` argument list includes the `window.size` and specifies `norm =
+#'   "L2"`.
 #'
 tadpole_control <- function(dc,
                             window.size,
@@ -175,11 +194,6 @@ tadpole_control <- function(dc,
 #' @param preproc A list of arguments for a preprocessing function to be used in [tsclust()].
 #' @param dist A list of arguments for a distance function to be used in [tsclust()].
 #' @param cent A list of arguments for a centroid function to be used in [tsclust()].
-#'
-#' @section TADPole:
-#'
-#'   When using TADPole, the `dist` argument list includes the `window.size` and specifies `norm =
-#'   "L2"`.
 #'
 tsclust_args <- function(preproc = list(), dist = list(), cent = list())
 {

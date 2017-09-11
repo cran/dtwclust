@@ -1,13 +1,12 @@
 #' Helper function for preprocessing/distance/centroid configurations
 #'
 #' Create preprocessing, distance and centroid configurations for [compare_clusterings_configs()].
-#' All functions use [base::expand.grid()].
 #'
 #' @export
 #'
 #' @param type Which type of function is being targeted by this configuration.
-#' @param ... Any number of named nested lists with functions and arguments that will be shared by
-#'   all clusterings. See details.
+#' @param ... Any number of named lists with functions and arguments that will be shared by all
+#'   clusterings. See details.
 #' @param partitional A named list of lists with functions and arguments for partitional
 #'   clusterings.
 #' @param hierarchical A named list of lists with functions and arguments for hierarchical
@@ -20,10 +19,12 @@
 #'
 #' @details
 #'
-#' The named lists are interpreted in the following way: the name of each element of the list will
-#' be considered to be a function name, and the elements of the nested list will be the possible
-#' parameters for the function. Each function must have at least an empty list. The parameters may
-#' be vectors that specify different values to be tested.
+#' All functions use [base::expand.grid()].
+#'
+#' The named lists are interpreted in the following way: the name of the list will be considered to
+#' be a function name, and the elements of the list will be the possible parameters for the
+#' function. Each function must have at least an empty list. The parameters may be vectors that
+#' specify different values to be tested.
 #'
 #' For preprocessing, the special name `none` signifies no preprocessing.
 #'
@@ -245,6 +246,7 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
                                    iter.max = control$iter.max,
                                    nrep = control$nrep,
                                    symmetric = control$symmetric,
+                                   version = control$version,
                                    stringsAsFactors = FALSE),
                             TRUE)
                 },
@@ -263,6 +265,7 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
                                    iter.max = control$iter.max,
                                    delta = control$delta,
                                    symmetric = control$symmetric,
+                                   version = control$version,
                                    stringsAsFactors = FALSE),
                             TRUE)
                 },
@@ -326,7 +329,7 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 #' @export
 #'
 #' @param series A list of series, a numeric matrix or a data frame. Matrices and data frames are
-#'   coerced to a list row-wise.
+#'   coerced to a list row-wise (see [tslist()]).
 #' @param types Clustering types. It must be any combination of (possibly abbreviated): partitional,
 #'   hierarchical, fuzzy, tadpole.
 #' @param ... Further arguments for [tsclust()], `score.clus` or `pick.clus`.
@@ -444,7 +447,7 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 #'
 #' [compare_clusterings_configs()], [tsclust()]
 #'
-#' @example inst/comparison-examples.R
+#' @example man-examples/comparison-examples.R
 #'
 compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ...,
                                 configs = compare_clusterings_configs(types),
@@ -516,9 +519,10 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ..
     ## Preprocessings
     ## =============================================================================================
 
-    if (trace) cat("Preprocessing series...\n")
+    if (trace) message("=================================== Preprocessing ",
+                       "series ===================================\n")
 
-    processed_series <- lapply(configs, function(config) {
+    processed_series <- Map(configs, types, f = function(config, type) {
         preproc_cols <- grepl("_?preproc$", names(config))
         preproc_df <- config[, preproc_cols, drop = FALSE]
 
@@ -528,6 +532,11 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ..
             return(NULL)
 
         preproc_args <- grepl("_preproc$", names(preproc_df))
+
+        if (trace) {
+            message("-------------- Applying ", type, " preprocessings: --------------")
+            print(preproc_df)
+        }
 
         lapply(seq_len(nrow(preproc_df)), function(i) {
             if (preproc_df$preproc[i] != "none") {
@@ -666,7 +675,6 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ..
             if (trace) {
                 message("-------------- Using configuration: --------------")
                 print(cfg)
-                cat("\n")
             }
 
             ## ---------------------------------------------------------------------------------
