@@ -1,4 +1,4 @@
-e8f5097306b4d1747f4d349f3bd16beb *DESCRIPTION
+5da1171a9ea278026b3291875c445328 *DESCRIPTION
 2b6388394bf2fc34eeb358be0c5b831b *NAMESPACE
 52b996808a9d548e945ea25e41294ade *R/DBA.R
 a049effe803dcd52b810fbab10e1ade5 *R/Distmat.R
@@ -27,7 +27,7 @@ bfb62632017b511e75084867337d5caa *R/dtwclust-methods.R
 ec81d524ba2af1a1f17894057da26e99 *R/globals-internal.R
 6359a7bfc07137f7e9daec4d0fce2b95 *R/lb-improved.R
 1aac5af16195dd4b16c71568265774ac *R/lb-keogh.R
-49af4fbb9503fb6096940dcc111a007f *R/partitional.R
+3afc2e7210d4a04dc06fe07a018f710d *R/partitional.R
 d30a0b4c322cb6b239dc3b585ab16251 *R/pkg.R
 9450271c95ddedfae2f3be6149dc9ed6 *R/reinterpolate.R
 ffbe9c33e76703ebac815aee593af810 *R/shape-extraction.R
@@ -43,9 +43,9 @@ d94bc83bd448602a3576140a85fbfbd2 *R/utils.R
 e0d90e5fe524478d8bd178f9a34e90bd *data/dtwclustTimings.rda
 cad8a63868ddf023a134893190421d1a *data/uciCT.rda
 531f5378c0534e2ac61f471961e72a20 *inst/COPYRIGHT.txt
-7938e9be9bb75918065047e80d597539 *inst/NEWS.Rd
+66421c6fd80bcbf1823425e959346b46 *inst/NEWS.Rd
 8ee2058b5c8fda592dfeb039e8fb501a *inst/doc/dtwclust.Rnw
-303d36c2611e36d23a89e72f8ed81b92 *inst/doc/dtwclust.pdf
+c720dcf737c9c752618bd8198db24bcd *inst/doc/dtwclust.pdf
 9ea7821fd6aae0321f0a6808de0a56e4 *inst/doc/timing-experiments.R
 1ae70dec92a9410f41f7c1242fa7a527 *inst/doc/timing-experiments.Rmd
 18734df69566d187ee0e3455d9d4c22a *inst/doc/timing-experiments.html
