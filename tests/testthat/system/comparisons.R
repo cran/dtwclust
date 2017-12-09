@@ -1,8 +1,8 @@
 context("\tCompare clusterings")
 
-# =================================================================================================
+# ==================================================================================================
 # setup
-# =================================================================================================
+# ==================================================================================================
 
 ## Original objects in env
 ols <- ls()
@@ -36,12 +36,15 @@ type_score_fun <- list(fuzzy = function(obj_list, lbls, ...) {
     })
 })
 
+bad_score_fun <- list(fuzzy = function(...) { list(1L:2L, 3L:5L) })
+
 cfgs <- compare_clusterings_configs(c("p", "h", "f", "t"), k = 2L:3L,
                                     controls = list(
                                         partitional = partitional_control(
                                             pam.precompute = c(FALSE, TRUE),
                                             iter.max = 10L,
-                                            nrep = 2L
+                                            nrep = 2L,
+                                            version = 1L
                                         ),
                                         hierarchical = hierarchical_control(
                                             method = "all"
@@ -49,7 +52,8 @@ cfgs <- compare_clusterings_configs(c("p", "h", "f", "t"), k = 2L:3L,
                                         fuzzy = fuzzy_control(
                                             fuzziness = c(2, 2.5),
                                             iter.max = 10L,
-                                            delta = c(0.1, 0.01)
+                                            delta = c(0.1, 0.01),
+                                            version = 1L
                                         ),
                                         tadpole = tadpole_control(
                                             dc = c(1.5, 2),
@@ -106,7 +110,8 @@ cfgs_gak <- compare_clusterings_configs(types = "p", k = 2L:3L,
                                         controls = list(
                                             partitional = partitional_control(
                                                 iter.max = 5L,
-                                                nrep = 2L
+                                                nrep = 2L,
+                                                version = 1L
                                             )
                                         ),
                                         preprocs = pdc_configs(
@@ -156,9 +161,9 @@ cfgs_mats <- compare_clusterings_configs(types = "h", k = 2L:3L,
                                          )
 )
 
-# =================================================================================================
+# ==================================================================================================
 # Compare clusterings
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Compare clusterings works for the minimum set with all possibilities.", {
     expect_warning(errorpass_comp <- compare_clusterings(data_subset, c("p", "h", "f"),
@@ -192,21 +197,37 @@ test_that("Compare clusterings works for the minimum set with all possibilities.
     expect_null(no_pick$pick)
     expect_true(!is.null(no_pick$scores))
 
+    expect_warning(compare_clusterings(data_reinterpolated_subset, c("f"),
+                                       configs = cfgs, seed = 392L,
+                                       score.clus = bad_score_fun,
+                                       lbls = labels_subset),
+                   "scores.*not.*appended")
+
     type_score <- compare_clusterings(data_reinterpolated_subset, c("f"),
                                       configs = cfgs, seed = 392L,
                                       score.clus = type_score_fun,
                                       lbls = labels_subset)
-    expect_identical(no_pick$results, type_score$results)
 
-    mute <- capture.output(all_comparisons <- compare_clusterings(data_reinterpolated_subset,
-                                                                  c("p", "h", "f", "t"),
-                                                                  configs = cfgs, seed = 392L,
-                                                                  trace = TRUE,
-                                                                  score.clus = score_fun,
-                                                                  pick.clus = pick_fun,
-                                                                  return.objects = TRUE,
-                                                                  shuffle.configs = TRUE,
-                                                                  lbls = labels_subset))
+    type_score_objs <- compare_clusterings(data_reinterpolated_subset, c("f"),
+                                           configs = cfgs, seed = 392L,
+                                           return.objects = TRUE,
+                                           score.clus = type_score_fun,
+                                           lbls = labels_subset)
+
+    expect_identical(no_pick$results, type_score$results)
+    expect_identical(no_pick$results, type_score_objs$results)
+
+    expect_output(
+        all_comparisons <- compare_clusterings(data_reinterpolated_subset,
+                                               c("p", "h", "f", "t"),
+                                               configs = cfgs, seed = 392L,
+                                               trace = TRUE,
+                                               score.clus = score_fun,
+                                               pick.clus = pick_fun,
+                                               return.objects = TRUE,
+                                               shuffle.configs = TRUE,
+                                               lbls = labels_subset)
+    )
 
     gak_comparison <- compare_clusterings(data_subset, "p",
                                           configs = cfgs_gak, seed = 190L,
@@ -250,7 +271,8 @@ test_that("Compare clusterings works for the minimum set with all possibilities.
     assign("comp_dba", dba_comparison, persistent)
 })
 
-# =================================================================================================
+# ==================================================================================================
 # clean
-# =================================================================================================
+# ==================================================================================================
+
 rm(list = setdiff(ls(), ols))

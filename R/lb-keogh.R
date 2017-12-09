@@ -67,6 +67,8 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1",
         upper.env <- envelopes$upper
 
     } else {
+        check_consistency(lower.env, "ts")
+        check_consistency(upper.env, "ts")
         if (length(lower.env) != length(x))
             stop("Length mismatch between 'x' and the lower envelope")
         if (length(upper.env) != length(x))
@@ -85,7 +87,7 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1",
         }
     }
 
-    ## return
+    # return
     list(d = d, upper.env = upper.env, lower.env = lower.env)
 }
 
@@ -93,6 +95,10 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1",
 # Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
 # ==================================================================================================
 
+#' @importFrom bigmemory attach.big.matrix
+#' @importFrom bigmemory describe
+#' @importFrom bigmemory is.big.matrix
+#'
 lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
                            force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE)
 {
@@ -109,13 +115,13 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
         if (error.check) check_consistency(y, "tslist")
     }
 
-    if (is_multivariate(x) || is_multivariate(y))
+    if (is_multivariate(c(x,y)))
         stop("lb_keogh does not support multivariate series.")
 
     pairwise <- isTRUE(pairwise)
     dim_out <- c(length(x), length(y))
     dim_names <- list(names(x), names(y))
-    D <- allocate_distmat(length(x), length(y), pairwise, FALSE) ## utils.R
+    D <- allocate_distmat(length(x), length(y), pairwise, FALSE) # utils.R
 
     envelopes <- lapply(y, function(s) { compute_envelope(s, window.size, error.check = FALSE) })
     lower.env <- lapply(envelopes, "[[", "lower")
@@ -123,7 +129,7 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
     lower.env <- split_parallel(lower.env)
     upper.env <- split_parallel(upper.env)
 
-    ## Wrap as needed for foreach
+    # Wrap as needed for foreach
     if (pairwise) {
         x <- split_parallel(x)
         validate_pairwise(x, lower.env)
@@ -146,7 +152,7 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
         packages <- c("dtwclust")
     }
 
-    ## Calculate distance matrix
+    # Calculate distance matrix
     foreach(x = x, lower.env = lower.env, upper.env = upper.env, endpoints = endpoints,
             .combine = c,
             .multicombine = TRUE,
@@ -185,7 +191,7 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
     }
 
     attr(D, "method") <- "LB_Keogh"
-    ## return
+    # return
     D
 }
 

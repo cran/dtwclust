@@ -1,15 +1,15 @@
 context("\tConsistency of dtw_basic")
 
-# =================================================================================================
+# ==================================================================================================
 # setup
-# =================================================================================================
+# ==================================================================================================
 
 ## Original objects in env
 ols <- ls()
 
-# =================================================================================================
+# ==================================================================================================
 # consistency of dtwb
-# =================================================================================================
+# ==================================================================================================
 
 test_that("dtw_basic gives the same results as dtw/dtw2", {
     for (rep in 1L:100L) {
@@ -23,9 +23,9 @@ test_that("dtw_basic gives the same results as dtw/dtw2", {
             window.size <- NULL
 
         if (j <= 50L)
-            step.pattern <- symmetric1
+            step.pattern <- dtw::symmetric1
         else
-            step.pattern <- symmetric2
+            step.pattern <- dtw::symmetric2
 
         if (is.null(window.size))
             window.type <- "none"
@@ -52,7 +52,7 @@ test_that("dtw_basic gives the same results as dtw/dtw2", {
 
         expect_equal(d1$distance, d2$distance, info = paste("Indices:", i, j, "- Norm:", norm))
 
-        if (identical(step.pattern, symmetric2)) {
+        if (identical(step.pattern, dtw::symmetric2)) {
             d3 <- dtw_basic(x, y, window.size = window.size, norm = norm,
                             step.pattern = step.pattern, normalize = TRUE)
 
@@ -74,7 +74,8 @@ test_that("dtw_basic gives the same results as dtw/dtw2", {
     expect_equivalent(D1_L1, D2_L1, info = "dtw2 vs dtw_basic")
 })
 
-# =================================================================================================
+# ==================================================================================================
 # clean
-# =================================================================================================
+# ==================================================================================================
+
 rm(list = setdiff(ls(), ols))

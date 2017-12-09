@@ -4,6 +4,7 @@
 #' improved lower bound (LB_Improved).
 #'
 #' @export
+#' @importFrom proxy dist
 #'
 #' @param x,y A matrix or data frame where rows are time series, or a list of time series.
 #' @param window.size Window size to use with the LB and DTW calculation. See details.
@@ -129,6 +130,7 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
 {
     norm <- match.arg(norm, c("L1", "L2"))
     dtw.func <- match.arg(dtw.func, c("dtw", "dtw_basic"))
+    nn.margin <- as.integer(nn.margin)
     if (nn.margin != 1L) nn.margin <- 2L
 
     if (dtw.func == "dtw")
@@ -139,7 +141,7 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
     X <- tslist(x)
     Y <- if (is.null(y)) X else tslist(y)
 
-    if (is_multivariate(X) || is_multivariate(Y))
+    if (is_multivariate(c(X,Y)))
         stop("dtw_lb does not support multivariate series.")
 
     dots <- list(...)
@@ -182,17 +184,17 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
     dots$window.size <- window.size
     dots$window.type <- "slantedband"
 
-    ## NOTE: I tried starting with LBK estimate, refining with LBI and then DTW but, overall,
-    ## it was usually slower, almost the whole matrix had to be recomputed for LBI
+    # NOTE: I tried starting with LBK estimate, refining with LBI and then DTW but, overall,
+    # it was usually slower, almost the whole matrix had to be recomputed for LBI
 
-    ## Initial estimate
+    # Initial estimate
     D <- proxy::dist(X, Y, method = "LBI",
                      window.size = window.size,
                      norm = norm,
                      error.check = error.check,
                      ...)
 
-    ## y = NULL means diagonal is zero and NNs are themselves
+    # y = NULL means diagonal is zero and NNs are themselves
     if (is.null(y)) {
         class(D) <- "crossdist"
         attr(D, "method") <- "DTW_LB"
@@ -202,7 +204,7 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
     D <- split_parallel(D, 1L)
     X <- split_parallel(X)
 
-    ## Update with DTW in parallel
+    # Update with DTW in parallel
     D <- foreach(X = X,
                  distmat = D,
                  .combine = rbind,
@@ -210,7 +212,7 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
                  .packages = "dtwclust",
                  .export = c("enlist", "call_dtwlb")) %op% {
                      if (method == "DTW_BASIC") {
-                         ## modifies distmat in place
+                         # modifies distmat in place
                          dots$margin <- nn.margin
                          do.call(call_dtwlb,
                                  enlist(x = X, y = Y, distmat = distmat, dots = dots),
@@ -239,24 +241,27 @@ dtw_lb <- function(x, y = NULL, window.size = NULL, norm = "L1",
                          }
                      }
 
-                     ## return from foreach()
+                     # return from foreach()
                      distmat
                  }
 
     class(D) <- "crossdist"
     attr(D, "method") <- "DTW_LB"
 
-    ## return
+    # return
     D
 }
 
-## helper function
+# helper function
+#' @importFrom dtw symmetric1
+#' @importFrom dtw symmetric2
+#'
 call_dtwlb <- function(x, y, distmat, ..., window.size, norm, margin,
                        step.pattern = NULL, gcm = NULL)
 {
-    if (is.null(step.pattern) || identical(step.pattern, symmetric2))
+    if (is.null(step.pattern) || identical(step.pattern, dtw::symmetric2))
         step.pattern <- 2
-    else if (identical(step.pattern, symmetric1))
+    else if (identical(step.pattern, dtw::symmetric1))
         step.pattern <- 1
     else
         stop("step.pattern must be either symmetric1 or symmetric2 (without quotes)")
@@ -276,6 +281,6 @@ call_dtwlb <- function(x, y, distmat, ..., window.size, norm, margin,
                  backtrack = FALSE,
                  gcm = gcm)
 
-    ## return
+    # return
     .Call(C_dtw_lb, x, y, distmat, margin, dots, PACKAGE = "dtwclust")
 }

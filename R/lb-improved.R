@@ -10,9 +10,9 @@
 #' @param window.size Window size for envelope calculation. See details.
 #' @param norm Vector norm. Either `"L1"` for Manhattan distance or `"L2"` for Euclidean.
 #' @param lower.env Optionally, a pre-computed lower envelope for **`y`** can be provided (non-proxy
-#'   version only).
+#'   version only). See [compute_envelope()].
 #' @param upper.env Optionally, a pre-computed upper envelope for **`y`** can be provided (non-proxy
-#'   version only).
+#'   version only). See [compute_envelope()].
 #' @param force.symmetry If `TRUE`, a second lower bound is calculated by swapping `x` and `y`, and
 #'   whichever result has a *higher* distance value is returned. The proxy version can only work if
 #'   a square matrix is obtained, but use carefully.
@@ -94,6 +94,8 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1",
         upper.env <- envelopes$upper
 
     } else {
+        check_consistency(lower.env, "ts")
+        check_consistency(upper.env, "ts")
         if (length(lower.env) != length(x))
             stop("Length mismatch between 'x' and the lower envelope")
         if (length(upper.env) != length(x))
@@ -108,7 +110,7 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1",
         if (d2 > d) d <- d2
     }
 
-    ## return
+    # return
     d
 }
 
@@ -116,6 +118,10 @@ lb_improved <- function(x, y, window.size = NULL, norm = "L1",
 # Loop without using native 'proxy' looping (to avoid multiple calculations of the envelope)
 # ==================================================================================================
 
+#' @importFrom bigmemory attach.big.matrix
+#' @importFrom bigmemory describe
+#' @importFrom bigmemory is.big.matrix
+#'
 lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
                               force.symmetry = FALSE, pairwise = FALSE, error.check = TRUE)
 {
@@ -132,13 +138,13 @@ lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
         if (error.check) check_consistency(y, "tslist")
     }
 
-    if (is_multivariate(x) || is_multivariate(y))
+    if (is_multivariate(c(x,y)))
         stop("lb_improved does not support multivariate series.")
 
     pairwise <- isTRUE(pairwise)
     dim_out <- c(length(x), length(y))
     dim_names <- list(names(x), names(y))
-    D <- allocate_distmat(length(x), length(y), pairwise, FALSE) ## utils.R
+    D <- allocate_distmat(length(x), length(y), pairwise, FALSE) # utils.R
 
     envelopes <- lapply(y, function(s) { compute_envelope(s, window.size, error.check = FALSE) })
     lower.env <- lapply(envelopes, "[[", "lower")
@@ -147,7 +153,7 @@ lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
     upper.env <- split_parallel(upper.env)
     y <- split_parallel(y)
 
-    ## Wrap as needed for foreach
+    # Wrap as needed for foreach
     if (pairwise) {
         x <- split_parallel(x)
         validate_pairwise(x, y)
@@ -171,7 +177,7 @@ lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
         packages <- c("dtwclust")
     }
 
-    ## Calculate distance matrix
+    # Calculate distance matrix
     foreach(x = x, y = y, lower.env = lower.env, upper.env = upper.env, endpoints = endpoints,
             .combine = c,
             .multicombine = TRUE,
@@ -212,7 +218,7 @@ lb_improved_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
     }
 
     attr(D, "method") <- "LB_Improved"
-    ## return
+    # return
     D
 }
 

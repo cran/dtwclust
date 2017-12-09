@@ -45,7 +45,7 @@ check_consistency <- function(obj, case, ..., clus_type,
                         "Please confirm that the provided distance function supports this.")
         }
 
-        ## valid registered distance
+        # valid registered distance
         return(TRUE)
 
     } else if (case == "cent") {
@@ -66,7 +66,7 @@ check_consistency <- function(obj, case, ..., clus_type,
                     cent_char <- as.character(substitute(obj))[1L]
                 }
 
-                ## return partitional switch
+                # return partitional switch
                 cent_char
             },
             fuzzy = {
@@ -80,7 +80,7 @@ check_consistency <- function(obj, case, ..., clus_type,
                     cent_char <- as.character(substitute(obj))[1L]
                 }
 
-                ## return fuzzy switch
+                # return fuzzy switch
                 cent_char
             },
             hierarchical =, tadpole = {
@@ -96,25 +96,17 @@ check_consistency <- function(obj, case, ..., clus_type,
                             "so it was ignored.",
                             call. = FALSE, immediate. = TRUE)
 
-                ## return hierarchical/tadpole switch
+                # return hierarchical/tadpole switch
                 cent_char
             }
         )
 
-        ## cent case
+        # cent case
         return(cent_char)
     }
 
     invisible(NULL)
 }
-
-# Coerce to list
-any2list <- function(obj) { # nocov start
-    warning("dtwclust: If you're seeing this, ",
-            "you're probably using an old dtwclust/TSClusters object. ",
-            "Try using update() on it.")
-    tslist(obj)
-} # nocov end
 
 # Check if list of series have different length
 different_lengths <- function(x) { any(diff(lengths(x)) != 0L) }
@@ -143,96 +135,15 @@ adjust_args <- function(args, dots) {
     })
 }
 
-# Reinitialize empty clusters
-reinit_clusters <- function(x, cent, cent_case, num_empty, empty_clusters, control) {
-    ## Make sure no centroid is repeated (especially in case of PAM)
-    any_rep <- logical(num_empty)
-
-    while(TRUE) {
-        id_cent_extra <- sample(length(x), num_empty)
-        extra_cent <- x[id_cent_extra]
-
-        for (id_extra in 1L:num_empty) {
-            any_rep[id_extra] <- any(sapply(cent, function(i.centroid) {
-                identical(i.centroid, extra_cent[[id_extra]])
-            }))
-
-            if (cent_case == "pam")
-                control$distmat$id_cent[empty_clusters[id_extra]] <- id_cent_extra[id_extra]
-        }
-
-        if (all(!any_rep)) break
-    }
-
-    extra_cent
-}
-
 # Like dynGet() I assume, but that one is supposed to be experimental...
 get_from_callers <- function(obj_name, mode = "any") {
     ret <- get0(obj_name, mode = mode, inherits = TRUE)
     if (!is.null(ret)) return(ret)
-
     for (env in sys.frames()) {
         ret <- get0(obj_name, env, mode = mode, inherits = FALSE)
         if (!is.null(ret)) return(ret)
     }
-
-    stop("Could not find object '", obj_name, "' of mode '", mode, "'")
-}
-
-# Get an appropriate distance matrix object for internal use with PAM/FCMdd centroids
-pam_distmat <- function(series, control, distance, cent_char, family, args, trace) {
-    distmat <- control$distmat
-    distmat_provided <- FALSE
-
-    if (!is.null(distmat)) {
-        if (nrow(distmat) != length(series) || ncol(distmat) != length(series))
-            stop("Dimensions of provided cross-distance matrix don't correspond ",
-                 "to length of provided data")
-
-        ## see Distmat.R
-        if (!inherits(distmat, "Distmat")) distmat <- Distmat$new(distmat = distmat)
-        distmat_provided <- TRUE
-
-        if (trace) cat("\n\tDistance matrix provided...\n\n")
-
-    } else if (isTRUE(control$pam.precompute) || cent_char == "fcmdd") {
-        if (distance == "dtw_lb")
-            warning("Using dtw_lb with control$pam.precompute = TRUE is not ",
-                    "advised.")
-
-        if (trace) cat("\n\tPrecomputing distance matrix...\n\n")
-
-        ## see Distmat.R
-        distmat <- Distmat$new(distmat = do.call(
-            family@dist,
-            enlist(x = series,
-                   centroids = NULL,
-                   dots = args$dist),
-            TRUE
-        ))
-
-    } else {
-        if (isTRUE(control$pam.sparse) && distance != "dtw_lb") {
-            ## see SparseDistmat.R
-            distmat <- SparseDistmat$new(series = series,
-                                         distance = distance,
-                                         control = control,
-                                         dist_args = args$dist,
-                                         error.check = FALSE)
-
-        } else {
-            ## see Distmat.R
-            distmat <- Distmat$new(series = series,
-                                   distance = distance,
-                                   control = control,
-                                   dist_args = args$dist,
-                                   error.check = FALSE)
-        }
-    }
-
-    ## return
-    list(distmat = distmat, distmat_provided = distmat_provided)
+    stop("Could not find object '", obj_name, "' of mode '", mode, "'") # nocov
 }
 
 # ==================================================================================================
@@ -240,20 +151,10 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 # ==================================================================================================
 
 # Create combinations of all possible pairs
-call_pairs <- function(n = 2L, lower = TRUE) {
+call_pairs <- function(n = 2L) {
+    n <- as.integer(n)
     if (n < 2L) stop("At least two elements are needed to create pairs.")
-    pairs <- try(.Call(C_pairs, n, lower, PACKAGE = "dtwclust"), silent = TRUE)
-
-    if (inherits(pairs, "try-error")) { # nocov start
-        message("There was an error calculating the distance matrix. ",
-                "This usually indicates that the matrix is too big to fit in RAM.\n",
-                "If it applies, try using a non-hierarchical algorithm, ",
-                "or set pam.precompute = FALSE in the control.")
-
-        stop(pairs, call. = FALSE)
-    } # nocov end
-
-    pairs
+    .Call(C_pairs, n, PACKAGE = "dtwclust")
 }
 
 # Modify names in place
@@ -282,6 +183,8 @@ setnames_inplace <- function(vec, names) {
 }
 
 # Split a given object into chunks for parallel workers
+#' @importFrom parallel splitIndices
+#'
 split_parallel <- function(obj, margin = NULL) {
     num_workers <- foreach::getDoParWorkers()
     if (num_workers == 1L) return(structure(list(obj), endpoints = 1L))
@@ -311,60 +214,16 @@ validate_pairwise <- function(x, y) {
     invisible(NULL)
 }
 
-# Function to split indices for the symmetric, parallel, proxy case
-split_parallel_symmetric <- function(n, num_workers, adjust = 0L) {
-    if (num_workers <= 2L || n <= 4L) {
-        mid_point <- as.integer(n / 2)
-        ## indices for upper part of the lower triangular
-        ul_trimat <- 1L:mid_point + adjust
-        ## indices for lower part of the lower triangular
-        ll_trimat <- (mid_point + 1L):n + adjust
-        ## put triangular parts together for load balance
-        trimat <- list(ul = ul_trimat, ll = ll_trimat)
-
-        attr(trimat, "trimat") <- TRUE
-        trimat <- list(trimat)
-
-        mid_point <- mid_point + adjust
-        attr(ul_trimat, "rows") <- ll_trimat
-        mat <- list(ul_trimat)
-
-        ids <- c(trimat, mat)
-
-    } else {
-        mid_point <- as.integer(n / 2)
-
-        ## recursion
-        rec1 <- split_parallel_symmetric(mid_point, as.integer(num_workers / 4), adjust)
-        rec2 <- split_parallel_symmetric(n - mid_point, as.integer(num_workers / 4), mid_point + adjust)
-
-        endpoints <- parallel::splitIndices(mid_point, max(length(rec1) + length(rec2), num_workers))
-        endpoints <- endpoints[lengths(endpoints) > 0L]
-        mat <- lapply(endpoints, function(ids) {
-            ids <- ids + adjust
-            attr(ids, "rows") <- (mid_point + 1L):n + adjust
-            ids
-        })
-
-        ids <- c(rec1, rec2, mat)
-    }
-
-    chunk_sizes <- unlist(lapply(ids, function(x) {
-        if (is.null(attr(x, "trimat"))) length(x) else median(lengths(x))
-    }))
-
-    ## return
-    ids[sort(chunk_sizes, index.return = TRUE)$ix]
-}
-
 # ==================================================================================================
 # Helper distance-related
 # ==================================================================================================
 
 # allocate distance matrix for custom proxy loops
+#' @importFrom bigmemory big.matrix
+#'
 allocate_distmat <- function(x_len, y_len, pairwise, symmetric) {
     if (foreach::getDoParWorkers() > 1L) {
-        seed <- get0(".Random.seed", .GlobalEnv, mode = "integer") ## undo big.matrix() seed change...
+        seed <- get0(".Random.seed", .GlobalEnv, mode = "integer") # undo big.matrix() seed change...
         if (pairwise)
             D <- bigmemory::big.matrix(x_len, 1L, "double", 0)
         else if (symmetric)
@@ -381,7 +240,7 @@ allocate_distmat <- function(x_len, y_len, pairwise, symmetric) {
         else
             D <- matrix(0, x_len, y_len)
     }
-    ## return
+    # return
     D
 }
 
@@ -393,27 +252,27 @@ symmetric_loop_endpoints <- function(n) {
         start = list(i = 2L, j = 1L), end = list(i = n, j = n - 1L))
     ))
 
-    ## single to double index for symmetric matrices
+    # single to double index for symmetric matrices
     s2d <- function(id, n) {
         if (id < n) return(list(i = id + 1L, j = 1L))
-        ## start at second column
+        # start at second column
         i <- 3L
         j <- 2L
         start_pair <- n
         end_pair <- n * 2L - 3L
-        ## j is ready after this while loop finishes
+        # j is ready after this while loop finishes
         while (!(id >= start_pair && id <= end_pair)) {
             start_pair <- end_pair + 1L
             end_pair <- start_pair + n - j - 2L
             i <- i + 1L
             j <- j + 1L
         }
-        ## while loop for i
+        # while loop for i
         while (start_pair < id) {
             i <- i + 1L
             start_pair <- start_pair + 1L
         }
-        ## return
+        # return
         list(i = i, j = j)
     }
 
@@ -426,32 +285,15 @@ symmetric_loop_endpoints <- function(n) {
     })
 }
 
-# column-wise medians
-colMedians <- function(mat) { apply(mat, 2L, stats::median) }
-
-# l-norm, I think I'll only use L2
-lnorm <- function(x, n = 2) {
-    if (n %% 2 == 0L)
-        sum(x ^ n) ^ (1 / n)
-    else
-        sum(abs(x) ^ n) ^ (1 / n)
-}
-
-# PREFUN for some of my proxy distances so that they support 'pairwise' directly
-proxy_prefun <- function(x, y, pairwise, params, reg_entry) {
-    params$pairwise <- pairwise
-
-    list(x = x, y = y,
-         pairwise = pairwise,
-         p = params,
-         reg_entry = reg_entry)
-}
+# Euclidean norm
+l2norm <- function(x) { sqrt(sum(x * x)) }
 
 # ==================================================================================================
 # Multivariate helpers
 # ==================================================================================================
 
 is_multivariate <- function(x) {
+    if (length(x) == 0L) stop("Empty list of series received.")
     ncols <- sapply(x, NCOL)
     if (any(diff(ncols) != 0L)) stop("Inconsistent dimensions across series.")
     any(ncols > 1L)

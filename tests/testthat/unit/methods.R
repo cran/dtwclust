@@ -4,7 +4,7 @@ context("\tGenerics for included classes")
 # setup
 # ==================================================================================================
 
-## Original objects in env
+# Original objects in env
 ols <- ls()
 
 # ==================================================================================================
@@ -21,7 +21,7 @@ test_that("Methods for TSClusters objects are dispatched correctly.", {
                               dist = "sbd",
                               allcent = "pam",
                               preproc = zscore,
-                              control = partitional_control()),
+                              control = partitional_control(distmat = matrix(0, 1L, 1L))),
         "tsclustFamily"
     )
 
@@ -35,7 +35,7 @@ test_that("Methods for TSClusters objects are dispatched correctly.", {
                                   cluster = rep(1L:4L, each = 5L)[-2L],
                                   preproc = "zscore",
                                   distance = "sbd",
-                                  centroid = "pam",
+                                  centroid = "shape",
                                   override.family = TRUE),
         "PartitionalTSClusters"
     )
@@ -45,16 +45,16 @@ test_that("Methods for TSClusters objects are dispatched correctly.", {
                             type = "fuzzy",
                             k = 4L,
                             control = fuzzy_control(),
-                            datalist = data_reinterpolated_subset[-2L],
-                            centroids = data_reinterpolated_subset[seq(from = 1L, to = 16L, by = 5L)],
+                            datalist = data_multivariate[-2L],
+                            centroids = data_multivariate[seq(from = 1L, to = 16L, by = 5L)],
                             preproc = "zscore",
-                            distance = "sbd",
-                            centroid = "fcm",
+                            distance = "dtw_basic",
+                            centroid = "fcmdd",
                             override.family = TRUE),
         "FuzzyTSClusters"
     )
 
-    ## extra argument for preproc so that it is used in predict
+    # extra argument for preproc so that it is used in predict
     expect_s4_class(
         hierarchical_object <- new("HierarchicalTSClusters",
                                    hclust(proxy::dist(data_reinterpolated_subset, method = "L2")),
@@ -71,6 +71,55 @@ test_that("Methods for TSClusters objects are dispatched correctly.", {
                                    override.family = TRUE),
         "HierarchicalTSClusters"
     )
+
+    # ----------------------------------------------------------------------------------------------
+    # clue
+    # ----------------------------------------------------------------------------------------------
+
+    expect_identical(clue::as.cl_membership(partitional_object),
+                     clue::as.cl_membership(partitional_object@cluster))
+    expect_identical(clue::as.cl_membership(fuzzy_object),
+                     clue::as.cl_membership(fuzzy_object@cluster))
+    expect_identical(clue::as.cl_membership(hierarchical_object),
+                     clue::as.cl_membership(hierarchical_object@cluster))
+
+    expect_identical(clue::cl_class_ids(partitional_object),
+                     clue::as.cl_class_ids(partitional_object@cluster))
+    expect_identical(clue::cl_class_ids(fuzzy_object),
+                     clue::as.cl_class_ids(fuzzy_object@cluster))
+    expect_identical(clue::cl_class_ids(hierarchical_object),
+                     clue::as.cl_class_ids(hierarchical_object@cluster))
+
+    expect_identical(clue::cl_membership(partitional_object),
+                     clue::as.cl_membership(partitional_object@cluster))
+    expect_identical(clue::cl_membership(fuzzy_object),
+                     clue::as.cl_membership(fuzzy_object@cluster))
+    expect_identical(clue::cl_membership(hierarchical_object),
+                     clue::as.cl_membership(hierarchical_object@cluster))
+
+    expect_false(clue::is.cl_dendrogram(partitional_object))
+    expect_false(clue::is.cl_dendrogram(fuzzy_object))
+    expect_true(clue::is.cl_dendrogram(hierarchical_object))
+
+    expect_true(clue::is.cl_hard_partition(partitional_object))
+    expect_false(clue::is.cl_hard_partition(fuzzy_object))
+    expect_true(clue::is.cl_hard_partition(hierarchical_object))
+
+    expect_false(clue::is.cl_hierarchy(partitional_object))
+    expect_false(clue::is.cl_hierarchy(fuzzy_object))
+    expect_true(clue::is.cl_hierarchy(hierarchical_object))
+
+    expect_true(clue::is.cl_partition(partitional_object))
+    expect_true(clue::is.cl_partition(fuzzy_object))
+    expect_true(clue::is.cl_partition(hierarchical_object))
+
+    expect_identical(clue::n_of_classes(partitional_object), partitional_object@k)
+    expect_identical(clue::n_of_classes(fuzzy_object), fuzzy_object@k)
+    expect_identical(clue::n_of_classes(hierarchical_object), hierarchical_object@k)
+
+    expect_identical(clue::n_of_objects(partitional_object), length(partitional_object@cluster))
+    expect_identical(clue::n_of_objects(fuzzy_object), length(fuzzy_object@cluster))
+    expect_identical(clue::n_of_objects(hierarchical_object), length(hierarchical_object@cluster))
 
     # ----------------------------------------------------------------------------------------------
     # show
@@ -96,7 +145,7 @@ test_that("Methods for TSClusters objects are dispatched correctly.", {
     expect_identical(body(hc_update@family@allcent), body(hc_update@family@allcent),
                      info = "Updating hierarchical object with no parameters creates new identical allcent function in family")
 
-    ## for artificial update test below
+    # for artificial update test below
     partitional_object@call <- call("tsclust",
                                     quote(data_subset),
                                     k = 4L,
@@ -117,8 +166,10 @@ test_that("Methods for TSClusters objects are dispatched correctly.", {
     expect_silent(plot(hierarchical_object, type = "dendrogram"))
     expect_true(inherits(plot(hierarchical_object, type = "sc", plot = FALSE), "ggplot"),
                 info = "Plotting series and centroids returns a gg object invisibly")
-    expect_true(inherits(plot(hierarchical_object, type = "sc", series = data_subset[-1L], plot = FALSE), "ggplot"),
+    expect_true(inherits(plot(hierarchical_object, type = "sc", series = data_subset[-2L], plot = FALSE), "ggplot"),
                 info = "Plotting series and centroids providing data returns a gg object invisibly")
+    expect_true(inherits(plot(fuzzy_object, type = "series", plot = FALSE), "ggplot"),
+                info = "Plotting multivariate series returns a gg object invisibly")
 
     # ----------------------------------------------------------------------------------------------
     # predict
@@ -131,11 +182,11 @@ test_that("Methods for TSClusters objects are dispatched correctly.", {
     expect_identical(predict(hierarchical_object), hierarchical_object@cluster,
                      info = "Predicting with hierarchical clusters and no arguments simply returns existing cluster slot")
 
-    expect_true(is.integer(predict(partitional_object, newdata = data_subset[1L])),
+    expect_true(is.integer(predict(partitional_object, newdata = data_subset[2L])),
                 info = "Predicting with partitional clusters and newdata returns a new integer index")
-    expect_true(is.matrix(predict(fuzzy_object, newdata = data_reinterpolated_subset[1L])),
+    expect_true(is.matrix(predict(fuzzy_object, newdata = data_multivariate[2L])),
                 info = "Predicting with fuzzy clusters and newdata returns a new matrix of indices")
-    expect_true(is.integer(predict(hierarchical_object, newdata = data_subset[1L])),
+    expect_true(is.integer(predict(hierarchical_object, newdata = data_subset[2L])),
                 info = "Predicting with hierarchical clusters and newdata returns a new integer index")
 })
 
@@ -151,41 +202,11 @@ test_that("Included as.* methods are dispatched correctly.", {
                      info = "Changing a crossdist class to matrix/data.frame does not alter dimensions")
 
     pairdist <- proxy::dist(data_reinterpolated_subset[1L:10L], data_reinterpolated_subset[11L:20L],
-                      pairwise = TRUE)
+                            pairwise = TRUE)
     expect_true(class(base::as.matrix(pairdist)) == "matrix")
     expect_s3_class(base::as.data.frame(pairdist), "data.frame")
     expect_identical(dim(base::as.matrix(pairdist)), dim(as.data.frame(pairdist)),
                      info = "Changing a pairdist class to matrix/data.frame results in equal dimensions")
-})
-
-# ==================================================================================================
-# coercion to TSClusters from dtwclust
-# ==================================================================================================
-
-test_that("Coercion from dtwclust to TSClusters class works correctly.", {
-    skip_on_cran()
-
-    ndtw <- function(x, y, ...) {
-        dtw::dtw(x, y, distance.only = TRUE, ...)$normalizedDistance
-    }
-
-    coercion <- function(file) {
-        if (grepl("x32$", file)) return(TRUE)
-        obj <- readRDS(file)
-        if (inherits(obj, "dtwclust")) obj <- as(obj, "TSClusters")
-        else if (is.list(obj)) obj <- lapply(obj, function(o) { if (inherits(o, "dtwclust")) as(o, "TSClusters") else NULL })
-        TRUE
-    }
-
-    if (!pr_DB$entry_exists("nDTW"))
-        proxy::pr_DB$set_entry(FUN = ndtw, names=c("nDTW"),
-                               loop = TRUE, type = "metric", distance = TRUE,
-                               description = "Normalized DTW with L1 norm")
-
-    for (file in list.files("rds", full.names = TRUE, include.dirs = FALSE, no.. = TRUE)) {
-        expect_true(coercion(file), info = paste("File =", file))
-    }
-
 })
 
 # ==================================================================================================

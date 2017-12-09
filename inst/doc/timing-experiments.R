@@ -1,5 +1,6 @@
 ## ----setup, include=FALSE------------------------------------------------
 library("dtwclust")
+library("ggplot2")
 data("dtwclustTimings")
 
 dist_single_results <- dtwclustTimings$dist$single

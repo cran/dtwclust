@@ -6,6 +6,8 @@
 #'
 #' Reference class that is used internally for cross-distance matrices.
 #'
+#' @importFrom methods setRefClass
+#'
 #' @field distmat A distance matrix.
 #' @field series Time series list.
 #' @field distfun The distance function to calculate the distance matrix.
@@ -14,7 +16,7 @@
 #'
 #' @keywords internal
 #'
-Distmat <- setRefClass("Distmat",
+Distmat <- methods::setRefClass("Distmat",
                        fields = list(
                            distmat = "ANY",
                            series = "list",
@@ -41,7 +43,7 @@ Distmat <- setRefClass("Distmat",
                                            stop("Invalid control provided.")
                                    }
 
-                                   ## need another dist closure, otherwise it would be recursive
+                                   # need another dist closure, otherwise it would be recursive
                                    control$distmat <- NULL
                                    initFields(...,
                                               series = series,
@@ -62,6 +64,7 @@ Distmat <- setRefClass("Distmat",
 #' @name Distmat-generics
 #' @rdname Distmat-generics
 #' @keywords internal
+#' @importFrom methods setMethod
 #'
 NULL
 
@@ -80,6 +83,7 @@ NULL
 #'
 setMethod(`[`, "Distmat", function(x, i, j, ..., drop = TRUE) {
     if (inherits(x$distmat, "uninitializedField")) {
+        if (inherits(x$distfun, "uninitializedField")) stop("Invalid internal Distmat instance.")
         centroids <- if (identical(i,j)) NULL else x$series[j]
         dm <- do.call(x$distfun,
                       enlist(x = x$series[i],

@@ -4,6 +4,7 @@
 #' as well as the final cost aggregation step.
 #'
 #' @export
+#' @importFrom dtw dtw
 #'
 #' @param x,y A time series. A multivariate series should have time spanning the rows and variables
 #'   spanning the columns.
@@ -44,10 +45,13 @@ dtw2 <- function(x, y, ...) {
         d$normalizedDistance <- d$distance / normalization
     }
 
-    ## return
+    # return
     d
 }
 
+#' @importFrom dtw dtw
+#' @importFrom proxy dist
+#'
 dtw2.proxy <- function(x, y, ...) {
     lcm <- proxy::dist(x, y, method = "L1")
     sqrt(dtw::dtw(x = lcm^2, y = NULL, distance.only = TRUE, ...)$distance)

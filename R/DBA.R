@@ -3,6 +3,8 @@
 #' A global averaging method for time series under DTW (Petitjean, Ketterlin and Gancarski 2011).
 #'
 #' @export
+#' @importFrom dtw symmetric1
+#' @importFrom dtw symmetric2
 #'
 #' @param X A matrix or data frame where each row is a time series, or a list where each element is
 #'   a time series. Multivariate series should be provided as a list of matrices where time spans
@@ -49,7 +51,8 @@
 #'     variable.
 #'   - If `mv.ver = "by-series"`, then all variables are considered at the same time, so the DTW
 #'     backtracking is computed based on each multivariate series as a whole. This version was
-#'     implemented in version 4.0.0 of \pkg{dtwclust}, and it is faster.
+#'     implemented in version 4.0.0 of \pkg{dtwclust}, and it is faster, but not necessarily more
+#'     correct.
 #'
 #' @note
 #'
@@ -110,9 +113,9 @@ DBA <- function(X, centroid = NULL, ...,
     dots <- list(...)
     step.pattern <- dots$step.pattern
 
-    if (is.null(step.pattern) || identical(step.pattern, symmetric2))
+    if (is.null(step.pattern) || identical(step.pattern, dtw::symmetric2))
         step.pattern <- 2
-    else if (identical(step.pattern, symmetric1))
+    else if (identical(step.pattern, dtw::symmetric1))
         step.pattern <- 1
     else
         stop("step.pattern must be either symmetric1 or symmetric2 (without quotes)")
@@ -121,11 +124,11 @@ DBA <- function(X, centroid = NULL, ...,
     trace <- isTRUE(trace)
     norm <- match.arg(norm, c("L1", "L2"))
     norm <- switch(norm, "L1" = 1, "L2" = 2)
-    L <- max(sapply(X, NROW)) + 1L ## maximum length of considered series + 1L
+    L <- max(sapply(X, NROW)) + 1L # maximum length of considered series + 1L
     mv <- is_multivariate(c(X, list(centroid)))
     nr <- NROW(centroid) + 1L
 
-    ## pre-allocate cost matrices
+    # pre-allocate cost matrices
     if (is.null(gcm))
         gcm <- matrix(0, L, nr)
     else if (!is.matrix(gcm) || nrow(gcm) < L || ncol(gcm) < nr)
@@ -133,14 +136,14 @@ DBA <- function(X, centroid = NULL, ...,
     else if (storage.mode(gcm) != "double")
         stop("DBA: If provided, 'gcm' must have 'double' storage mode.")
 
-    ## All parameters for dtw_basic()
+    # All parameters for dtw_basic()
     dots <- list(window.size = window.size,
                  norm = norm,
                  gcm = gcm,
                  step.pattern = step.pattern,
                  backtrack = TRUE)
 
-    ## C++ code
+    # C++ code
     new_cent <- .Call(C_dba, X, centroid, max.iter, delta, trace, mv, mv.ver, dots, PACKAGE = "dtwclust")
     if (mv) dimnames(new_cent) <- dimnames(centroid)
     new_cent

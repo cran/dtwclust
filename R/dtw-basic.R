@@ -5,6 +5,8 @@
 #' options.
 #'
 #' @export
+#' @importFrom dtw symmetric1
+#' @importFrom dtw symmetric2
 #'
 #' @param x,y Time series. Multivariate series must have time spanning the rows and variables
 #'   spanning the columns.
@@ -46,8 +48,10 @@
 #' The DTW algorithm (and the functions that depend on it) might return different values in 32 bit
 #' installations compared to 64 bit ones.
 #'
+#' @example man-examples/multivariate-dtw.R
+#'
 dtw_basic <- function(x, y, window.size = NULL, norm = "L1",
-                      step.pattern = symmetric2, backtrack = FALSE,
+                      step.pattern = dtw::symmetric2, backtrack = FALSE,
                       normalize = FALSE, ..., gcm = NULL, error.check = TRUE)
 {
     if (error.check) {
@@ -62,9 +66,9 @@ dtw_basic <- function(x, y, window.size = NULL, norm = "L1",
 
     if (NCOL(x) != NCOL(y)) stop("Multivariate series must have the same number of variables.")
 
-    if (identical(step.pattern, symmetric1))
+    if (identical(step.pattern, dtw::symmetric1))
         step.pattern <- 1
-    else if (identical(step.pattern, symmetric2))
+    else if (identical(step.pattern, dtw::symmetric2))
         step.pattern <- 2
     else
         stop("step.pattern must be either symmetric1 or symmetric2 (without quotes)")
@@ -109,7 +113,7 @@ dtw_basic <- function(x, y, window.size = NULL, norm = "L1",
         d$path <- NULL
     }
 
-    ## return
+    # return
     d
 }
 
@@ -117,6 +121,10 @@ dtw_basic <- function(x, y, window.size = NULL, norm = "L1",
 # Wrapper for proxy::dist
 # ==================================================================================================
 
+#' @importFrom bigmemory attach.big.matrix
+#' @importFrom bigmemory describe
+#' @importFrom bigmemory is.big.matrix
+#'
 dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pairwise = FALSE) {
     x <- tslist(x)
     if (error.check) check_consistency(x, "vltslist")
@@ -134,14 +142,14 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
         symmetric <- FALSE
     }
 
-    ## pre-allocate gcm
+    # pre-allocate gcm
     if(is.null(gcm)) gcm <- matrix(0, 2L, max(sapply(y, NROW)) + 1L)
     pairwise <- isTRUE(pairwise)
     dim_out <- c(length(x), length(y))
     dim_names <- list(names(x), names(y))
-    D <- allocate_distmat(length(x), length(y), pairwise, symmetric) ## utils.R
+    D <- allocate_distmat(length(x), length(y), pairwise, symmetric) # utils.R
 
-    ## Wrap as needed for foreach
+    # Wrap as needed for foreach
     if (pairwise) {
         x <- split_parallel(x)
         y <- split_parallel(y)
@@ -149,7 +157,7 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
         endpoints <- attr(x, "endpoints")
 
     } else if (symmetric) {
-        endpoints <- symmetric_loop_endpoints(length(x)) ## utils.R
+        endpoints <- symmetric_loop_endpoints(length(x)) # utils.R
         x <- lapply(1L:(foreach::getDoParWorkers()), function(dummy) { x })
         y <- x
 
@@ -170,7 +178,7 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
         packages <- c("dtwclust")
     }
 
-    ## Calculate distance matrix
+    # Calculate distance matrix
     foreach(x = x, y = y, endpoints = endpoints,
             .combine = c,
             .multicombine = TRUE,
@@ -203,7 +211,7 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
     }
 
     attr(D, "method") <- "DTW_BASIC"
-    ## return
+    # return
     D
 }
 
@@ -211,17 +219,20 @@ dtw_basic_proxy <- function(x, y = NULL, ..., gcm = NULL, error.check = TRUE, pa
 # Wrapper for C++
 # ==================================================================================================
 
+#' @importFrom dtw symmetric1
+#' @importFrom dtw symmetric2
+#'
 dtwb_loop <- function(d, x, y, symmetric, pairwise, endpoints, bigmat, ..., normalize = FALSE,
-                      window.size = NULL, norm = "L1", step.pattern = symmetric2, gcm = NULL)
+                      window.size = NULL, norm = "L1", step.pattern = dtw::symmetric2, gcm = NULL)
 {
     if (is.null(window.size))
         window.size <- -1L
     else
         window.size <- check_consistency(window.size, "window")
 
-    if (identical(step.pattern, symmetric1))
+    if (identical(step.pattern, dtw::symmetric1))
         step.pattern <- 1
-    else if (identical(step.pattern, symmetric2))
+    else if (identical(step.pattern, dtw::symmetric2))
         step.pattern <- 2
     else
         stop("step.pattern must be either symmetric1 or symmetric2 (without quotes)")

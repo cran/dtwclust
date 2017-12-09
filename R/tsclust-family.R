@@ -3,6 +3,7 @@
 #' Formal S4 class with a family of functions used in [tsclust()].
 #'
 #' @exportClass tsclustFamily
+#' @importFrom methods setClass
 #'
 #' @details
 #'
@@ -78,21 +79,38 @@
 #' ffam <- new("tsclustFamily", control = fuzzy_control(), fuzzy = TRUE)
 #'
 #'
-setClass("tsclustFamily",
-         slots = c(dist = "function",
-                   allcent = "function",
-                   cluster = "function",
-                   preproc = "function"),
-         prototype = prototype(preproc = function(x, ...) { x },
-                               cluster = function(distmat = NULL, ...) {
-                                   max.col(-distmat, "first")
-                               })
+tsclustFamily <- methods::setClass(
+    "tsclustFamily",
+    slots = c(dist = "function",
+              allcent = "function",
+              cluster = "function",
+              preproc = "function"),
+    prototype = prototype(preproc = function(x, ...) { x },
+                          cluster = function(distmat = NULL, ...) {
+                              max.col(-distmat, "first")
+                          })
 )
+
+# ==================================================================================================
+# Membership update for fuzzy c-means clustering
+# ==================================================================================================
+
+fcm_cluster <- function(distmat, m) {
+    cprime <- apply(distmat, 1L, function(dist_row) { sum( (1 / dist_row) ^ (2 / (m - 1)) ) })
+    u <- 1 / apply(distmat, 2L, function(dist_col) { cprime * dist_col ^ (2 / (m - 1)) })
+    if (is.null(dim(u))) u <- rbind(u) # for predict generic
+    u[is.nan(u)] <- 1 # in case fcmdd is used
+    u
+}
 
 # ==================================================================================================
 # Custom initialize
 # ==================================================================================================
 
+#' @importFrom methods callNextMethod
+#' @importFrom methods initialize
+#' @importFrom methods setMethod
+#'
 setMethod("initialize", "tsclustFamily",
           function(.Object, dist, allcent, ..., control = list(), fuzzy = FALSE) {
               dots <- list(...)
@@ -106,15 +124,22 @@ setMethod("initialize", "tsclustFamily",
               }
 
               if (fuzzy) {
-                  dots$cluster <- fcm_cluster # fuzzy.R
+                  dots$cluster <- fcm_cluster
                   if (!missing(allcent) && is.character(allcent))
                       allcent <- match.arg(allcent, c("fcm", "fcmdd"))
               }
 
               if (!missing(allcent)) {
-                  if (is.character(allcent))
+                  if (is.character(allcent)) {
+                      if (allcent %in% c("pam", "fcmdd")) {
+                          if (!is.null(control$distmat) && !inherits(control$distmat, "Distmat"))
+                              control$distmat <- Distmat$new( # see Distmat.R
+                                  distmat = base::as.matrix(control$distmat)
+                              )
+                      }
                       dots$allcent <- all_cent2(allcent, control)
-                  else if (is.function(allcent))
+
+                  } else if (is.function(allcent))
                       dots$allcent <- allcent
                   else
                       stop("Centroid definition must be either a function or a character")

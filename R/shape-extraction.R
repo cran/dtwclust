@@ -4,6 +4,7 @@
 #' (2015) for the k-Shape clustering algorithm.
 #'
 #' @export
+#' @importFrom RSpectra eigs_sym
 #'
 #' @param X A matrix or data frame where each row is a time series, or a list where each element is
 #'   a time series. Multivariate series should be provided as a list of matrices where time spans
@@ -64,8 +65,10 @@ shape_extraction <- function(X, centroid = NULL, znorm = FALSE, ..., error.check
         if (!is.null(centroid)) check_consistency(centroid, "ts")
     }
 
-    ## utils.R
+    # utils.R
     if (is_multivariate(X)) {
+        if (!is.null(centroid) && dim(X[[1L]]) != dim(centroid))
+            stop("Dimension inconsistency between the series in 'X' and the provided 'centroid'.")
         mv <- reshape_multivariate(X, centroid) # utils.R
         new_c <- Map(mv$series, mv$cent, f = function(xx, cc, ...) {
             new_c <- shape_extraction(xx, cc, znorm = znorm, ..., error.check = FALSE)
@@ -73,9 +76,9 @@ shape_extraction <- function(X, centroid = NULL, znorm = FALSE, ..., error.check
         return(do.call(cbind, new_c, TRUE))
     }
 
-    Xz <- if (znorm) zscore(X, ...) else X
+    Xz <- if (znorm) zscore(X, ..., error.check = FALSE) else X
 
-    ## make sure at least one series is not just a flat line at zero
+    # make sure at least one series is not just a flat line at zero
     if (all(sapply(Xz, sum) == 0)) {
         if (is.null(centroid))
             return(rep(0, sample(lengths(Xz), 1L)))
@@ -94,20 +97,21 @@ shape_extraction <- function(X, centroid = NULL, znorm = FALSE, ..., error.check
         }
 
     } else {
-        centroid <- zscore(centroid, ...) # use given reference
+        centroid <- zscore(centroid, ..., error.check = FALSE) # use given reference
         A <- lapply(Xz, function(a) { SBD(centroid, a)$yshift })
         A <- do.call(rbind, A, TRUE)
     }
 
-    Y <- zscore(A, ...)
+    Y <- zscore(A, ..., error.check = FALSE)
     S <- if (is.matrix(Y)) t(Y) %*% Y else Y %*% t(Y)
     nc <- ncol(A)
     P <- diag(nc) - 1 / nc * matrix(1, nc, nc)
     M <- P %*% S %*% P
     ksc <- Re(RSpectra::eigs_sym(M, 1L)$vectors[ , 1L, drop = TRUE])
-    d1 <- lnorm(A[1L, , drop = TRUE] - ksc, 2)
-    d2 <- lnorm(A[1L, , drop = TRUE] + ksc, 2)
+    # utils.R
+    d1 <- l2norm(A[1L, , drop = TRUE] - ksc)
+    d2 <- l2norm(A[1L, , drop = TRUE] + ksc)
     if (d1 >= d2) ksc <- -ksc
-    ksc <- zscore(ksc, ...)
+    ksc <- zscore(ksc, ..., error.check = FALSE)
     ksc
 }

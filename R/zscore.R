@@ -12,6 +12,7 @@
 #'   list is provided in `x`.
 #' @param keep.attributes Should the mean and standard deviation returned by [base::scale()] be
 #'   preserved?
+#' @template error-check
 #'
 #' @details
 #'
@@ -19,23 +20,25 @@
 #'
 #' @return Normalized data in the same format as provided.
 #'
-zscore <- function(x, ..., multivariate = FALSE, keep.attributes = FALSE) {
+zscore <- function(x, ..., multivariate = FALSE, keep.attributes = FALSE, error.check = TRUE) {
     if (is.list(x) && !is.data.frame(x)) {
         x <- lapply(x, zscore, ...,
                     multivariate = is_multivariate(x),
                     keep.attributes = keep.attributes)
 
     } else if (!multivariate && (is.matrix(x) || is.data.frame(x))) {
-        check_consistency(x, "ts")
+        if (is.data.frame(x)) x <- base::as.matrix(x)
+        if (error.check) check_consistency(x, "ts")
         dots <- list(...)
         center <- if (is.null(dots$center)) formals(base::scale)$center else dots$center
         scale <- if (is.null(dots$scale)) formals(base::scale)$scale else dots$scale
-        x <- t(base::scale(t(base::as.matrix(x)), center = center, scale = scale))
+        x <- t(base::scale(t(x), center = center, scale = scale))
         x[is.nan(x)] <- 0
         if (!keep.attributes) { attr(x, "scaled:center") <- attr(x, "scaled:scale") <- NULL }
 
     } else {
-        check_consistency(x, "ts")
+        if (is.data.frame(x)) x <- base::as.matrix(x)
+        if (error.check) check_consistency(x, "ts")
         dots <- list(...)
         center <- if (is.null(dots$center)) formals(base::scale)$center else dots$center
         scale <- if (is.null(dots$scale)) formals(base::scale)$scale else dots$scale
@@ -45,6 +48,6 @@ zscore <- function(x, ..., multivariate = FALSE, keep.attributes = FALSE) {
         if (!keep.attributes) { attr(x, "scaled:center") <- attr(x, "scaled:scale") <- NULL }
     }
 
-    ## return
+    # return
     x
 }

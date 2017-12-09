@@ -1,8 +1,8 @@
 context("\tProxy distances")
 
-# =================================================================================================
+# ==================================================================================================
 # setup
-# =================================================================================================
+# ==================================================================================================
 
 ## Original objects in env
 ols <- ls()
@@ -10,9 +10,9 @@ ols <- ls()
 ## Data
 x <- data_reinterpolated[3L:8L]
 
-# =================================================================================================
+# ==================================================================================================
 # proxy distances
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Included proxy distances can be called and give expected dimensions.", {
     for (distance in dtwclust:::distances_included) {
@@ -41,9 +41,9 @@ test_that("Included proxy distances can be called and give expected dimensions."
     }
 })
 
-# =================================================================================================
+# ==================================================================================================
 # proxy pairwise distances
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Included proxy distances can be called for pairwise = TRUE and give expected length", {
     for (distance in dtwclust:::distances_included) {
@@ -70,7 +70,39 @@ test_that("Included proxy distances can be called for pairwise = TRUE and give e
     }
 })
 
-# =================================================================================================
+# ==================================================================================================
+# proxy similarities
+# ==================================================================================================
+
+test_that("Included proxy similarities can be called and give expected dimensions.", {
+    for (distance in c("uGAK")) {
+        d <- proxy::simil(x, method = distance, window.size = 15L, sigma = 100)
+        expect_identical(dim(d), c(length(x), length(x)), info = paste(distance, "single-arg"))
+
+        d2 <- proxy::simil(x, x, method = distance, window.size = 15L, sigma = 100)
+        expect_equal(d2, d, check.attributes = FALSE,
+                     info = paste(distance, "double-arg"))
+
+        d3 <- proxy::simil(x[1L], x, method = distance, window.size = 15L, sigma = 100)
+        class(d3) <- "matrix"
+        expect_identical(dim(d3), c(1L, length(x)), info = paste(distance, "one-vs-many"))
+
+        d4 <- proxy::simil(x, x[1L], method = distance, window.size = 15L, sigma = 100)
+        class(d4) <- "matrix"
+        expect_identical(dim(d4), c(length(x), 1L), info = paste(distance, "many-vs-one"))
+
+        ## dtw_lb will give different results below because of how it works
+        if (distance == "dtw_lb") next
+
+        expect_equal(d3, d[1L, , drop = FALSE], check.attributes = FALSE,
+                     info = paste(distance, "one-vs-many-vs-distmat"))
+        expect_equal(d4, d[ , 1L, drop = FALSE], check.attributes = FALSE,
+                     info = paste(distance, "many-vs-one-vs-distmat"))
+    }
+})
+
+# ==================================================================================================
 # clean
-# =================================================================================================
+# ==================================================================================================
+
 rm(list = setdiff(ls(), ols))

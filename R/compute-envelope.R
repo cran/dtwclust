@@ -42,17 +42,9 @@ compute_envelope <- function(x, window.size, error.check = TRUE) {
     window.size <- check_consistency(window.size, "window")
     window.size <- window.size * 2L + 1L
 
-    ## NOTE: window.size is now window.size*2 + 1, thus the 2L below
+    # NOTE: window.size is now window.size*2 + 1, thus the 2L below
     if (window.size > (2L * NROW(x)))
         stop("Window cannot be greater or equal than the series' length.")
 
     .Call(C_envelope, x, window.size, PACKAGE = "dtwclust")
-}
-
-#' @rdname compute_envelope
-#' @export
-#'
-compute_envelop <- function(x, window.size, error.check = TRUE) {
-    .Deprecated("compute_envelope", "dtwclust")
-    compute_envelope(x, window.size, error.check)
 }

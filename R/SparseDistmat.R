@@ -8,7 +8,9 @@
 #' `pam.sparse = TRUE`. It allows for mutable state. It contains [Distmat-class].
 #'
 #' @include Distmat.R
-#' @include pkg.R
+#' @importClassesFrom Matrix sparseMatrix
+#' @importFrom Matrix sparseMatrix
+#' @importFrom methods setRefClass
 #'
 #' @field distmat The sparse matrix.
 #' @field symmetric Logical indicating if the matrix is symmetric.
@@ -17,7 +19,7 @@
 #'
 #' @keywords internal
 #'
-SparseDistmat <- setRefClass(
+SparseDistmat <- methods::setRefClass(
     "SparseDistmat",
     contains = "Distmat",
     fields = list(
@@ -39,7 +41,7 @@ SparseDistmat <- setRefClass(
 
             if (isTRUE(control$symmetric) && distmat@uplo != "L") distmat <<- t(distmat)
 
-            ## initialize C++ class
+            # initialize C++ class
             distmat_indices <<- .Call(C_SparseDistmatIndices__new,
                                       nrow(distmat),
                                       PACKAGE = "dtwclust")
@@ -61,18 +63,21 @@ SparseDistmat <- setRefClass(
 #' @name SparseDistmat-generics
 #' @rdname SparseDistmat-generics
 #' @keywords internal
+#' @importFrom methods setMethod
 #'
 NULL
 
 #' @rdname SparseDistmat-generics
 #' @aliases show,SparseDistmat
+#' @importFrom methods show
 #'
 #' @param object A [SparseDistmat-class] object.
 #'
-setMethod("show", "SparseDistmat", function(object) { show(object$distmat) }) # nocov
+setMethod("show", "SparseDistmat", function(object) { methods::show(object$distmat) }) # nocov
 
 #' @rdname SparseDistmat-generics
 #' @aliases [,SparseDistmat,ANY,ANY,ANY
+#' @importFrom Matrix forceSymmetric
 #'
 #' @param x A [SparseDistmat-class] object.
 #' @param i Row indices.
@@ -89,7 +94,7 @@ setMethod(`[`, "SparseDistmat", function(x, i, j, ..., drop = TRUE) {
                     x$distmat_indices, i, j, x$symmetric,
                     PACKAGE = "dtwclust")
 
-    ## update distmat if necessary
+    # update distmat if necessary
     if (nrow(id_new) > 0L) {
         x$distmat[id_new] <- as.numeric(do.call(x$distfun,
                                                 enlist(x = x$series[id_new[, 1L]],

@@ -1,8 +1,8 @@
 context("\tCentroids")
 
-# =================================================================================================
+# ==================================================================================================
 # setup
-# =================================================================================================
+# ==================================================================================================
 
 ## Original objects in env
 ols <- ls()
@@ -12,10 +12,11 @@ x <- data_reinterpolated_subset
 k <- 2L
 cl_id <- rep(c(1L, 2L), each = length(x) / 2L)
 x_mv <- reinterpolate(data_multivariate, 205L)
+expect_trace <- if (foreach::getDoParWorkers() > 1L) testthat::expect_silent else testthat::expect_output
 
-# =================================================================================================
+# ==================================================================================================
 # mean
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Operations with mean centroid complete successfully.", {
     family <- new("tsclustFamily", control = pt_ctrl, allcent = "mean")
@@ -44,9 +45,9 @@ test_that("Operations with mean centroid complete successfully.", {
     assign("cent_mv_mean", cent_mv_mean, persistent)
 })
 
-# =================================================================================================
+# ==================================================================================================
 # median
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Operations with median centroid complete successfully.", {
     family <- new("tsclustFamily", control = pt_ctrl, allcent = "median")
@@ -75,9 +76,9 @@ test_that("Operations with median centroid complete successfully.", {
     assign("cent_mv_median", cent_mv_median, persistent)
 })
 
-# =================================================================================================
+# ==================================================================================================
 # shape
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Operations with shape centroid complete successfully.", {
     family <- new("tsclustFamily", control = pt_ctrl, allcent = "shape")
@@ -104,11 +105,19 @@ test_that("Operations with shape centroid complete successfully.", {
     ## ---------------------------------------------------------- refs
     assign("cent_shape", cent_shape, persistent)
     assign("cent_mv_shape", cent_mv_shape, persistent)
+
+    ## ---------------------------------------------------------- directly
+    zero_shape_centroid <- shape_extraction(matrix(0, 2L, 10L))
+    expect_identical(sum(zero_shape_centroid), 0)
+    zero_shape_centroid_reference <- shape_extraction(matrix(0, 2L, 10L), x[[1L]])
+    expect_identical(zero_shape_centroid_reference, x[[1L]])
+
+    expect_error(shape_extraction(data_subset, data_multivariate[[1L]]), regexp = "dimension")
 })
 
-# =================================================================================================
+# ==================================================================================================
 # pam
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Operations with pam centroid complete successfully.", {
     ## ---------------------------------------------------------- univariate without distmat
@@ -208,44 +217,82 @@ test_that("Operations with pam centroid complete successfully.", {
     assign("cent_mv_pam", cent_mv_pam, persistent)
 })
 
-# =================================================================================================
+# ==================================================================================================
 # dba
-# =================================================================================================
+# ==================================================================================================
 
 test_that("Operations with dba centroid complete successfully.", {
     family <- new("tsclustFamily", control = pt_ctrl, allcent = "dba")
 
+    expect_error(
+        family@allcent(x,
+                       cl_id = cl_id,
+                       k = k,
+                       cent = x[c(1L,20L)],
+                       cl_old = 0L,
+                       window.size = 18L,
+                       max.iter = 15L,
+                       gcm = matrix(0, 2L, 2L)),
+        regexp = "Dimension inconsistency"
+    )
+    expect_error(
+        family@allcent(x,
+                       cl_id = cl_id,
+                       k = k,
+                       cent = x[c(1L,20L)],
+                       cl_old = 0L,
+                       window.size = 18L,
+                       max.iter = 15L,
+                       gcm = matrix(0L, 206L, 206L)),
+        regexp = "storage mode"
+    )
+
     ## ---------------------------------------------------------- univariate
-    cent_dba <- family@allcent(x,
-                               cl_id = cl_id,
-                               k = k,
-                               cent = x[c(1L,20L)],
-                               cl_old = 0L,
-                               window.size = 18L,
-                               max.iter = 15L)
+
+    expect_output(
+        dba(x[1L:5L], centroid = x[[1L]], max.iter = 20L, trace = TRUE),
+        "Converged!"
+    )
+
+    expect_trace(
+        cent_dba <- family@allcent(x,
+                                   cl_id = cl_id,
+                                   k = k,
+                                   cent = x[c(1L,20L)],
+                                   cl_old = 0L,
+                                   window.size = 18L,
+                                   max.iter = 15L,
+                                   trace = TRUE)
+    )
 
     expect_identical(length(cent_dba), k)
 
     ## ---------------------------------------------------------- multivariate
-    cent_mv_dba <- family@allcent(x_mv,
-                                  cl_id = cl_id,
-                                  k = k,
-                                  cent = x_mv[c(1L,20L)],
-                                  cl_old = 0L,
-                                  window.size = 18L,
-                                  max.iter = 15L,
-                                  norm = "L2")
+    expect_trace(
+        cent_mv_dba <- family@allcent(x_mv,
+                                      cl_id = cl_id,
+                                      k = k,
+                                      cent = x_mv[c(1L,20L)],
+                                      cl_old = 0L,
+                                      window.size = 18L,
+                                      max.iter = 15L,
+                                      norm = "L2",
+                                      trace = TRUE)
+    )
 
     expect_identical(length(cent_mv_dba), k)
     expect_identical(dim(cent_mv_dba[[1L]]), dim(x_mv[[1L]]))
 
     ## ---------------------------------------------------------- multivariate v2
-    cent_mv_dba_bys <- family@allcent(x_mv,
-                                      cl_id = cl_id,
-                                      k = k,
-                                      cent = x_mv[c(1L,20L)],
-                                      cl_old = 0L,
-                                      mv.ver = "by-s")
+    expect_trace(
+        cent_mv_dba_bys <- family@allcent(x_mv,
+                                          cl_id = cl_id,
+                                          k = k,
+                                          cent = x_mv[c(1L,20L)],
+                                          cl_old = 0L,
+                                          mv.ver = "by-s",
+                                          trace = TRUE)
+    )
 
     expect_identical(length(cent_mv_dba_bys), k)
     expect_identical(dim(cent_mv_dba_bys[[1L]]), dim(x_mv[[1L]]))
@@ -256,43 +303,8 @@ test_that("Operations with dba centroid complete successfully.", {
     assign("cent_mv_dba_bys", cent_mv_dba_bys, persistent)
 })
 
-# =================================================================================================
-# custom
-# =================================================================================================
-
-test_that("Operations with custom centroid complete successfully.", {
-    ## ---------------------------------------------------------- with dots
-    mycent <- function(x, cl_id, k, cent, cl_old, ...) {
-        x_split <- split(x, cl_id)
-        x_split <- lapply(x_split, function(xx) do.call(rbind, xx))
-        new_cent <- lapply(x_split, colMeans)
-        new_cent
-    }
-
-    cent_colMeans <- tsclust(data_matrix, k = 20L,
-                             distance = "sbd", centroid = mycent, seed = 123)
-
-    cent_colMeans <- reset_nondeterministic(cent_colMeans)
-
-    ## ---------------------------------------------------------- without dots
-    mycent <- function(x, cl_id, k, cent, cl_old) {
-        x_split <- split(x, cl_id)
-        x_split <- lapply(x_split, function(xx) do.call(rbind, xx))
-        new_cent <- lapply(x_split, colMeans)
-        new_cent
-    }
-
-    cent_colMeans_nd <- tsclust(data_matrix, k = 20L,
-                                distance = "sbd", centroid = mycent, seed = 123)
-
-    cent_colMeans_nd <- reset_nondeterministic(cent_colMeans_nd)
-
-    ## ---------------------------------------------------------- refs
-    assign("cent_colMeans", cent_colMeans, persistent)
-    assign("cent_colMeans_nd", cent_colMeans_nd, persistent)
-})
-
-# =================================================================================================
+# ==================================================================================================
 # clean
-# =================================================================================================
+# ==================================================================================================
+
 rm(list = setdiff(ls(), ols))

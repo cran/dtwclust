@@ -1,15 +1,15 @@
 context("\tClusterings")
 
-# =================================================================================================
+# ==================================================================================================
 # setup
-# =================================================================================================
+# ==================================================================================================
 
 ## Original objects in env
 ols <- ls()
 
-# =================================================================================================
+# ==================================================================================================
 # fuzzy
-# =================================================================================================
+# ==================================================================================================
 
 with(persistent, {
     test_that("Fuzzy clustering gives the same results as references.", {
@@ -20,28 +20,32 @@ with(persistent, {
         expect_equal_to_reference(fcmdd, file_name(fcmdd))
         expect_equal_to_reference(fcm_mv, file_name(fcm_mv))
         expect_equal_to_reference(fcmdd_mv, file_name(fcmdd_mv))
+
+        # notice files are the same, results should be equal
+        expect_equal_to_reference(fcent_fcm, file_name(fcent_fcm), info = "Custom fuzzy c-means")
+        expect_equal_to_reference(fcent_fcm_nd, file_name(fcent_fcm), info = "Custom fuzzy c-means")
     })
 })
 
-# =================================================================================================
+# ==================================================================================================
 # hierarchical
-# =================================================================================================
+# ==================================================================================================
 
 with(persistent, {
     test_that("Hierarchical clustering gives the same results as references.", {
         skip_on_cran()
 
         expect_equal_to_reference(hc_k, file_name(hc_k))
-        expect_equal_to_reference(hc_all, file_name(hc_all, x32 = TRUE))
+        expect_equal_to_reference(hc_all, file_name(hc_all))
         expect_equal_to_reference(hc_lbi, file_name(hc_lbi))
         expect_equal_to_reference(hc_cent, file_name(hc_cent))
-        expect_equal_to_reference(hc_diana, file_name(hc_diana, x32 = TRUE))
+        expect_equal_to_reference(hc_diana, file_name(hc_diana))
     })
 })
 
-# =================================================================================================
+# ==================================================================================================
 # partitional
-# =================================================================================================
+# ==================================================================================================
 
 with(persistent, {
     test_that("Partitional clustering gives the same results as references.", {
@@ -59,17 +63,21 @@ with(persistent, {
         expect_equal_to_reference(pc_kshape, file_name(pc_kshape))
         expect_equal_to_reference(pc_dba, file_name(pc_dba))
         expect_equal_to_reference(pc_mv_pam, file_name(pc_mv_pam))
-        expect_equal_to_reference(pc_mv_dba, file_name(pc_mv_dba, x32 = TRUE))
+        expect_equal_to_reference(pc_mv_dba, file_name(pc_mv_dba))
 
         expect_equal_to_reference(pc_tadp, file_name(pc_tadp))
         expect_equal_to_reference(pc_tadp_lbi, file_name(pc_tadp_lbi))
         expect_equal_to_reference(pc_tadp_cent, file_name(pc_tadp_cent))
 
         expect_equal_to_reference(pc_cr, file_name(pc_cr))
+
+        # notice files are the same, results should be equal
+        expect_equal_to_reference(cent_colMeans, file_name(cent_colMeans), info = "Custom colMeans")
+        expect_equal_to_reference(cent_colMeans_nd, file_name(cent_colMeans), info = "Custom colMeans")
     })
 })
 
-# =================================================================================================
+# ==================================================================================================
 # clean
-# =================================================================================================
+# ==================================================================================================
 rm(list = setdiff(ls(), ols))

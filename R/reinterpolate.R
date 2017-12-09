@@ -4,6 +4,7 @@
 #' reinterpolation. It also supports matrices, data frames, and lists of time series.
 #'
 #' @export
+#' @importFrom stats approx
 #'
 #' @param x Data to reinterpolate. Either a vector, a matrix/data.frame where each row is to be
 #'   reinterpolated, or a list of vectors/matrices.
@@ -38,9 +39,10 @@ reinterpolate <- function(x, new.length, multivariate = FALSE) {
         x <- t(apply(x, 1L, reinterpolate, new.length = new.length))
 
     } else {
+        if (is.data.frame(x)) x <- base::as.matrix(x)
         check_consistency(x, "ts")
 
-        if (multivariate)
+        if (multivariate && !is.null(dim(x)))
             x <- apply(x, 2L, reinterpolate, new.length = new.length)
         else
             x <- stats::approx(x, method = "linear", n = new.length)$y
