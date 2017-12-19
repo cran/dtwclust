@@ -3,7 +3,7 @@
 # ==================================================================================================
 
 check_consistency <- function(obj, case, ..., clus_type,
-                              diff_lengths = FALSE, cent_missing,
+                              diff_lengths = FALSE, cent_missing, cent_char,
                               trace = FALSE, silent = TRUE)
 {
     case <- match.arg(case, c("ts", "tslist", "vltslist", "window", "dist", "cent"))
@@ -63,7 +63,7 @@ check_consistency <- function(obj, case, ..., clus_type,
                              paste(centroids_difflength, collapse = "\t"))
 
                 } else {
-                    cent_char <- as.character(substitute(obj))[1L]
+                    force(cent_char)
                 }
 
                 # return partitional switch
@@ -77,24 +77,24 @@ check_consistency <- function(obj, case, ..., clus_type,
                         stop("Fuzzy c-means does not support series with different length.")
 
                 } else {
-                    cent_char <- as.character(substitute(obj))[1L]
+                    force(cent_char)
                 }
 
                 # return fuzzy switch
                 cent_char
             },
             hierarchical =, tadpole = {
-                cent_char <- paste("PAM",
-                                   switch(clus_type,
-                                          hierarchical = "(Hierarchical)",
-                                          tadpole = "(TADPole)"))
-
                 if (is.function(obj))
-                    cent_char <- as.character(substitute(obj))[1L]
+                    force(cent_char)
                 else if (!cent_missing)
                     warning("The 'centroid' argument was provided but it wasn't a function, ",
                             "so it was ignored.",
                             call. = FALSE, immediate. = TRUE)
+                else
+                    cent_char <- paste("PAM",
+                                       switch(clus_type,
+                                              hierarchical = "(Hierarchical)",
+                                              tadpole = "(TADPole)"))
 
                 # return hierarchical/tadpole switch
                 cent_char
@@ -287,6 +287,16 @@ symmetric_loop_endpoints <- function(n) {
 
 # Euclidean norm
 l2norm <- function(x) { sqrt(sum(x * x)) }
+
+# Get the clusinfo slot for TSClusters
+compute_clusinfo <- function(k, cluster, cldist) {
+    cluster <- factor(cluster, levels = 1L:k)
+    # return
+    data.frame(
+        size = as.integer(table(cluster)),
+        av_dist = as.numeric(tapply(cldist[, 1L], list(cluster), mean, default = 0))
+    )
+}
 
 # ==================================================================================================
 # Multivariate helpers

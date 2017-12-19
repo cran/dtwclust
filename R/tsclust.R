@@ -160,6 +160,7 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'     resulting centroids will also have this normalization. See [shape_extraction()] for more
 #'     details.
 #'   - "dba": DTW Barycenter Averaging. See [DBA()] for more details.
+#'   - "sdtw_cent": Soft-DTW centroids, See [sdtw_cent()] for more details.
 #'   - "pam": Partition around medoids (PAM). This basically means that the cluster centroids are
 #'     always one of the time series in the data. In this case, the distance matrix can be
 #'     pre-computed once using all time series in the data and then re-used at each iteration. It
@@ -168,13 +169,13 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'   - "fcmdd": Fuzzy c-medoids. Only supported for fuzzy clustering. It **always** precomputes the
 #'     whole cross-distance matrix.
 #'
-#'   These check for the special cases where parallelization might be desired. Note that only
-#'   `shape`, `dba`, `pam` and `fcmdd` support series of different length. Also note that, for
-#'   `shape` and `dba`, this support has a caveat: the final centroids' length will depend on the
-#'   length of those series that were randomly chosen at the beginning of the clustering algorithm.
-#'   For example, if the series in the dataset have a length of either 10 or 15, 2 clusters are
-#'   desired, and the initial choice selects two series with length of 10, the final centroids will
-#'   have this same length.
+#'   The `dba`, `shape` and `sdtw_cent` implementations check for parallelization. Note that only
+#'   `shape`, `dba`, `sdtw_cent`, `pam` and `fcmdd` support series of different length. Also note
+#'   that for `shape`, `dba` and `sdtw_cent`, this support has a caveat: the final centroids' length
+#'   will depend on the length of those series that were randomly chosen at the beginning of the
+#'   clustering algorithm. For example, if the series in the dataset have a length of either 10 or
+#'   15, 2 clusters are desired, and the initial choice selects two series with length of 10, the
+#'   final centroids will have this same length.
 #'
 #'   As special cases, if hierarchical or tadpole clustering is used, you can provide a centroid
 #'   function that takes a list of series as first input. It will also receive the contents of
@@ -207,6 +208,7 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'     constraint. See [lb_improved()].
 #'   - `"sbd"`: Shape-based distance. See [SBD()].
 #'   - `"gak"`: Global alignment kernels. See [GAK()].
+#'   - `"sdtw"`: Soft-DTW. See [sdtw()].
 #'
 #'   Out of the aforementioned, only the distances based on DTW lower bounds *don't* support series
 #'   of different length. The lower bounds are probably unsuitable for direct clustering unless
@@ -339,7 +341,8 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
     distance <- tolower(distance)
     cent_missing <- missing(centroid)
     cent_char <- check_consistency(centroid, "cent", clus_type = type,
-                                   diff_lengths = diff_lengths, cent_missing = cent_missing)
+                                   diff_lengths = diff_lengths, cent_missing = cent_missing,
+                                   cent_char = as.character(substitute(centroid))[1L])
 
     if (type != "tadpole") {
         # symmetric versions of dtw that I know of
@@ -353,7 +356,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             control$symmetric <- symmetric_pattern && (is.null(args$dist$window.size) || !diff_lengths)
         else if (distance %in% c("lbk", "lbi"))
             control$symmetric <- FALSE
-        else if (distance %in% c("sbd", "gak"))
+        else if (distance %in% c("sbd", "gak", "sdtw"))
             control$symmetric <- TRUE
 
         if (distance == "dtw_lb" && isTRUE(args$dist$nn.margin != 1L)) { # nocov start
@@ -374,6 +377,12 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             N <- max(sapply(series, NROW))
             args$dist$logs <- matrix(0, N + 1L, 3L)
             matrices_allocated <- TRUE
+
+        } else if (distance == "sdtw" && is.null(args$dist$cm)) {
+            N <- max(sapply(series, NROW))
+            args$dist$cm <- matrix(0, N + 1L, N + 1L)
+            matrices_allocated <- TRUE
+
         }
     }
 
@@ -384,6 +393,18 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
         args$cent$gcm <- matrix(0, N + 1L, N + 1L)
 
     } else dba_allocated <- FALSE
+
+    # pre-allocate matrix for sdtw_cent
+    if (grepl("^sdtw_cent$", cent_char, ignore.case = TRUE) &&
+        (is.null(args$cent$cm) || is.null(args$cent$dm) || is.null(args$cent$em)))
+    {
+        sdtwc_allocated <- TRUE
+        if (!exists("N", mode = "integer", inherits = FALSE)) N <- max(sapply(series, NROW))
+        args$cent$cm <- matrix(0, N + 2L, N + 2L)
+        args$cent$dm <- matrix(0, N + 1L, N + 1L)
+        args$cent$em <- matrix(0, 2L, N + 2L)
+
+    } else sdtwc_allocated <- FALSE
 
     RET <- switch(
         type,
@@ -440,35 +461,11 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             # Cluster
             # --------------------------------------------------------------------------------------
 
-            # I need to re-register any custom distances in each parallel worker
-            dist_entry <- proxy::pr_DB$get_entry(distance)
-            export <- c("pfclust", "check_consistency", "enlist")
-            rng <- rngtools::RNGseq(length(k) * nrep, seed = seed, simplify = FALSE)
-            # if %do% is used, the outer loop replaces values in this envir
-            rng0 <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) { rng[i] })
-            k0 <- k
-            # sequential allows the matrix to be updated iteratively
-            `%this_op%` <- if(inherits(control$distmat, "SparseDistmat")) `%do%` else `%op%`
-            i <- integer() # CHECK complains about non-initialization
-
-            pc_list <- foreach(k = k0, rng = rng0,
-                               .combine = c, .multicombine = TRUE,
-                               .packages = control$packages,
-                               .export = export) %:%
-                foreach(i = 1L:nrep,
-                        .combine = c, .multicombine = TRUE,
-                        .packages = control$packages,
-                        .export = export) %this_op%
-                        {
-                            if (trace) message("Repetition ", i, " for k = ", k)
-                            rngtools::setRNG(rng[[i]])
-
-                            if (!check_consistency(dist_entry$names[1L], "dist"))
-                                do.call(proxy::pr_DB$set_entry, dist_entry, TRUE)
-
-                            # return
-                            list(
-                                do.call(pfclust,
+            if (length(k) == 1L && nrep == 1L) {
+                rngtools::setRNG(rngtools::RNGseq(1L, seed = seed, simplify = TRUE))
+                # just one repetition,
+                # done like this so dist/cent functions can take advantage of parallelization
+                pc_list <- list(do.call(pfclust,
                                         enlist(x = series,
                                                k = k,
                                                family = family,
@@ -477,9 +474,49 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                                                cent = cent_char,
                                                trace = trace,
                                                args = args),
-                                        TRUE)
-                            )
-                        }
+                                        TRUE))
+            } else {
+                # I need to re-register any custom distances in each parallel worker
+                dist_entry <- proxy::pr_DB$get_entry(distance)
+                export <- c("pfclust", "check_consistency", "enlist")
+                rng <- rngtools::RNGseq(length(k) * nrep, seed = seed, simplify = FALSE)
+                # if %do% is used, the outer loop replaces values in this envir
+                rng0 <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) { rng[i] })
+                k0 <- k
+                # sequential allows the matrix to be updated iteratively
+                `%this_op%` <- if(inherits(control$distmat, "SparseDistmat")) `%do%` else `%op%`
+                i <- integer() # CHECK complains about non-initialization
+
+                pc_list <- foreach(k = k0, rng = rng0,
+                                   .combine = c, .multicombine = TRUE,
+                                   .packages = control$packages,
+                                   .export = export) %:%
+                    foreach(i = 1L:nrep,
+                            .combine = c, .multicombine = TRUE,
+                            .packages = control$packages,
+                            .export = export) %this_op%
+                            {
+                                if (trace) message("Repetition ", i, " for k = ", k)
+                                rngtools::setRNG(rng[[i]])
+
+                                if (!check_consistency(dist_entry$names[1L], "dist"))
+                                    do.call(proxy::pr_DB$set_entry, dist_entry, TRUE)
+
+                                # return
+                                list(
+                                    do.call(pfclust,
+                                            enlist(x = series,
+                                                   k = k,
+                                                   family = family,
+                                                   control = control,
+                                                   fuzzy = isTRUE(type == "fuzzy"),
+                                                   cent = cent_char,
+                                                   trace = trace,
+                                                   args = args),
+                                            TRUE)
+                                )
+                            }
+            }
 
             # --------------------------------------------------------------------------------------
             # Prepare results
@@ -496,8 +533,9 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             }
 
             if (inherits(distmat, "Distmat")) distmat <- distmat$distmat
-            if (matrices_allocated) { args$dist$gcm <- args$dist$logs <- NULL }
+            if (matrices_allocated) { args$dist$cm <- args$dist$gcm <- args$dist$logs <- NULL }
             if (dba_allocated) args$cent$gcm <- NULL
+            if (sdtwc_allocated) { args$cent$cm <- args$cent$dm <- args$cent$em <- NULL }
 
             # Create objects
             RET <- lapply(pc_list, function(pc) {
@@ -607,7 +645,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             # Cluster
             # --------------------------------------------------------------------------------------
 
-            if (trace) cat("Performing hierarchical clustering...\n\n")
+            if (trace) cat("Performing hierarchical clustering...\n")
 
             if (is.character(method)) {
                 # Using hclust
@@ -629,8 +667,10 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             # Prepare results
             # --------------------------------------------------------------------------------------
 
-            if (matrices_allocated) { args$dist$gcm <- args$dist$logs <- NULL }
+            if (matrices_allocated) { args$dist$cm <- args$dist$gcm <- args$dist$logs <- NULL }
             if (dba_allocated) args$cent$gcm <- NULL
+            if (sdtwc_allocated) { args$cent$cm <- args$cent$dm <- args$cent$em <- NULL }
+            if (trace) cat("Extracting centroids...\n\n")
 
             RET <- lapply(k, function(k) {
                 lapply(hc, function(hc) {
@@ -761,6 +801,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                 }
 
                 if (dba_allocated) args$cent$gcm <- NULL
+                if (sdtwc_allocated) { args$cent$cm <- args$cent$dm <- args$cent$em <- NULL }
 
                 obj <- methods::new("PartitionalTSClusters",
                                     call = MYCALL,
