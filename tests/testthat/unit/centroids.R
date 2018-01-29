@@ -224,29 +224,6 @@ test_that("Operations with pam centroid complete successfully.", {
 test_that("Operations with dba centroid complete successfully.", {
     family <- new("tsclustFamily", control = pt_ctrl, allcent = "dba")
 
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       window.size = 18L,
-                       max.iter = 15L,
-                       gcm = matrix(0, 2L, 2L)),
-        regexp = "Dimension inconsistency"
-    )
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       window.size = 18L,
-                       max.iter = 15L,
-                       gcm = matrix(0L, 206L, 206L)),
-        regexp = "storage mode"
-    )
-
     ## ---------------------------------------------------------- univariate
 
     expect_output(
@@ -309,64 +286,6 @@ test_that("Operations with dba centroid complete successfully.", {
 
 test_that("Operations with sdtw_cent centroid complete successfully.", {
     family <- new("tsclustFamily", control = pt_ctrl, allcent = "sdtw_cent")
-
-    # cm
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       cm = matrix(0, 2L, 2L)),
-        regexp = "Dimension inconsistency"
-    )
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       cm = matrix(0L, 207L, 207L)),
-        regexp = "storage mode"
-    )
-    # dm
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       dm = matrix(0, 2L, 2L)),
-        regexp = "Dimension inconsistency"
-    )
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       dm = matrix(0L, 206L, 206L)),
-        regexp = "storage mode"
-    )
-    # em
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       em = matrix(0, 2L, 2L)),
-        regexp = "Dimension inconsistency"
-    )
-    expect_error(
-        family@allcent(x,
-                       cl_id = cl_id,
-                       k = k,
-                       cent = x[c(1L,20L)],
-                       cl_old = 0L,
-                       em = matrix(0L, 2L, 207L)),
-        regexp = "storage mode"
-    )
 
     ## ---------------------------------------------------------- univariate
 

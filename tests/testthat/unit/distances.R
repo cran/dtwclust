@@ -195,7 +195,7 @@ test_that("dtw_lb gives the same result regardless of dtw.func.", {
                                     window.size = 15L, step.pattern = dtw::symmetric1)
     distmat_with_dtw <- dtw_lb(data_reinterpolated[1L:50L], data_reinterpolated[51L:100L],
                                window.size = 15L, step.pattern = dtw::symmetric1, dtw.func = "dtw")
-    expect_equal(distmat_with_dtwbasic, distmat_with_dtw)
+    expect_equal(distmat_with_dtwbasic, distmat_with_dtw, check.attributes = FALSE)
 })
 
 test_that("dtw_lb gives the same result for different nn.margin and corresponding inputs.", {
@@ -228,21 +228,6 @@ test_that("Backtracking in dtw_basic() works.", {
     expect_identical(multivariate_result$index1, multivariate_result$index2)
 })
 
-test_that("Inconsistencies in parameter 'gcm' for dtw_basic() are detected.", {
-    gcm_wrong_dim <- matrix(0, 2L, 2L)
-    expect_error(dtw_basic(x_uv, x_uv, backtrack = FALSE, gcm = gcm_wrong_dim),
-                 regexp = "inconsistency")
-    expect_error(dtw_basic(x_uv, x_uv, backtrack = TRUE, gcm = gcm_wrong_dim),
-                 regexp = "inconsistency")
-
-    int_gcm_no_backtrack <- matrix(0L, 2L, length(x_uv) + 1L)
-    int_gcm_backtrack <- matrix(0L, length(x_uv) + 1L, length(x_uv) + 1L)
-    expect_error(dtw_basic(x_uv, x_uv, backtrack = FALSE, gcm = int_gcm_no_backtrack),
-                 regexp = "storage mode")
-    expect_error(dtw_basic(x_uv, x_uv, backtrack = TRUE, gcm = int_gcm_backtrack),
-                 regexp = "storage mode")
-})
-
 # ==================================================================================================
 # GAK
 # ==================================================================================================
@@ -252,30 +237,12 @@ test_that("GAK can estimate sigma.", {
     expect_gt(attr(gak_distance, "sigma"), 0)
 })
 
-test_that("Inconsistencies in parameter 'logs' for GAK() are detected.", {
-    logs_wrong_dim <- matrix(0, 2L, 2L)
-    expect_error(GAK(x_uv, x_uv, logs = logs_wrong_dim),
-                 regexp = "inconsistency")
-
-    int_logs <- matrix(0L, length(x_uv) + 1L, 3L)
-    expect_error(GAK(x_uv, x_uv, logs = int_logs),
-                 regexp = "storage mode")
-})
-
 # ==================================================================================================
 # sdtw
 # ==================================================================================================
 
 test_that("Inconsistencies in parameters for sdtw() are detected.", {
     expect_error(sdtw(x_uv, x_uv, gamma = -0.01), "gamma.*positive")
-
-    cm_wrong_dim <- matrix(0, 2L, 2L)
-    expect_error(sdtw(x_uv, x_uv, cm = cm_wrong_dim),
-                 regexp = "inconsistency")
-
-    int_cm <- matrix(0L, length(x_uv) + 1L, length(x_uv) + 1L)
-    expect_error(sdtw(x_uv, x_uv, cm = int_cm),
-                 regexp = "storage mode")
 })
 
 # ==================================================================================================

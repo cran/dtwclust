@@ -25,7 +25,12 @@ test_that("Parallel computation gives the same results as sequential", {
     require(doParallel)
 
     cl <- makeCluster(num_workers)
-    invisible(clusterEvalQ(cl, library(dtwclust)))
+    invisible(clusterEvalQ(cl, {
+        library(dtwclust)
+        # environment variables get inherited by the workers when they are created, so reset this
+        RcppParallel::setThreadOptions()
+        Sys.unsetenv("RCPP_PARALLEL_NUM_THREADS")
+    }))
     registerDoParallel(cl)
 
     # Filter excludes files that have "parallel" in them, otherwise it would be recursive
@@ -42,6 +47,7 @@ test_that("Parallel FORK computation gives the same results as sequential", {
     skip_on_cran()
     skip_on_travis()
     skip_on_os("windows")
+    skip_if(nzchar(Sys.getenv("R_COVR")), "calculating coverage")
 
     if (getOption("dtwclust_skip_par_tests", FALSE))
         skip("Parallel tests disabled explicitly.")
@@ -50,6 +56,7 @@ test_that("Parallel FORK computation gives the same results as sequential", {
     cat(" - Test FORKs:\n")
 
     cl <- makeCluster(num_workers - 1L, "FORK")
+    invisible(clusterEvalQ(cl, RcppParallel::setThreadOptions(2L)))
     registerDoParallel(cl)
 
     # Filter excludes files that have "parallel" in them, otherwise it would be recursive

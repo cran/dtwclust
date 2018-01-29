@@ -249,51 +249,18 @@ test_that("Compare clusterings works for the minimum set with all possibilities.
                                           score.clus = score_fun,
                                           lbls = labels_subset)
 
-    dba_comparison <- compare_clusterings(data_multivariate, "h",
-                                          configs = cfgs_dba, seed = 294L,
-                                          score.clus = score_fun,
-                                          lbls = labels_subset)
+    do_this <- if (foreach::getDoParWorkers() > 1L) base::eval else testthat::expect_warning
+    do_this({
+        dba_comparison <- compare_clusterings(data_multivariate, "h",
+                                              configs = cfgs_dba, seed = 294L,
+                                              score.clus = score_fun,
+                                              lbls = labels_subset)
+    })
 
     sdtwc_comparison <- compare_clusterings(data_subset, "h",
                                             configs = cfgs_sdtwc, seed = 3290L,
                                             score.clus = score_fun,
                                             lbls = labels_subset)
-
-    N <- max(lengths(data_subset)) + 1L
-    logs <- matrix(0, N, 3L)
-    gcm <- matrix(0, N, N)
-    cm <- matrix(0, N + 1L, N + 1L)
-    dm <- matrix(0, N, N)
-    em <- matrix(0, 2L, N + 1L)
-
-    mats_comparison <- compare_clusterings(data_subset, "h",
-                                           configs = cfgs_mats, seed = 9430L,
-                                           logs = logs,
-                                           gcm = gcm,
-                                           return.objects = TRUE)
-
-    expect_true(all(
-        c("gcm", "logs") %in%
-            names(mats_comparison$objects.hierarchical$config1@dots)
-    ))
-
-    mats_comparison <- compare_clusterings(data_subset, "h",
-                                           configs = cfgs_sdtwc, seed = 9430L,
-                                           cm = cm, dm = dm, em = em,
-                                           return.objects = TRUE)
-
-    expect_true(all(
-        c("cm", "dm", "em") %in%
-            names(mats_comparison$objects.hierarchical$config1@dots)
-    ))
-
-    if (foreach::getDoParWorkers() == 1L) {
-        expect_false(all(logs == 0))
-        expect_false(all(gcm == 0))
-        expect_false(all(cm == 0))
-        expect_false(all(dm == 0))
-        expect_false(all(em == 0))
-    }
 
     ## rds
     all_comparisons$pick <- reset_nondeterministic(all_comparisons$pick)

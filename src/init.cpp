@@ -1,32 +1,27 @@
-#include <Rcpp.h>
 #include "dtwclust.h"
-#include "dtwclust++.h"
 
-#define CALLDEF(name, n) { "C_"#name, (DL_FUNC) &name, n }
-#define CALLDEFpp(name, n) { "C_"#name, (DL_FUNC) &dtwclust::name, n }
+#include <Rinternals.h>
+#include <R_ext/Rdynload.h>
+
+#define CALLDEF(name, n) { "C_"#name, (DL_FUNC) &dtwclust::name, n }
 
 static R_CallMethodDef callMethods[] = {
-    CALLDEFpp(SparseDistmatIndices__new, 1),
-    CALLDEFpp(SparseDistmatIndices__getNewIndices, 4),
-    CALLDEFpp(dba, 8),
-    CALLDEFpp(dtwb_loop, 10),
-    CALLDEFpp(dtw_lb, 5),
-    CALLDEFpp(envelope, 2),
-    CALLDEFpp(force_lb_symmetry, 1),
-    CALLDEFpp(gak_loop, 9),
-    CALLDEFpp(lbk, 4),
-    CALLDEFpp(lbk_loop, 9),
-    CALLDEFpp(lbi, 6),
-    CALLDEFpp(lbi_loop, 11),
-    CALLDEFpp(sbd_loop, 10),
-    CALLDEFpp(sdtw_cent, 8),
-    CALLDEFpp(sdtw_loop, 9),
-    CALLDEFpp(soft_dtw, 6),
-    CALLDEFpp(tadpole, 8),
-    CALLDEF(dtw_basic, 10),
+    CALLDEF(SparseDistmatIndices__new, 1),
+    CALLDEF(SparseDistmatIndices__getNewIndices, 4),
+    CALLDEF(dba, 9),
+    CALLDEF(distmat_loop, 8),
+    CALLDEF(dtw_basic, 11),
+    CALLDEF(dtw_lb, 6),
+    CALLDEF(envelope, 2),
+    CALLDEF(force_lb_symmetry, 1),
+    CALLDEF(lbk, 4),
+    CALLDEF(lbi, 6),
     CALLDEF(logGAK, 8),
     CALLDEF(pairs, 1),
     CALLDEF(setnames_inplace, 2),
+    CALLDEF(sdtw_cent, 6),
+    CALLDEF(soft_dtw, 5),
+    CALLDEF(tadpole, 9),
     {NULL, NULL, 0}
 };
 
@@ -38,11 +33,9 @@ void register_functions() {
     DTWCLUST_REGISTER(dtw_basic);
     DTWCLUST_REGISTER(dtw_lb);
     DTWCLUST_REGISTER(envelope);
-    DTWCLUST_REGISTER(lbk);
     DTWCLUST_REGISTER(lbi);
+    DTWCLUST_REGISTER(lbk);
     DTWCLUST_REGISTER(logGAK);
-    DTWCLUST_REGISTER(pairs);
-    DTWCLUST_REGISTER(setnames_inplace);
     DTWCLUST_REGISTER(sdtw_cent);
     DTWCLUST_REGISTER(soft_dtw);
     DTWCLUST_REGISTER(tadpole);

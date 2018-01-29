@@ -2,7 +2,7 @@ Overall license
 ===============
 
 dtwclust: Time Series Clustering Along With Optimizations for DTW
-Copyright (C) 2015-2017  Alexis Sarda-Espinosa
+Copyright (C) 2015-2018  Alexis Sarda-Espinosa
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ Warping envelopes
 -----------------
 
 The code in:
-- src/envelope.cpp
+- src/utils/envelope.cpp
 
 was adapted from third-party code to which the following applies:
 
@@ -49,7 +49,7 @@ Global alignment kernel
 -----------------------
 
 The code in:
-- src/logGAK.c
+- src/distances/logGAK.cpp
 
 was adapted from third-party code to which the following applies:
 
