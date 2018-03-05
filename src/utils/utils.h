@@ -3,29 +3,7 @@
 
 #include <vector>
 
-#include <RcppArmadillo.h>
-
 namespace dtwclust {
-
-// -------------------------------------------------------------------------------------------------
-/* can be called from R */
-// -------------------------------------------------------------------------------------------------
-
-// for sparse matrices in R
-RcppExport SEXP SparseDistmatIndices__new(SEXP num_rows);
-RcppExport SEXP SparseDistmatIndices__getNewIndices(SEXP xptr, SEXP i, SEXP j, SEXP symmetric);
-
-// envelope.cpp
-RcppExport SEXP envelope(SEXP series, SEXP window);
-
-// utils.cpp
-RcppExport SEXP force_lb_symmetry(SEXP X);
-
-// utils.cpp
-RcppExport SEXP pairs(SEXP L);
-
-// utils.cpp
-RcppExport SEXP setnames_inplace(SEXP vec, SEXP names);
 
 // -------------------------------------------------------------------------------------------------
 /* called by other C++ functions */
@@ -43,12 +21,6 @@ double kahan_sum(const double * const x, const int length);
 
 // utils.cpp
 void s2d(const int id, const int nrow, int& i, int& j);
-
-// double to single index for matrices
-int inline d2s(int const i, int const j, int const num_rows)
-    __attribute__((always_inline));
-int inline d2s(int const i, int const j, int const num_rows)
-{ return i + j * num_rows; }
 
 // grain parameter for multi-threading
 int inline get_grain(const int n, const int num_threads)
@@ -69,7 +41,7 @@ public:
 
 private:
     double* const x_;
-    int nrows_, ncols_;
+    int nrows_;
     std::vector<double> c_, y_, t_;
 };
 

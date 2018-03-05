@@ -60,7 +60,8 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'
 #' This is the main function to perform time series clustering. See the details and the examples for
 #' more information, as well as the included package vignettes (which can be found by typing
-#' `browseVignettes("dtwclust")`). A convenience wrapper is available in [compare_clusterings()].
+#' `browseVignettes("dtwclust")`). A convenience wrapper is available in [compare_clusterings()],
+#' and a shiny app in [interactive_clustering()].
 #'
 #' @export
 #' @importFrom dtw symmetric1
@@ -69,8 +70,6 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #' @importFrom methods slot
 #' @importFrom parallel splitIndices
 #' @importFrom proxy pr_DB
-#' @importFrom rngtools RNGseq
-#' @importFrom rngtools setRNG
 #' @importFrom stats as.dist
 #' @importFrom stats as.hclust
 #' @importFrom stats cutree
@@ -111,10 +110,9 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'
 #' In the case of multivariate time series, they should be provided as a list of matrices, where
 #' time spans the rows of each matrix and the variables span the columns (see [CharTrajMV] for an
-#' example). At the moment, only `dtw_basic`, `DTW`, `DTW2` and `GAK` support such series. You can
-#' of course create your own custom distances. All included centroid functions should work with the
-#' aforementioned format, although `shape` is *not* recommended. Note that the `plot` method will
-#' simply append all dimensions (columns) one after the other.
+#' example). All included centroid functions should work with the aforementioned format, although
+#' `shape` is *not* recommended. Note that the `plot` method will simply append all dimensions
+#' (columns) one after the other.
 #'
 #' @return
 #'
@@ -227,15 +225,15 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'   its formal arguments.
 #'
 #'   It is convenient to provide this function if you're planning on using the [stats::predict()]
-#'   generic (see also [tsclusters-methods]).
+#'   generic (see also [TSClusters-methods]).
 #'
 #' @section Repetitions:
 #'
 #'   Due to their stochastic nature, partitional clustering is usually repeated several times with
 #'   different random seeds to allow for different starting points. This function uses
-#'   [rngtools::RNGseq()] to obtain different seed streams for each repetition, utilizing the `seed`
-#'   parameter (if provided) to initialize it. If more than one repetition is made, the streams are
-#'   returned in an attribute called `rng`.
+#'   [parallel::nextRNGStream()] to obtain different seed streams for each repetition, utilizing the
+#'   `seed` parameter (if provided) to initialize it. If more than one repetition is made, the
+#'   streams are returned in an attribute called `rng`.
 #'
 #'   Multiple values of `k` can also be provided to get different partitions using any `type` of
 #'   clustering.
@@ -271,8 +269,8 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'
 #' @seealso
 #'
-#' [TSClusters-class], [tsclusters-methods], [tsclustFamily-class], [tsclust-controls],
-#' [compare_clusterings()].
+#' [TSClusters-class], [TSClusters-methods], [tsclustFamily-class], [tsclust-controls],
+#' [compare_clusterings()], [interactive_clustering()], [ssdtwclust()].
 #'
 #' @example man-examples/tsclust-examples.R
 #'
@@ -288,7 +286,15 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
     # ==============================================================================================
 
     tic <- proc.time()
-    set.seed(seed)
+    handle_rngkind() # UTILS-rng.R
+    if (!is.null(seed)) {
+        if (length(seed) == 1L)
+            set.seed(seed)
+        else if (length(seed) == 7L)
+            assign(".Random.seed", seed, globalenv())
+        else
+            stop("Invalid seed provided") # nocov
+    }
     type <- match.arg(type, c("partitional", "hierarchical", "tadpole", "fuzzy"))
     series <- tslist(series, error.check) # coerce to list if necessary
     if (any(k < 2L)) stop("At least two clusters must be defined")
@@ -349,10 +355,10 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
         else if (distance %in% c("sbd", "gak", "sdtw"))
             control$symmetric <- TRUE
 
-        if (distance == "dtw_lb" && isTRUE(args$dist$nn.margin != 1L)) { # nocov start
+        if (distance == "dtw_lb" && isTRUE(args$dist$nn.margin != 1L)) {
             warning("Using dtw_lb in tsclust() always uses row-wise nearest neighbors.")
             args$dist$nn.margin <- 1L
-        } # nocov end
+        }
     }
 
     RET <- switch(
@@ -408,8 +414,11 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             # Cluster
             # --------------------------------------------------------------------------------------
 
+            .rng_ <- dots$.rng_
             if (length(k) == 1L && nrep == 1L) {
-                rngtools::setRNG(rngtools::RNGseq(1L, seed = seed, simplify = TRUE))
+                # UTILS-rng.R
+                if (is.null(.rng_)) .rng_ <- rng_seq(1L, seed = seed, simplify = TRUE)
+                assign(".Random.seed", .rng_, globalenv())
                 # just one repetition,
                 # done like this so dist/cent functions can take advantage of parallelization
                 pc_list <- list(do.call(pfclust,
@@ -427,13 +436,17 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                 # I need to re-register any custom distances in each parallel worker
                 dist_entry <- proxy::pr_DB$get_entry(distance)
                 export <- c("pfclust", "check_consistency", "enlist")
-                rng <- rngtools::RNGseq(length(k) * nrep, seed = seed, simplify = FALSE)
+                if (is.null(.rng_))
+                    .rng_ <- rng_seq(length(k) * nrep, seed = seed, simplify = FALSE) # UTILS-rng.R
                 # if %do% is used, the outer loop replaces values in this envir
-                rng0 <- lapply(parallel::splitIndices(length(rng), length(k)), function(i) { rng[i] })
+                rng0 <- lapply(parallel::splitIndices(length(.rng_), length(k)),
+                               function(i) { .rng_[i] })
                 k0 <- k
                 # sequential allows the matrix to be updated iteratively
                 `%this_op%` <- if(inherits(control$distmat, "SparseDistmat")) `%do%` else `%op%`
-                i <- integer() # CHECK complains about non-initialization
+                # CHECK complains about non-initialization and globals
+                rng <- list()
+                i <- integer()
                 # cluster
                 pc_list <- foreach(k = k0, rng = rng0,
                                    .combine = c, .multicombine = TRUE,
@@ -445,7 +458,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                             .export = export) %this_op%
                             {
                                 if (trace) message("Repetition ", i, " for k = ", k)
-                                rngtools::setRNG(rng[[i]])
+                                assign(".Random.seed", rng[[i]], globalenv())
 
                                 if (!check_consistency(dist_entry$names[1L], "dist"))
                                     do.call(proxy::pr_DB$set_entry, dist_entry, TRUE)
@@ -479,6 +492,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                 distance <- if (is.null(dist_method)) "unknown" else dist_method
             }
             if (inherits(distmat, "Distmat")) distmat <- distmat$distmat
+            if (inherits(distmat, "uninitializedField")) distmat <- NULL
             # Create objects
             RET <- lapply(pc_list, function(pc) {
                 if (type == "partitional") {
@@ -701,13 +715,13 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             # Prepare results
             # --------------------------------------------------------------------------------------
 
-            # seeds
-            rng <- rngtools::RNGseq(length(k) * length(control$dc),
-                                    seed = seed,
-                                    simplify = FALSE)
+            # seeds (UTILS-rng.R)
+            .rng_ <- dots$.rng_
+            if (is.null(.rng_))
+                .rng_ <- rng_seq(length(k) * length(control$dc), seed = seed, simplify = FALSE)
 
-            RET <- Map(R, rng, f = function(R, rng) {
-                rngtools::setRNG(rng)
+            RET <- Map(R, .rng_, f = function(R, rng) {
+                assign(".Random.seed", rng, globalenv())
                 k <- length(R$centroids)
                 if (is.function(centroid)) {
                     allcent <- function(...) { list(centroid(...)) }

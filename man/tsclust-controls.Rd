@@ -21,7 +21,8 @@ hierarchical_control(method = "average", symmetric = FALSE,
   packages = character(0L), distmat = NULL)
 
 fuzzy_control(fuzziness = 2, iter.max = 100L, delta = 0.001,
-  packages = character(0L), symmetric = FALSE, version = 2L)
+  packages = character(0L), symmetric = FALSE, version = 2L,
+  distmat = NULL)
 
 tadpole_control(dc, window.size, lb = "lbk")
 
@@ -45,7 +46,7 @@ functions. Relevant for parallel computation, although since the distance entrie
 re-registered in each parallel worker if needed, this is probably useless, but just in case.}
 
 \item{distmat}{If available, the cross-distance matrix can be provided here. Only relevant for
-partitional with PAM centroids or hierarchical procedures.}
+partitional with PAM centroids, fuzzy with FCMdd centroids, or hierarchical clustering.}
 
 \item{pam.sparse}{Attempt to use a sparse matrix for PAM centroids. See details.}
 
@@ -87,7 +88,7 @@ this, but bear in mind that the results may vary slightly due to the missing ite
 \section{Partitional}{
 
 
-When \code{pam.precompute = FALSE}, using \code{pam.sparse = TRUE} defines a sparse matrix (see
+When \code{pam.precompute = FALSE}, using \code{pam.sparse = TRUE} defines a sparse matrix (refer to
 \code{\link[Matrix:sparseMatrix]{Matrix::sparseMatrix()}}) and updates it every iteration (except for \code{"dtw_lb"} distance). For
 most cases, precomputing the whole distance matrix is still probably faster. See the timing
 experiments in \code{browseVignettes("dtwclust")}.

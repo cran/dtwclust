@@ -8,9 +8,9 @@
 #include <RcppParallel.h>
 
 #include "../distance-calculators/distance-calculators.h"
-#include "../distances/distances.h" // dtw_basic_par
+#include "../distances/distances-details.h" // dtw_basic_par
 #include "../utils/TSTSList.h"
-#include "../utils/utils.h" // KahanSummer, Rflush, d2s
+#include "../utils/utils.h" // KahanSummer, Rflush
 
 namespace dtwclust {
 
@@ -62,6 +62,10 @@ public:
         if (index2_) delete[] index2_;
     }
 
+    // default copy/move constructor (must be explicitly defined due to custom destructor)
+    DtwBacktrackCalculator(const DtwBacktrackCalculator&) = default;
+    DtwBacktrackCalculator(DtwBacktrackCalculator&&) = default;
+
     // calculate for given indices (inherited)
     double calculate(const int i, const int j) override {
         if (is_multivariate_)
@@ -83,14 +87,6 @@ public:
         ptr->index2_ = new int[max_len_x_ + max_len_y_];
         return ptr;
     }
-
-    // limits
-    int xLimit() const override { // nocov start
-        return is_multivariate_ ? x_mv_.length() : x_uv_.length();
-    }
-    int yLimit() const override {
-        return is_multivariate_ ? y_mv_.length() : y_uv_.length();
-    } // nocov end
 
     // input series (univariate)
     TSTSList<Rcpp::NumericVector> x_uv_, y_uv_;
@@ -498,7 +494,7 @@ SEXP dba_mv_by_series(const SEXP& X, const Rcpp::NumericMatrix& centroid, const 
 /* main gateway function */
 // =================================================================================================
 
-RcppExport SEXP dba(SEXP X, SEXP CENT,
+extern "C" SEXP dba(SEXP X, SEXP CENT,
                     SEXP MAX_ITER, SEXP DELTA, SEXP TRACE,
                     SEXP MV, SEXP MV_VER, SEXP DOTS, SEXP NUM_THREADS)
 {

@@ -51,7 +51,8 @@ hierarchical procedures are used, or \code{length(k)} \code{>} \code{1}, a list 
 \description{
 This is the main function to perform time series clustering. See the details and the examples for
 more information, as well as the included package vignettes (which can be found by typing
-\code{browseVignettes("dtwclust")}). A convenience wrapper is available in \code{\link[=compare_clusterings]{compare_clusterings()}}.
+\code{browseVignettes("dtwclust")}). A convenience wrapper is available in \code{\link[=compare_clusterings]{compare_clusterings()}},
+and a shiny app in \code{\link[=interactive_clustering]{interactive_clustering()}}.
 }
 \details{
 Partitional and fuzzy clustering procedures use a custom implementation. Hierarchical clustering
@@ -67,10 +68,9 @@ missing values are allowed.
 
 In the case of multivariate time series, they should be provided as a list of matrices, where
 time spans the rows of each matrix and the variables span the columns (see \link{CharTrajMV} for an
-example). At the moment, only \code{dtw_basic}, \code{DTW}, \code{DTW2} and \code{GAK} support such series. You can
-of course create your own custom distances. All included centroid functions should work with the
-aforementioned format, although \code{shape} is \emph{not} recommended. Note that the \code{plot} method will
-simply append all dimensions (columns) one after the other.
+example). All included centroid functions should work with the aforementioned format, although
+\code{shape} is \emph{not} recommended. Note that the \code{plot} method will simply append all dimensions
+(columns) one after the other.
 }
 \note{
 The lower bounds are defined only for time series of equal length. They are \strong{not} symmetric,
@@ -188,7 +188,7 @@ will receive the data as first argument, followed by the contents of \code{args$
 its formal arguments.
 
 It is convenient to provide this function if you're planning on using the \code{\link[stats:predict]{stats::predict()}}
-generic (see also \link{tsclusters-methods}).
+generic (see also \link{TSClusters-methods}).
 }
 
 \section{Repetitions}{
@@ -196,9 +196,9 @@ generic (see also \link{tsclusters-methods}).
 
 Due to their stochastic nature, partitional clustering is usually repeated several times with
 different random seeds to allow for different starting points. This function uses
-\code{\link[rngtools:RNGseq]{rngtools::RNGseq()}} to obtain different seed streams for each repetition, utilizing the \code{seed}
-parameter (if provided) to initialize it. If more than one repetition is made, the streams are
-returned in an attribute called \code{rng}.
+\code{\link[parallel:nextRNGStream]{parallel::nextRNGStream()}} to obtain different seed streams for each repetition, utilizing the
+\code{seed} parameter (if provided) to initialize it. If more than one repetition is made, the
+streams are returned in an attribute called \code{rng}.
 
 Multiple values of \code{k} can also be provided to get different partitions using any \code{type} of
 clustering.
@@ -418,8 +418,8 @@ Please refer to the package vignette references (which can be loaded by typing
 \code{vignette("dtwclust")}).
 }
 \seealso{
-\linkS4class{TSClusters}, \link{tsclusters-methods}, \linkS4class{tsclustFamily}, \link{tsclust-controls},
-\code{\link[=compare_clusterings]{compare_clusterings()}}.
+\linkS4class{TSClusters}, \link{TSClusters-methods}, \linkS4class{tsclustFamily}, \link{tsclust-controls},
+\code{\link[=compare_clusterings]{compare_clusterings()}}, \code{\link[=interactive_clustering]{interactive_clustering()}}, \code{\link[=ssdtwclust]{ssdtwclust()}}.
 }
 \author{
 Alexis Sarda-Espinosa

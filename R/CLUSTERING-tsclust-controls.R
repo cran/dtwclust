@@ -19,7 +19,7 @@
 #'   functions. Relevant for parallel computation, although since the distance entries are
 #'   re-registered in each parallel worker if needed, this is probably useless, but just in case.
 #' @param distmat If available, the cross-distance matrix can be provided here. Only relevant for
-#'   partitional with PAM centroids or hierarchical procedures.
+#'   partitional with PAM centroids, fuzzy with FCMdd centroids, or hierarchical clustering.
 #' @param pam.sparse Attempt to use a sparse matrix for PAM centroids. See details.
 #' @param version Which version of partitional/fuzzy clustering to use. See details.
 #'
@@ -34,7 +34,7 @@
 #'
 #' @section Partitional:
 #'
-#'   When `pam.precompute = FALSE`, using `pam.sparse = TRUE` defines a sparse matrix (see
+#'   When `pam.precompute = FALSE`, using `pam.sparse = TRUE` defines a sparse matrix (refer to
 #'   [Matrix::sparseMatrix()]) and updates it every iteration (except for `"dtw_lb"` distance). For
 #'   most cases, precomputing the whole distance matrix is still probably faster. See the timing
 #'   experiments in `browseVignettes("dtwclust")`.
@@ -134,7 +134,8 @@ fuzzy_control <- function(fuzziness = 2,
                           delta = 1e-3,
                           packages = character(0L),
                           symmetric = FALSE,
-                          version = 2L)
+                          version = 2L,
+                          distmat = NULL)
 {
     if (any(fuzziness <= 1)) stop("Fuzziness exponent should be greater than one")
     if (any(iter.max <= 0L)) stop("Maximum iterations must be positive")
@@ -146,7 +147,8 @@ fuzzy_control <- function(fuzziness = 2,
              delta = delta,
              symmetric = as.logical(symmetric)[1L],
              packages = unique(c("dtwclust", as.character(packages))),
-             version = as.integer(version)),
+             version = as.integer(version),
+             distmat = distmat),
         "class" = c(control_classes[["fuzzy"]])
     )
 }

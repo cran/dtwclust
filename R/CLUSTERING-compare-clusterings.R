@@ -180,8 +180,8 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 
     if (missing(preprocs))
         force(preprocs)
-    else if (!is.list(preprocs) || is.null(names(preprocs)))
-        stop("The 'preprocs' argument must be a named list")
+    else if (!is.list(preprocs) || (length(preprocs) > 0L && is.null(names(preprocs))))
+        stop("The 'preprocs' argument must be a list with named elements")
     else if (!all(types %in% names(preprocs)))
         stop("The names of the 'preprocs' argument do not correspond to the provided 'types'")
 
@@ -193,8 +193,8 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 
     if (missing(distances))
         force(distances)
-    else if (!is.list(distances) || is.null(names(distances)))
-        stop("The 'distances' argument must be a named list")
+    else if (!is.list(distances) || (length(distances) > 0L && is.null(names(distances))))
+        stop("The 'distances' argument must be a list with named elements")
     else if (!all(setdiff(types, "tadpole") %in% names(distances)))
         stop("The names of the 'distances' argument do not correspond to the provided 'types'")
 
@@ -206,8 +206,8 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 
     if (missing(centroids))
         force(centroids)
-    else if (!is.list(centroids) || is.null(names(centroids)))
-        stop("The 'centroids' argument must be a named list")
+    else if (!is.list(centroids) || (length(centroids) > 0L && is.null(names(centroids))))
+        stop("The 'centroids' argument must be a list with named elements")
     else if (!all(types %in% names(centroids)))
         stop("The names of the 'centroids' argument do not correspond to the provided 'types'")
 
@@ -314,7 +314,6 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 #' @export
 #' @importFrom dplyr bind_rows
 #' @importFrom proxy pr_DB
-#' @importFrom rngtools RNGseq
 #'
 #' @param series A list of series, a numeric matrix or a data frame. Matrices and data frames are
 #'   coerced to a list row-wise (see [tslist()]).
@@ -347,6 +346,8 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 #' The scoring and picking functions are for convenience, if they are not specified, the `scores`
 #' and `pick` elements of the result will be `NULL`.
 #'
+#' See [repeat_clustering()] for when `return.objects = FALSE`.
+#'
 #' @return
 #'
 #' A list with:
@@ -374,8 +375,9 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 #'   to the objects might also be inconsistent.
 #'
 #'   Parallelization can incur a lot of deep copies of data when returning the cluster objects,
-#'   since each one will likely contain a copy of `datalist`. If you want to avoid this, consider
-#'   specifying `score.clus` and setting `return.objects` to `FALSE`.
+#'   since each one will contain a copy of `datalist`. If you want to avoid this, consider
+#'   specifying `score.clus` and setting `return.objects` to `FALSE`, and then using
+#'   [repeat_clustering()].
 #'
 #' @section Scoring:
 #'
@@ -451,6 +453,7 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ..
     # ==============================================================================================
 
     tic <- proc.time()
+    handle_rngkind() # UTILS-rng.R
     set.seed(seed)
     score_missing <- missing(score.clus)
     pick_missing <- missing(pick.clus)
@@ -460,7 +463,7 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ..
     if (!return.objects && score_missing)
         stop("Returning no objects and specifying no scoring function would return no useful results.")
     # coerce to list if necessary
-    if (!is.list(series)) series <- tslist(series, TRUE)
+    if (is.data.frame(series) || !is.list(series)) series <- tslist(series, TRUE)
     check_consistency(series, "vltslist")
     if (!is.function(score.clus) && !(is.list(score.clus) && all(sapply(score.clus, is.function))))
         stop("Invalid evaluation function(s)")
@@ -491,10 +494,10 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ..
     # ----------------------------------------------------------------------------------------------
 
     num_seeds <- cumsum(sapply(configs, nrow))
-    seeds <- rngtools::RNGseq(num_seeds[length(num_seeds)], seed = seed, simplify = FALSE)
+    seeds <- rng_seq(num_seeds[length(num_seeds)], seed = seed, simplify = FALSE) # UTILS-rng.R
     seeds <- Map(c(1L, num_seeds[-length(num_seeds)] + 1L), num_seeds,
                  f = function(first, last) { seeds[first:last] })
-    setnames_inplace(seeds, names(configs))
+    setnames_inplace(seeds, names(configs)) # UTILS-utils.R
 
     # ==============================================================================================
     # Preprocessings
@@ -815,51 +818,39 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"), ..
         dfs <- switch(
             type,
             partitional = {
-                if (length(k) > 1L || any(config$nrep > 1L))
-                    lapply(seq_len(nrow(config)), function(i) {
-                        this_config <- config[i, , drop = FALSE]
-                        rep <- 1L:this_config$nrep
-                        this_config <- this_config[setdiff(names(this_config), c("k", "nrep"))]
-                        df <- expand.grid(rep = rep, k = k)
-                        make_unique_ids(df, this_config) # see EOF
-                    })
-                else
-                    config
+                lapply(seq_len(nrow(config)), function(i) {
+                    this_config <- config[i, , drop = FALSE]
+                    rep <- 1L:this_config$nrep
+                    this_config <- this_config[setdiff(names(this_config), c("k", "nrep"))]
+                    df <- expand.grid(rep = rep, k = k)
+                    make_unique_ids(df, this_config) # see EOF
+                })
             },
             hierarchical = {
-                if (length(k) > 1L || any(lengths(config$method) > 1L))
-                    lapply(seq_len(nrow(config)), function(i) {
-                        this_config <- config[i, , drop = FALSE]
-                        method <- unlist(this_config$method)
-                        this_config <- this_config[setdiff(names(this_config), c("k", "method"))]
-                        df <- expand.grid(k = k, method = method)
-                        make_unique_ids(df, this_config) # see EOF
-                    })
-                else
-                    config
+                lapply(seq_len(nrow(config)), function(i) {
+                    this_config <- config[i, , drop = FALSE]
+                    method <- unlist(this_config$method)
+                    this_config <- this_config[setdiff(names(this_config), c("k", "method"))]
+                    df <- expand.grid(k = k, method = method, stringsAsFactors = FALSE)
+                    make_unique_ids(df, this_config) # see EOF
+                })
             },
             fuzzy = {
-                if (length(k) > 1L)
-                    lapply(seq_len(nrow(config)), function(i) {
-                        this_config <- config[i, , drop = FALSE]
-                        this_config <- this_config[setdiff(names(this_config), c("k"))]
-                        df <- expand.grid(k = k)
-                        make_unique_ids(df, this_config) # see EOF
-                    })
-                else
-                    config
+                lapply(seq_len(nrow(config)), function(i) {
+                    this_config <- config[i, , drop = FALSE]
+                    this_config <- this_config[setdiff(names(this_config), c("k"))]
+                    df <- expand.grid(k = k)
+                    make_unique_ids(df, this_config) # see EOF
+                })
             },
             tadpole = {
-                if (length(k) > 1L || any(lengths(config$dc) > 1L))
-                    lapply(seq_len(nrow(config)), function(i) {
-                        this_config <- config[i, , drop = FALSE]
-                        dc <- unlist(this_config$dc)
-                        this_config <- this_config[setdiff(names(this_config), c("k", "dc"))]
-                        df <- expand.grid(k = k, dc = dc)
-                        make_unique_ids(df, this_config) # see EOF
-                    })
-                else
-                    config
+                lapply(seq_len(nrow(config)), function(i) {
+                    this_config <- config[i, , drop = FALSE]
+                    dc <- unlist(this_config$dc)
+                    this_config <- this_config[setdiff(names(this_config), c("k", "dc"))]
+                    df <- expand.grid(k = k, dc = dc)
+                    make_unique_ids(df, this_config) # see EOF
+                })
             }
         )
         # return Map

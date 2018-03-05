@@ -20,7 +20,7 @@ check_consistency <- function(obj, case, ..., clus_type,
     }
     else if (case == "window") {
         if (is.null(obj)) stop("Please provide the 'window.size' parameter")
-        if (any(obj <= 0L)) stop("Window width must be larger than 0")
+        if (any(obj < 0L)) stop("Window size must be non-negative")
         return(as.integer(obj))
     }
     else if (case == "dist") {
@@ -170,17 +170,28 @@ setnames_inplace <- function(vec, names) {
             .packages = "dtwclust"
         ) %dopar% {
             reset <- TRUE
-            num_threads <- Sys.getenv("RCPP_PARALLEL_NUM_THREADS")
-            if (nzchar(num_threads))
-                reset <- FALSE # nocov
+            if (nzchar(Sys.getenv("RCPP_PARALLEL_NUM_THREADS")))
+                reset <- FALSE
             else
                 RcppParallel::setThreadOptions(1L)
             reset
         }
     }
+    # check the RNGkind of the workers
+    if (foreach::getDoParName() != "doSEQ") {
+        rng_kind <- foreach::foreach(
+            i = 1L:num_workers,
+            .combine = c,
+            .multicombine = TRUE,
+            .inorder = FALSE,
+            .packages = "dtwclust"
+        ) %dopar% {
+            RNGkind("L'Ecuyer-CMRG")[1L]
+        }
+    }
     # evaluate expression
     withCallingHandlers({
-        ret <- eval.parent(substitute(obj %dopar% ex))
+        ret <- tryCatch(eval.parent(substitute(obj %dopar% ex)), error = function(e) { e })
     },
     warning = function(w) {
         if (grepl("package:dtwclust", w$message, ignore.case = TRUE))
@@ -188,7 +199,7 @@ setnames_inplace <- function(vec, names) {
     })
     # reset parallel workers if needed
     if (num_workers > 1L && any(reset_workers)) {
-        reset_failed <- foreach::foreach(
+        foreach::foreach(
             i = 1L:num_workers,
             .combine = c,
             .multicombine = TRUE,
@@ -196,12 +207,21 @@ setnames_inplace <- function(vec, names) {
             .packages = "dtwclust"
         ) %dopar% {
             RcppParallel::setThreadOptions("auto")
-            Sys.unsetenv("RCPP_PARALLEL_NUM_THREADS")
-            nzchar(Sys.getenv("RCPP_PARALLEL_NUM_THREADS"))
         }
-        if (any(reset_failed))
-            warning("Could not reset thread options in the parallel workers") # nocov
     }
+    # reset RNGkind if needed
+    if (foreach::getDoParName() != "doSEQ" && any(rng_kind != dtwclust_rngkind)) {
+        foreach::foreach(
+            rng_kind = rng_kind,
+            .combine = c,
+            .multicombine = TRUE,
+            .inorder = FALSE,
+            .packages = "dtwclust"
+        ) %dopar% {
+            RNGkind(rng_kind)
+        }
+    }
+    if (inherits(ret, "error") && obj$errorHandling != "pass") stop(ret)
     # return
     ret
 }

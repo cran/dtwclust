@@ -46,7 +46,7 @@ knitr::opts_chunk$set(eval = FALSE, comment = "#>")
 #  registerDoSEQ()
 
 ## ----reset-rcpp-parallel, eval = TRUE, include = FALSE-------------------
-Sys.unsetenv("RCPP_PARALLEL_NUM_THREADS")
+RcppParallel::setThreadOptions()
 
 ## ----rcpp-parallel-env, eval = TRUE--------------------------------------
 # when this is *unset* (default), all threads are used

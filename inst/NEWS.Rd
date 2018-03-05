@@ -7,14 +7,12 @@
     Full changelog available at \url{https://github.com/asardaes/dtwclust/blob/master/CHANGELOG.md}
 }
 
-\section{Changes in version 5.2.0}{
+\section{Changes in version 5.3.0}{
 \itemize{
-    \item Several functions now use \code{RcppParallel} for parallelization, refer to the new parallelization vignette for more information.
-    \item None of the distance/centroid functions expose parameters for helper matrices anymore.
-    \item Added the option to add labels to non-dendrogram plots.
-    \item The ellipsis in \code{sdtw_cent} is now actually passed to \code{nloptr}.
-    \item Fixed \code{tsclust} for \code{dtw_lb} distance and \code{pam.precompute = FALSE} (it was always using \code{dtw_basic}, so the results should not change).
-    \item Updated timing experiments.
-    \item Added soft-DTW information to the PDF vignette.
+    \item Added 2 shiny apps, see \code{interactive_clustering} and \code{ssdtwclust}.
+    \item Added another helper for \code{compare_clusterings}: \code{repeat_clustering}.
+    \item Added \code{distmat} to \code{fuzzy_control} for when \code{centroid = "fcmdd"}.
+    \item Dropped dependency on \code{rngtools}. Changing the random number generator after loading \code{dtwclust} should not be a problem now.
+    \item Fixed a bug regarding the way \code{tsclust} handled the \code{seed} when called from \code{compare_clusterings}. This will affect \code{compare_clusterings} results of hierarchical or TADPole clusterings made therein if a centroid subject to randomness was used (e.g. \code{dba}).
 }
 }

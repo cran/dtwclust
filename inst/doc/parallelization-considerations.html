@@ -282,7 +282,7 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 
 
 
-<section id="introduction" class="level1">
+<div id="introduction" class="section level1">
 <h1><span class="header-section-number">1</span> Introduction</h1>
 <p>Up until <code>dtwclust</code> version 5.1.0, parallelization solely relied on the <code>foreach</code> package, which mostly leverages multi-processing parallelization. Thanks to the <code>RcppParallel</code> package, several included functions can now also take advantage of multi-threading. However, this means that there are some considerations to keep in mind when using the package in order to make the most of either parallelization strategy. The TL;DR version is:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="co"># load dtwclust</span></a>
@@ -300,10 +300,10 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <a class="sourceLine" id="cb1-13" data-line-number="13"><span class="kw">require</span>(doParallel)</a>
 <a class="sourceLine" id="cb1-14" data-line-number="14"><span class="kw">registerDoParallel</span>(workers)</a></code></pre></div>
 <p>The documentation of the functions specify if they use parallelization, what type, and how they use it. For more details, continue reading.</p>
-</section>
-<section id="calculation-of-cross-distance-matrices" class="level1">
+</div>
+<div id="calculation-of-cross-distance-matrices" class="section level1">
 <h1><span class="header-section-number">2</span> Calculation of cross-distance matrices</h1>
-<section id="distances-included-in-dtwclust" class="level2">
+<div id="distances-included-in-dtwclust" class="section level2">
 <h2><span class="header-section-number">2.1</span> Distances included in <code>dtwclust</code></h2>
 <p>As mentioned above, parallelization in <code>dtwclust</code> always used <code>foreach</code>, so it was necessary to explicitly configure the parallel workers at first. Now all included distance functions that are registered with <code>proxy</code> rely on <code>RcppParallel</code> (and some centroid functions leverage multi-threading too), so it is no longer necessary to explicitly create <code>parallel</code> workers for the calculation of cross-distance matrices. Nevertheless, creating workers will not prevent the distances to use multi-threading when it is appropriate (more on this later). Using <code>doParallel</code> as an example:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="kw">data</span>(<span class="st">&quot;uciCT&quot;</span>)</a>
@@ -316,8 +316,8 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <p>If you want to <em>prevent</em> the use of multi-threading, you can do the following, but it will <strong>not</strong> fall back on <code>foreach</code>, so it will be always sequential:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb3-1" data-line-number="1">RcppParallel<span class="op">::</span><span class="kw">setThreadOptions</span>(1L)</a>
 <a class="sourceLine" id="cb3-2" data-line-number="2">distmat &lt;-<span class="st"> </span>proxy<span class="op">::</span><span class="kw">dist</span>(CharTraj, <span class="dt">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</a></code></pre></div>
-</section>
-<section id="distances-not-included-with-dtwclust" class="level2">
+</div>
+<div id="distances-not-included-with-dtwclust" class="section level2">
 <h2><span class="header-section-number">2.2</span> Distances not included with <code>dtwclust</code></h2>
 <p>As mentioned in its documentation, the <code>tsclustFamily</code> class has a distance function that wraps <code>proxy::dist</code> and, with some restrictions, can use parallelization even with distances not included with <code>dtwclust</code>. In that regard everything remains the same, which means that it still depends on <code>foreach</code> for non-<code>dtwclust</code> distances. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb4-1" data-line-number="1"><span class="co"># instantiate the family and use the dtw::dtw function</span></a>
@@ -328,11 +328,11 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <a class="sourceLine" id="cb4-6" data-line-number="6">distmat &lt;-<span class="st"> </span>fam<span class="op">@</span><span class="kw">dist</span>(CharTraj)</a>
 <a class="sourceLine" id="cb4-7" data-line-number="7"><span class="co"># go back to sequential calculations</span></a>
 <a class="sourceLine" id="cb4-8" data-line-number="8"><span class="kw">registerDoSEQ</span>()</a></code></pre></div>
-</section>
-</section>
-<section id="parallelization-with-foreach" class="level1">
+</div>
+</div>
+<div id="parallelization-with-foreach" class="section level1">
 <h1><span class="header-section-number">3</span> Parallelization with <code>foreach</code></h1>
-<section id="within-dtwclust" class="level2">
+<div id="within-dtwclust" class="section level2">
 <h2><span class="header-section-number">3.1</span> Within <code>dtwclust</code></h2>
 <p>Some other included functions still use <code>foreach</code> for parallelization, most importantly <code>tsclust</code> and <code>compare_clusterings</code>. Internally, any call to <code>foreach</code> first performs the following checks:</p>
 <ul>
@@ -389,16 +389,16 @@ code > span.fu { color: #900; font-weight: bold; }  code > span.er { color: #a61
 <li>No workers and 4 threads required 12.5 minutes to finish.</li>
 </ul>
 <p>The last scenario has the possible advantage that tracing is still possible.</p>
-</section>
-<section id="outside-dtwclust" class="level2">
+</div>
+<div id="outside-dtwclust" class="section level2">
 <h2><span class="header-section-number">3.2</span> Outside <code>dtwclust</code></h2>
 <p>If you are using <code>foreach</code> for parallelization, there’s a good chance you’re already using all available threads/cores from your CPU. If you are calling <code>dtwclust</code> functions inside a <code>foreach</code> evaluation, you should specify the number of threads:</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb15-1" data-line-number="1">results &lt;-<span class="st"> </span><span class="kw">foreach</span>(...) <span class="op">%dopar%</span><span class="st"> </span>{</a>
 <a class="sourceLine" id="cb15-2" data-line-number="2">    RcppParallel<span class="op">::</span><span class="kw">setThreadOptions</span>(1L)</a>
 <a class="sourceLine" id="cb15-3" data-line-number="3">    <span class="co"># any code that uses dtwclust...</span></a>
 <a class="sourceLine" id="cb15-4" data-line-number="4">}</a></code></pre></div>
-</section>
-</section>
+</div>
+</div>
 
 
 

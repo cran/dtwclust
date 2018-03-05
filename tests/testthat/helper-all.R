@@ -1,5 +1,7 @@
 data(uciCT)
 options(deparse.max.lines = 2L)
+RNGkind("default")
+default_rngkind <- RNGkind()[1L]
 
 # environment to save objects for regression tests
 persistent <- new.env()
@@ -34,4 +36,14 @@ file_name <- function(object, x32 = FALSE) {
         paste0("rds/x32/", as.character(substitute(object)), ".rds")
     else
         paste0("rds/", as.character(substitute(object)), ".rds")
+}
+
+# expect_equal for specific slots
+expect_equal_slots <- function(current, target, slots = c("cluster", "centroids", "cldist"), ...) {
+    for (object_slot in slots) {
+        expect_equal(slot(current, object_slot),
+                     slot(target, object_slot),
+                     ...,
+                     info = paste("slot =", object_slot))
+    }
 }
