@@ -13,7 +13,7 @@
 #' @details
 #'
 #' Unlike other distances, soft-DTW can return negative values, and `sdtw(x, x)` is not always equal
-#' to zero. Like DTW, soft-DTW does not follow the triangle inequality, but it is always symmetric.
+#' to zero. Like DTW, soft-DTW does not fulfill the triangle inequality, but it is always symmetric.
 #'
 #' @return The Soft DTW distance.
 #'
@@ -68,8 +68,7 @@ sdtw_proxy <- function(x, y = NULL, gamma = 0.01, ..., error.check = TRUE, pairw
     # calculate distance matrix
     distance <- "SDTW" # read in C++, can't be temporary!
     distargs <- list(
-        gamma = gamma,
-        is.multivariate = mv
+        gamma = gamma
     )
     num_threads <- get_nthreads()
     .Call(C_distmat_loop,

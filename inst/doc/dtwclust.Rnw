@@ -1,9 +1,28 @@
+<<setup, include = FALSE, cache = FALSE>>=
+library("knitr")
+library("dtwclust")
+
+data("uciCT")
+
+# knitr defaults
+opts_chunk$set(fig.width = 8, fig.asp = 0.5625,
+               out.width = "\\linewidth",
+               fig.align = "center", fig.pos = "htbp",
+               cache = FALSE, echo = FALSE, autodep = TRUE)
+
+# use Sinput and Soutput environments
+# render_sweave()
+
+# prevent additional .sty files from being created
+opts_knit$set(self.contained = TRUE)
+@
+
 \documentclass[article,shortnames,nojss,noheadings]{jss}
 
 % Vignette options
 %\VignetteEngine{knitr::knitr_notangle}
 %\VignettePackage{dtwclust}
-%\VignetteDepends{TSclust, TSdist, cluster, doParallel}
+%\VignetteDepends{TSclust, TSdist, doParallel}
 %\VignetteIndexEntry{Comparing Time-Series Clustering Algorithms in R Using the dtwclust Package}
 %\VignetteEncoding{UTF-8}
 
@@ -67,7 +86,7 @@
 \author{Alexis~Sard\'a-Espinosa}
 \date{\today}
 
-\Address{
+\Address{%
 Alexis Sard\'a-Espinosa\\
 \email{alexis.sarda@gmail.com}\\
 Disclaimer: The software package was developed\\
@@ -100,25 +119,6 @@ showcasing how it can be used to evaluate many different time-series clustering 
 % ===========================================================================================================
 
 \begin{document}
-
-<<setup, include = FALSE, cache = FALSE>>=
-library("knitr")
-library("dtwclust")
-
-data("uciCT")
-
-# knitr defaults
-opts_chunk$set(fig.width = 8, fig.asp = 0.5625,
-               out.width = "\\linewidth",
-               fig.align = "center", fig.pos = "htbp",
-               cache = FALSE, echo = FALSE, autodep = TRUE)
-
-# use Sinput and Soutput environments
-# render_sweave()
-
-# prevent additional .sty files from being created
-opts_knit$set(self.contained = TRUE)
-@
 
 \section{Introduction}
 \label{sec:introduction}
@@ -235,7 +235,7 @@ using either the time-series directly,
 or by applying suitable transformations and then clustering in the resulting space.
 We will describe the algorithms that are available in \dtwclust{},
 mentioning the most important characteristics of each and showing how the package can be used to evaluate them,
-as well as how other packages complement \dtwclust{}.
+as well as how other packages complement it.
 Additionally, the variations related to DTW and other common distances will be explored,
 and the parallelization strategies and optimizations included in the package will be described.
 
@@ -244,14 +244,15 @@ The \pkg{flexclust} package \citep{leisch2006} implements many partitional proce
 while the \pkg{cluster} package \citep{cluster} focuses more on hierarchical procedures and their evaluation;
 neither of them, however, is specifically targeted at time-series data.
 Packages like \pkg{TSdist} \citep{tsdist} and \pkg{TSclust} \citep{montero2014} focus solely on dissimilarity measures for time-series,
-the latter of which inclues a single algorithm for clustering based on $p$ values.
+the latter of which includes a single algorithm for clustering based on $p$ values.
 Another example is the \pkg{pdc} package \citep{brandmaier2015},
 which implements a specific clustering algorithm,
 namely one based on permutation distributions.
 The \pkg{dtw} package \citep{giorgino2009} implements extensive functionality with respect to DTW,
 but does not include the lower bound techniques that can be very useful in time-series clustering.
 New clustering algorithms like \kshape{} \citep{paparrizos2015} and TADPole \citep{begum2015} are available to the public upon request,
-but were implemented in \proglang{MATLAB}, making their combination with other \R{} packages cumbersome.
+but were implemented in \proglang{MATLAB},
+making their combination with other \R{} packages cumbersome.
 Hence, the \dtwclust{} package is intended to provide a consistent and user-friendly way of interacting with classic and new clustering algorithms,
 taking into consideration the nuances of time-series data.
 
@@ -260,7 +261,7 @@ The information relevant to the distance measures will be presented in \cref{sec
 Supported algorithms for prototype extraction will be discussed in \cref{sec:prototypes}.
 The main clustering algorithms will be described in \cref{sec:clustering}.
 The included parallelization strategies will be outlined in \cref{sec:parallel}.
-Basic information rearding cluster evaluation will be provided in \cref{sec:evaluation}.
+Basic information regarding cluster evaluation will be provided in \cref{sec:evaluation}.
 An overview of extensibility will be given in \cref{sec:extensibility},
 and the final remarks will be given in \cref{sec:conclusion}.
 Code examples will be deferred to the appendices.
@@ -333,7 +334,7 @@ plot(dtw_example, type = "two",
 DTW is computationally expensive.
 If $x$ has length $n$ and $y$ has length $m$,
 the DTW distance between them can be computed in $O(nm)$ time,
-which is almost quadratic if $m$ and $n$ are similar.
+which is quadratic if $m$ and $n$ are similar.
 Additionally, DTW is prone to implementation bias since its calculations are not easily vectorized and tend to be very slow in non-compiled programming languages.
 The \pkg{dtw} package \citep{giorgino2009} includes a \proglang{C} implementation of the dynamic programming step of the algorithm,
 which should be very fast;
@@ -354,7 +355,7 @@ However, there are some aspects that are worth discussing here.
 
 The first step in DTW involves creating a local cost matrix (LCM  or $lcm$),
 which has $n \times m$ dimensions.
-Such a matrix must be created for every pair of distances compared,
+Such a matrix must be created for every pair of series compared,
 meaning that memory requirements may grow quickly as the dataset size grows.
 Considering $x$ and $y$ as the input series,
 for each element $(i,j)$ of the LCM,
@@ -403,13 +404,13 @@ but also uses the $l_2$ norm in the second step.
 The \code{dtw_basic} function follows the above definition.
 
 The way in which the algorithm traverses through the LCM is primarily dictated by the chosen step pattern.
-The step pattern is a local constraint that determines which directions are allowed when moving ahead in the LCM as the cost is being aggregated,
+It is a local constraint that determines which directions are allowed when moving ahead in the LCM as the cost is being aggregated,
 as well as the associated per-step weights.
 \Cref{fig:step-patterns} depicts two common step patterns and their names in the \pkg{dtw} package.
 Unfortunately, very few articles from the data mining community specify which pattern they use,
 although in the author's experience,
 the \code{symmetric1} pattern seems to be standard.
-By contrast, the \code{dtw} function uses the \code{symmetric2} pattern by default,
+By contrast, the \code{dtw} and \code{dtw\_basic} functions use the \code{symmetric2} pattern by default,
 but it is simple to modify this by providing the appropriate value in the \code{step.pattern} argument.
 The choice of step pattern also determines whether the corresponding DTW distance can be normalized or not
 (which may be important for series with different length).
@@ -432,7 +433,7 @@ or all series have the same length if a constraint is indeed used.
 
 One of the possible modifications of DTW is to use global constraints,
 also known as window constraints.
-Such constraints limit the area of the LCM that can be reached by the algorithm.
+These limit the area of the LCM that can be reached by the algorithm.
 There are many types of windows (see, e.g., \citet{giorgino2009}),
 but one of the most common ones is the Sakoe-Chiba window \citep{sakoe1978},
 with which an allowed region is created along the diagonal of the LCM (see \cref{fig:dtw-window-plot}).
@@ -543,7 +544,8 @@ In order for the LBs to be worth it,
 they must be computed in significantly less time than it takes to calculate the DTW distance.
 \citet{lemire2009} developed a streaming algorithm to calculate the envelopes using no more than $3n$ comparisons when using a Sakoe-Chiba window.
 This algorithm has been ported to \dtwclust{} using the \proglang{C++} programming language,
-ensuring an efficient calculation.
+ensuring an efficient calculation,
+and it is exposed in the \code{compute\_envelope} function.
 
 \code{LB_Keogh} requires the calculation of one set of envelopes for every pair of series compared,
 whereas \code{LB_Improved} must calculate two sets of envelopes for every pair of series.
@@ -805,7 +807,7 @@ and thus a prototyping function based on DTW has also been developed in \citet{p
 The procedure is called DTW barycenter averaging (DBA),
 and is an iterative, global method.
 The latter means that the order in which the series enter the prototyping function does not affect the outcome.
-It is also available as a standalone function in \dtwclust{}, named simply \code{DBA}.
+It is available as a standalone function in \dtwclust{}, named simply \code{DBA}.
 
 DBA requires a series to be used as reference (centroid),
 and it usually begins by randomly selecting one of the series in the data.
@@ -825,6 +827,20 @@ thanks to DTW itself,
 it can support series with different length directly,
 with the caveat that the length of the resulting prototype will be the same as the length of the reference series that was initially chosen by the algorithm,
 and that the \code{symmetric1} or \code{symmetric2} step pattern should be used.
+
+\subsection{Soft-DTW centroid}
+\label{sec:sdtw-cent}
+
+Thanks to the gradient that can be computed as a by-product of the soft-DTW distance calculation
+(see \cref{sec:sdtw}),
+it is possible to define an objective function
+(see Equation (4) in \citet{cuturi2017})
+and subsequently minimize it with numerical optimization.
+In addition to the smoothing parameter of soft-DTW ($\gamma$),
+the optimization procedure considers the option of using normalizing weights for the input series,
+which noticeably alters the resulting centroids
+(see Figure 4 in \citet{cuturi2017}).
+The clustering and classification experiments performed by \citet{cuturi2017} showed that using soft-DTW (distance and centroid) provided quantitatively better results in many scenarios.
 
 \subsection{Shape extraction}
 \label{sec:shape}
@@ -868,20 +884,6 @@ namely that the length of the resulting prototype will depend on the length of t
 Technically, for multivariate series,
 the shape extraction algorithm could be applied for each variable $v$ of all involved series,
 but this was not explored by the authors of \kshape{}.
-
-\subsection{Soft-DTW centroid}
-\label{sec:sdtw-cent}
-
-Thanks to the gradient that can be computed as a by-product of the soft-DTW distance calculation
-(see \cref{sec:sdtw}),
-it is possible to define an objective function
-(see Equation (4) in \citet{cuturi2017})
-and subsequently minimize it with numerical optimization.
-In addition to the smoothing parameter of soft-DTW ($\gamma$),
-the optimization procedure considers the option of using normalizing weights for the input series,
-which noticeably alters the resulting centroids
-(see Figure 4 in \citet{cuturi2017}).
-The clustering and classification experiments performed by \citet{cuturi2017} showed that using soft-DTW (distance and centroid) provided quantitatively better results in many scenarios.
 
 \subsection{Fuzzy-based prototypes}
 \label{sec:fuzzy-cent}
@@ -987,7 +989,7 @@ The distance between all objects in the data and all centroids is calculated,
 and each object is assigned to the cluster of its closest centroid.
 A prototyping function is applied to each cluster to update the corresponding centroid.
 Then, distances and centroids are updated iteratively until a certain number of iterations have elapsed,
-or no object changes clusters anymore.
+or no object changes clusters any more.
 It can happen that a cluster becomes empty at a certain iteration,
 in which case a new cluster can be reinitialized at random by choosing a new object from the data
 (this is what \dtwclust{} does).
@@ -1005,7 +1007,7 @@ and which ones are chosen as cluster centroids,
 so that no data is modified.
 
 Some of the most popular partitional algorithms are \textit{k}-means and \textit{k}-medoids \citep{hastie2009}.
-These usually use the Euclidean distance and, respectively, mean or PAM centroids (see \cref{sec:prototypes}).
+These use the Euclidean distance and, respectively, mean or PAM centroids (see \cref{sec:prototypes}).
 Most of the proposed algorithms for time-series clustering use the same basic strategy while changing the distance and/or centroid function.
 
 Partitional clustering procedures are stochastic due to their random start.
@@ -1654,7 +1656,7 @@ plot(fc, series = CharTraj[1:20], type = "series")
 
 One way of using parallelization with \R{} and \pkg{foreach} is by means of the \pkg{doParallel} package \citep{doParallel}.
 It provides a great level of abstraction so that users can easily configure a parallel backend which can be used by \dtwclust{}.
-The example below does the backend registration and calls \dtwclust{},
+The example below does the backend registration and calls \code{tsclust},
 returning to sequential computation after it finishes.
 It only uses 2 parallel workers,
 but more can be configured depending on each processor (see function \code{detectCores} in \R{}).

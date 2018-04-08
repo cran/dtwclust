@@ -236,7 +236,7 @@ ggplot(cent_results[id_gg,],
     labs(x = "Amount of time-series considered",
          y = "Median time (ms)")
 
-## ----cent-dba-plot, fig.height=20, fig.cap="*The facets' rows indicate the DBA version and the window size used, 'byS' means 'by series' and 'byV' means 'by variable' (see DBA documentation). The facet's columns indicate how many threads were used. Note the different vertical scales for each row of the facets.*"----
+## ----cent-dba-plot, fig.height=20, fig.cap="*The facets' rows indicate the DBA version and the window size used. The facet's columns indicate how many threads were used. Note the different vertical scales for each row of the facets.*"----
 id_gg <- grepl("^DBA", cent_results$cent)
 ggplot(cent_results[id_gg,],
        aes(x = num_series,
