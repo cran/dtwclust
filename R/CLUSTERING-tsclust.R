@@ -176,6 +176,14 @@ pam_distmat <- function(series, control, distance, cent_char, family, args, trac
 #'   centroids are returned in the `centroids` slot. By default, a type of PAM centroid function is
 #'   used.
 #'
+#'   In the following cases, the `centroids` list will have an attribute `series_id` with an integer
+#'   vector indicating which `series` were chosen as centroids:
+#'
+#'   - Partitional clustering using "pam" centroid.
+#'   - Fuzzy clustering using "fcmdd" centroid.
+#'   - Hierarchical clustering with the default centroid extraction.
+#'   - TADPole clustering with the default centroid extraction.
+#'
 #' @section Distance Measures:
 #'
 #'   The distance measure to be used with partitional, hierarchical and fuzzy clustering can be
@@ -291,7 +299,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
         if (length(seed) == 1L)
             set.seed(seed)
         else if (length(seed) == 7L)
-            assign(".Random.seed", seed, globalenv())
+            assign(".Random.seed", seed, .GlobalEnv)
         else
             stop("Invalid seed provided") # nocov
     }
@@ -418,7 +426,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
             if (length(k) == 1L && nrep == 1L) {
                 # UTILS-rng.R
                 if (is.null(.rng_)) .rng_ <- rng_seq(1L, seed = seed, simplify = TRUE)
-                assign(".Random.seed", .rng_, globalenv())
+                assign(".Random.seed", .rng_, .GlobalEnv)
                 # just one repetition,
                 # done like this so dist/cent functions can take advantage of parallelization
                 pc_list <- list(do.call(pfclust,
@@ -465,7 +473,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                             .export = export) %this_op%
                             {
                                 if (trace) message("Repetition ", i, " for k = ", k)
-                                assign(".Random.seed", rng[[i]], globalenv())
+                                assign(".Random.seed", rng[[i]], .GlobalEnv)
 
                                 if (!check_consistency(dist_entry$names[1L], "dist"))
                                     do.call(proxy::pr_DB$set_entry, dist_entry, TRUE)
@@ -645,13 +653,14 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                     }
                     else {
                         allcent <- function(...) {} # dummy
-                        centroids <- sapply(1L:k, function(kcent) {
+                        centroid_ids <- sapply(1L:k, function(kcent) {
                             id_k <- cluster == kcent
                             d_sub <- distmat[id_k, id_k, drop = FALSE]
                             id_centroid <- which.min(apply(d_sub, 1L, sum))
                             which(id_k)[id_centroid]
                         })
-                        centroids <- series[centroids]
+                        centroids <- series[centroid_ids]
+                        attr(centroids, "series_id") <- unname(centroid_ids)
                     }
 
                     methods::new("HierarchicalTSClusters",
@@ -728,7 +737,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                 .rng_ <- rng_seq(length(k) * length(control$dc), seed = seed, simplify = FALSE)
 
             RET <- Map(R, .rng_, f = function(R, rng) {
-                assign(".Random.seed", rng, globalenv())
+                assign(".Random.seed", rng, .GlobalEnv)
                 k <- length(R$centroids)
                 if (is.function(centroid)) {
                     allcent <- function(...) { list(centroid(...)) }
@@ -744,6 +753,7 @@ tsclust <- function(series = NULL, type = "partitional", k = 2L, ...,
                 else {
                     allcent <- function(...) {}
                     centroids <- series[R$centroids]
+                    attr(centroids, "series_id") <- R$centroids
                 }
 
                 obj <- methods::new("PartitionalTSClusters",
