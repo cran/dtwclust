@@ -80,8 +80,8 @@ lb_keogh <- function(x, y, window.size = NULL, norm = "L1",
         d2 <- lb_keogh(x = y, y = x, window.size = window.size, norm = norm, error.check = FALSE)
         if (d2$d > d) {
             d <- d2$d
-            lower.env = d2$lower.env
-            upper.env = d2$upper.env
+            lower.env <- d2$lower.env
+            upper.env <- d2$upper.env
         }
     }
     # return
@@ -138,7 +138,7 @@ lb_keogh_proxy <- function(x, y = NULL, window.size = NULL, norm = "L1", ...,
     }
     if (force.symmetry && !pairwise) {
         if (nrow(D) != ncol(D))
-            warning("Unable to force symmetry. Resulting distance matrix is not square.")
+            warning("Unable to force symmetry. Resulting distance matrix is not square.") # nocov
         else
             .Call(C_force_lb_symmetry, D, PACKAGE = "dtwclust")
     }

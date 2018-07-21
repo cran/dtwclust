@@ -2,6 +2,8 @@
 
 #include <R.h>
 
+#include "SurrogateMatrix.h"
+
 namespace dtwclust {
 
 /* grain parameter for multi-threading */
@@ -20,10 +22,10 @@ void Rflush()
 }
 
 /* helper kahan_sum */
-double kahan_sum(const double * const x, const int length)
+double kahan_sum(const SurrogateMatrix<double>& x)
 {
     double sum = 0, c = 0;
-    for (int i = 0; i < length; i++) {
+    for (id_t i = 0; i < x.nrow(); i++) {
         double y = x[i] - c;
         double t = sum + y;
         c = (t - sum) - y;
@@ -33,7 +35,7 @@ double kahan_sum(const double * const x, const int length)
 }
 
 /* single to double indices for symmetric matrices without diagonal */
-void s2d(const int id, const int nrow, int& i, int& j) {
+void s2d(const id_t id, const id_t nrow, id_t& i, id_t& j) {
     // check if it's the first column
     if (id < (nrow - 1)) {
         i = id + 1;
@@ -43,8 +45,8 @@ void s2d(const int id, const int nrow, int& i, int& j) {
     // otherwise start at second column
     i = 2;
     j = 1;
-    int start_id = nrow - 1;
-    int end_id = nrow * 2 - 4;
+    id_t start_id = nrow - 1;
+    id_t end_id = nrow * 2 - 4;
     // j is ready after this while loop finishes
     while (!(id >= start_id && id <= end_id)) {
         start_id = end_id + 1;

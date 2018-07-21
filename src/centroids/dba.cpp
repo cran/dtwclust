@@ -1,16 +1,17 @@
-#include "centroids.h"
+#include "R-gateways.h"
 
 #include <cmath> // std::abs
-#include <cstddef> // std::size_t
 #include <utility> // std::move
 
 #include <RcppArmadillo.h>
 #include <RcppParallel.h>
 
-#include "../distance-calculators/distance-calculators.h"
-#include "../distances/distances-details.h" // dtw_basic_par
+#include "../distances/calculators.h"
+#include "../distances/details.h" // dtw_basi
+#include "../utils/KahanSummer.h"
+#include "../utils/SurrogateMatrix.h"
 #include "../utils/TSTSList.h"
-#include "../utils/utils.h" // KahanSummer, Rflush, get_grain
+#include "../utils/utils.h" // Rflush, get_grain, id_t
 
 namespace dtwclust {
 
@@ -41,66 +42,54 @@ public:
         // set value of max_len_*_
         max_len_x_ = this->maxLength(x_);
         max_len_y_ = this->maxLength(y_);
-        // make sure pointers are null
-        gcm_ = nullptr;
-        index1_ = nullptr;
-        index2_ = nullptr;
     }
-
-    // destructor
-    ~DtwBacktrackCalculator() {
-        if (gcm_) delete[] gcm_;
-        if (index1_) delete[] index1_;
-        if (index2_) delete[] index2_;
-    }
-
-    // default copy/move constructor (must be explicitly defined due to custom destructor)
-    DtwBacktrackCalculator(const DtwBacktrackCalculator&) = default;
-    DtwBacktrackCalculator(DtwBacktrackCalculator&&) = default;
 
     // calculate for given indices (inherited)
-    double calculate(const int i, const int j) override {
+    double calculate(const id_t i, const id_t j) override {
         return this->calculate(x_[i], y_[j]);
     }
 
     // calculate for given indices (custom for multivariate by-variable version)
-    double calculate(const int i, const int j, const int k) {
+    double calculate(const id_t i, const id_t j, const id_t k) {
         return this->calculate(x_[i], y_[j], k);
     }
 
     // clone to setup helpers in each thread
     DtwBacktrackCalculator* clone() const override {
         DtwBacktrackCalculator* ptr = new DtwBacktrackCalculator(*this);
-        ptr->gcm_ = new double[(max_len_x_ + 1) * (max_len_y_ + 1)];
-        ptr->index1_ = new int[max_len_x_ + max_len_y_];
-        ptr->index2_ = new int[max_len_x_ + max_len_y_];
+        ptr->lcm_ = SurrogateMatrix<double>(max_len_x_ + 1, max_len_y_ + 1);
+        ptr->index1_ = SurrogateMatrix<int>(max_len_x_ + max_len_y_, 1);
+        ptr->index2_ = SurrogateMatrix<int>(max_len_x_ + max_len_y_, 1);
         return ptr;
     }
 
     // input series
     TSTSList<arma::mat> x_, y_;
     // helpers for backtracking
-    int path_, *index1_, *index2_;
+    int path_;
+    SurrogateMatrix<int> index1_, index2_;
 
 private:
     // primary calculate
-    double calculate(const arma::mat& x, const arma::mat& y)
-    {
-        if (!gcm_ || !index1_ || !index2_) return -1;
-        return dtw_basic_par(&x[0], &y[0],
-                             x.n_rows, y.n_rows, x.n_cols,
-                             window_, norm_, step_, normalize_,
-                             gcm_, index1_, index2_, &path_);
+    double calculate(const arma::mat& x, const arma::mat& y) {
+        if (!lcm_ || !index1_ || !index2_) return -1;
+
+        SurrogateMatrix<const double> temp_x(x.n_rows, x.n_cols, &x[0]);
+        SurrogateMatrix<const double> temp_y(y.n_rows, y.n_cols, &y[0]);
+        return dtw_basic(lcm_, temp_x, temp_y,
+                         window_, norm_, step_, normalize_,
+                         index1_, index2_, path_);
     }
 
     // by-variable multivariate calculate
-    double calculate(const arma::mat& x, const arma::mat& y, const int k)
-    {
-        if (!gcm_ || !index1_ || !index2_) return -1;
-        return dtw_basic_par(&x[0] + (x.n_rows * k), &y[0] + (y.n_rows * k),
-                             x.n_rows, y.n_rows, 1,
-                             window_, norm_, step_, normalize_,
-                             gcm_, index1_, index2_, &path_);
+    double calculate(const arma::mat& x, const arma::mat& y, const id_t k) {
+        if (!lcm_ || !index1_ || !index2_) return -1;
+
+        SurrogateMatrix<const double> temp_x(x.n_rows, 1, &x[0] + (k * x.n_rows));
+        SurrogateMatrix<const double> temp_y(y.n_rows, 1, &y[0] + (k * y.n_rows));
+        return dtw_basic(lcm_, temp_x, temp_y,
+                         window_, norm_, step_, normalize_,
+                         index1_, index2_, path_);
     }
 
     // input parameters
@@ -108,7 +97,7 @@ private:
     double norm_, step_;
     bool normalize_;
     // helper "matrix"
-    double* gcm_;
+    SurrogateMatrix<double> lcm_;
     // to dimension helpers
     int max_len_x_, max_len_y_;
 };
@@ -135,17 +124,17 @@ public:
     }
 
     // parallel loop across specified range
-    void operator()(std::size_t begin, std::size_t end) {
+    void operator()(id_t begin, id_t end) {
         // local copy of calculator so it is setup separately for each thread
         mutex_.lock();
         DtwBacktrackCalculator* local_calculator = backtrack_calculator_.clone();
         mutex_.unlock();
         // kahan sum step
-        for (std::size_t i = begin; i < end; i++) {
+        for (id_t i = begin; i < end; i++) {
             local_calculator->calculate(i,0);
             const auto& x = local_calculator->x_[i];
             mutex_.lock();
-            for (int ii = local_calculator->path_ - 1; ii >= 0; ii--) {
+            for (int ii = 0; ii < local_calculator->path_; ii++) {
                 int i1 = local_calculator->index1_[ii] - 1;
                 int i2 = local_calculator->index2_[ii] - 1;
                 summer_.add(x[i1], i2);
@@ -191,18 +180,18 @@ public:
     }
 
     // parallel loop across specified range
-    void operator()(std::size_t begin, std::size_t end) {
+    void operator()(id_t begin, id_t end) {
         // local copy of calculator so it is setup separately for each thread
         mutex_.lock();
         DtwBacktrackCalculator* local_calculator = backtrack_calculator_.clone();
         mutex_.unlock();
         // kahan sum step
-        for (std::size_t i = begin; i < end; i++) {
+        for (id_t i = begin; i < end; i++) {
             local_calculator->calculate(i,0);
             const auto& x = local_calculator->x_[i];
             mutex_.lock();
-            for (int j = 0; j < static_cast<int>(new_cent_.ncol()); j++) {
-                for (int ii = local_calculator->path_ - 1; ii >= 0; ii--) {
+            for (id_t j = 0; j < new_cent_.ncol(); j++) {
+                for (int ii = 0; ii < local_calculator->path_; ii++) {
                     int i1 = local_calculator->index1_[ii] - 1;
                     int i2 = local_calculator->index2_[ii] - 1;
                     summer_.add(x.at(i1,j), i2, j);
@@ -249,18 +238,18 @@ public:
     }
 
     // parallel loop across specified range
-    void operator()(std::size_t begin, std::size_t end) {
+    void operator()(id_t begin, id_t end) {
         // local copy of calculator so it is setup separately for each thread
         mutex_.lock();
         DtwBacktrackCalculator* local_calculator = backtrack_calculator_.clone();
         mutex_.unlock();
         // kahan sum step
-        for (std::size_t i = begin; i < end; i++) {
+        for (id_t i = begin; i < end; i++) {
             const auto& x = local_calculator->x_[i];
-            for (int j = 0; j < static_cast<int>(new_cent_.ncol()); j++) {
+            for (id_t j = 0; j < new_cent_.ncol(); j++) {
                 local_calculator->calculate(i,0,j);
                 mutex_.lock();
-                for (int ii = local_calculator->path_ - 1; ii >= 0; ii--) {
+                for (int ii = 0; ii < local_calculator->path_; ii++) {
                     int i1 = local_calculator->index1_[ii] - 1;
                     int i2 = local_calculator->index2_[ii] - 1;
                     summer_.add(x.at(i1,j), i2, j);

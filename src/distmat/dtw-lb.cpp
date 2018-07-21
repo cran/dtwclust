@@ -1,4 +1,4 @@
-#include "distmat-loops.h"
+#include "R-gateways.h"
 
 #include <cstddef> // std::size_t
 #include <memory> // shared_ptr
@@ -6,8 +6,8 @@
 #include <RcppArmadillo.h>
 #include <RcppParallel.h>
 
-#include "../distance-calculators/distance-calculators.h"
-#include "../utils/utils.h" // get_grain
+#include "../distances/calculators.h"
+#include "../utils/utils.h" // get_grain, id_t
 
 namespace dtwclust {
 
@@ -18,8 +18,8 @@ namespace dtwclust {
 class DtwDistanceUpdater : public RcppParallel::Worker {
 public:
     // constructor
-    DtwDistanceUpdater(const Rcpp::LogicalVector& id_changed,
-                       const Rcpp::IntegerVector& id_nn,
+    DtwDistanceUpdater(const SurrogateMatrix<bool>& id_changed,
+                       const SurrogateMatrix<int>& id_nn,
                        Rcpp::NumericMatrix& distmat,
                        const std::shared_ptr<DistanceCalculator>& dist_calculator,
                        int margin)
@@ -60,8 +60,8 @@ public:
 
 private:
     // input vectors
-    const RcppParallel::RVector<int> id_changed_;
-    const RcppParallel::RVector<int> id_nn_;
+    const SurrogateMatrix<bool>& id_changed_;
+    const SurrogateMatrix<int>& id_nn_;
     // output matrix
     RcppParallel::RMatrix<double> distmat_;
     // distance calculator
@@ -76,7 +76,7 @@ private:
 /* find nearest neighbors */
 // =================================================================================================
 
-void set_nn(const Rcpp::NumericMatrix& distmat, Rcpp::IntegerVector& nn, const int margin)
+void set_nn(const Rcpp::NumericMatrix& distmat, SurrogateMatrix<int>& nn, const int margin)
 {
     if (margin == 1) {
         for (int i = 0; i < distmat.nrow(); i++) {
@@ -110,12 +110,12 @@ void set_nn(const Rcpp::NumericMatrix& distmat, Rcpp::IntegerVector& nn, const i
 /* check if updates are finished based on indices */
 // =================================================================================================
 
-bool check_finished(const Rcpp::IntegerVector& nn,
-                    const Rcpp::IntegerVector& nn_prev,
-                    Rcpp::LogicalVector& changed)
+bool check_finished(const SurrogateMatrix<int>& nn,
+                    const SurrogateMatrix<int>& nn_prev,
+                    SurrogateMatrix<bool>& changed)
 {
     bool finished = true;
-    for (int i = 0; i < nn.length(); i++) {
+    for (id_t i = 0; i < nn.nrow(); i++) {
         if (nn[i] != nn_prev[i]) {
             changed[i] = true;
             finished = false;
@@ -140,16 +140,17 @@ void dtw_lb_cpp(const Rcpp::List& X,
 {
     auto dist_calculator = DistanceCalculatorFactory().create("DTW_BASIC", DOTS, X, Y);
     int len = margin == 1 ? distmat.nrow() : distmat.ncol();
-    Rcpp::IntegerVector id_nn(len), id_nn_prev(len);
-    Rcpp::LogicalVector id_changed(len);
+    SurrogateMatrix<int> id_nn(len, 1);
+    SurrogateMatrix<int> id_nn_prev(len, 1);
+    SurrogateMatrix<bool> id_changed(len, 1);
     DtwDistanceUpdater dist_updater(id_changed, id_nn, distmat, dist_calculator, margin);
     set_nn(distmat, id_nn, margin);
-    for (int i = 0; i < id_nn.length(); i++) id_nn_prev[i] = id_nn[i] + 1; // initialize different
+    for (id_t i = 0; i < id_nn.nrow(); i++) id_nn_prev[i] = id_nn[i] + 1; // initialize different
     int grain = get_grain(len, num_threads);
     while (!check_finished(id_nn, id_nn_prev, id_changed)) {
         Rcpp::checkUserInterrupt();
         // update nn_prev
-        for (int i = 0; i < id_nn.length(); i++) id_nn_prev[i] = id_nn[i];
+        for (id_t i = 0; i < id_nn.nrow(); i++) id_nn_prev[i] = id_nn[i];
         // calculate dtw distance if necessary
         RcppParallel::parallelFor(0, len, dist_updater, grain);
         // update nearest neighbors

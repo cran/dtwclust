@@ -1,7 +1,9 @@
-#include "utils.h"
+#include "KahanSummer.h"
 
 #include <algorithm> // std::fill
 #include <vector>
+
+#include "utils.h" // id_t
 
 namespace dtwclust {
 
@@ -17,8 +19,8 @@ void KahanSummer::reset() {
     std::fill(c_.begin(), c_.end(), 0);
 }
 
-void KahanSummer::add(const double value, const int i, const int j) {
-    int id = i + j * nrows_;
+void KahanSummer::add(const double value, const id_t i, const id_t j) {
+    id_t id = i + j * nrows_;
     y_[id] = value - c_[id];
     t_[id] = x_[id] + y_[id];
     c_[id] = (t_[id] - x_[id]) - y_[id];

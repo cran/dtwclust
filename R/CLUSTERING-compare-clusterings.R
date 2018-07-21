@@ -309,6 +309,12 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
                 if (any(nms_args)) names(centroid)[nms_args] <- paste0(nms[nms_args], "_centroid")
                 cfg <- base::merge(cfg, centroid, all = TRUE)
             }
+            # special case: tadpole
+            tadpole_controls <- names(formals(tadpole_control))
+            if (type == "tadpole" && any(no.expand %in% tadpole_controls)) {
+                need_adjustment <- c(need_adjustment, "tadpole")
+                tadpole <- cfg[, tadpole_controls, drop = FALSE]
+            }
 
             # adjust no.expand columns
             if (length(need_adjustment) > 0L) {
@@ -318,7 +324,8 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
                     pdc_cfg <- get_from_callers(suffix, mode = "list")
                     cols <- intersect(names(pdc_cfg), no.expand)
                     adjusted_cols <- adjust_cols[, cols, drop = FALSE]
-                    names(adjusted_cols) <- paste0(names(adjusted_cols), "_", suffix)
+                    if (suffix != "tadpole")
+                        names(adjusted_cols) <- paste0(names(adjusted_cols), "_", suffix)
                     adjusted_cols
                 })
                 cfg <- dplyr::bind_cols(cfg, adjusted_cols)
@@ -488,14 +495,19 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
     score_missing <- missing(score.clus)
     pick_missing <- missing(pick.clus)
 
-    if (is.null(series)) stop("No series provided.") # nocov
-    types <- match.arg(types, supported_clusterings, TRUE)
-    .errorhandling <- match.arg(.errorhandling, c("stop", "remove", "pass"))
+    # nocov start
+    if (is.null(series))
+        stop("No series provided.")
+
     if (!return.objects && score_missing)
         stop("Returning no objects and specifying no scoring function would return no useful results.")
 
+    types <- match.arg(types, supported_clusterings, TRUE)
+    .errorhandling <- match.arg(.errorhandling, c("stop", "remove", "pass"))
+
     # coerce to list if necessary
-    if (is.data.frame(series) || !is.list(series)) series <- tslist(series, TRUE) # nocov
+    if (is.data.frame(series) || !is.list(series))
+        series <- tslist(series, TRUE)
     check_consistency(series, "vltslist")
 
     if (!is.function(score.clus) && !(is.list(score.clus) && all(sapply(score.clus, is.function))))
@@ -503,9 +515,12 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
     else if (is.list(score.clus)) {
         if (!all(types %in% names(score.clus)))
             stop("The names of the 'score.clus' argument do not correspond to the provided 'types'")
+
         score.clus <- score.clus[types]
     }
-    if (!is.function(pick.clus)) stop("Invalid pick function") # nocov
+
+    if (!is.function(pick.clus))
+        stop("Invalid pick function") # nocov end
 
     # ----------------------------------------------------------------------------------------------
     # Misc parameters
@@ -515,7 +530,7 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
     dots <- list(...)
     configs <- configs[types]
     if (any(sapply(configs, is.null)))
-        stop("The configuration for one of the chosen clustering types is missing.")
+        stop("The configuration for one of the chosen clustering types is missing.") # nocov
     if (shuffle.configs) {
         configs <- lapply(configs, function(config) {
             config[sample(nrow(config)), , drop = FALSE]

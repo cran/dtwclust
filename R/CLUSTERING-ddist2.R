@@ -95,7 +95,7 @@ ddist2 <- function(distance, control) {
                 is.null(dots$dist.method) &&
                 is_multivariate(c(x, centroids)))
             {
-                dots$dist.method <- "L1"
+                dots$dist.method <- "L1" # nocov
             }
 
             # If the function doesn't have '...', remove invalid arguments from 'dots'
@@ -142,7 +142,8 @@ ddist2 <- function(distance, control) {
                         .export = export
                     ) %op% {
                         if (!check_consistency(dist_entry$names[1L], "dist"))
-                            do.call(proxy::pr_DB$set_entry, dist_entry, TRUE)
+                            do.call(proxy::pr_DB$set_entry, dist_entry, TRUE) # nocov
+
                         dd <- bigmemory::attach.big.matrix(d_desc)
                         if (isTRUE(attr(ids, "trimat"))) {
                             # assign upper part of lower triangular
@@ -213,7 +214,7 @@ ddist2 <- function(distance, control) {
                 }
                 else {
                     centroids <- lapply(1L:foreach::getDoParWorkers(), function(dummy) { centroids })
-                    if (length(centroids) > length(x)) centroids <- centroids[1L:length(x)]
+                    if (length(centroids) > length(x)) centroids <- centroids[1L:length(x)] # nocov
                     combine <- rbind
                 }
 

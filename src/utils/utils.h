@@ -1,9 +1,13 @@
 #ifndef DTWCLUST_UTILS_HPP_
 #define DTWCLUST_UTILS_HPP_
 
-#include <vector>
+#include <cstddef> // std::size_t
+
+#include "SurrogateMatrix.h"
 
 namespace dtwclust {
+
+typedef std::size_t id_t;
 
 // -------------------------------------------------------------------------------------------------
 /* called by other C++ functions */
@@ -12,28 +16,14 @@ namespace dtwclust {
 #define DTWCLUST_MIN_GRAIN 8
 
 // envelope.cpp
-void envelope_cpp(const double * const array, const int length, const unsigned int width,
-                  double * const minvalues, double * const maxvalues);
+void envelope_cpp(const SurrogateMatrix<double>& array, const unsigned int width,
+                  SurrogateMatrix<double>& minvalues, SurrogateMatrix<double>& maxvalues);
 
 // utils.cpp
 void Rflush();
 int get_grain(const int n, const int num_threads);
-double kahan_sum(const double * const x, const int length);
-void s2d(const int id, const int nrow, int& i, int& j);
-
-// for kahan sum (compensated sum)
-class KahanSummer
-{
-public:
-    KahanSummer(double * const x, const int nrows, const int ncols = 1);
-    void reset();
-    void add(const double value, const int i, const int j = 0);
-
-private:
-    double* const x_;
-    int nrows_;
-    std::vector<double> c_, y_, t_;
-};
+double kahan_sum(const SurrogateMatrix<double>& x);
+void s2d(const id_t id, const id_t nrow, id_t& i, id_t& j);
 
 } // namespace dtwclust
 

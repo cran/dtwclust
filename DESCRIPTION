@@ -2,8 +2,8 @@ Package: dtwclust
 Type: Package
 Title: Time Series Clustering Along with Optimizations for the Dynamic
         Time Warping Distance
-Version: 5.4.1
-Date: 2018-06-10
+Version: 5.5.0
+Date: 2018-07-21
 Depends: R (>= 3.2.0), methods, proxy (>= 0.4-16), dtw
 Imports: parallel, stats, utils, bigmemory, clue, cluster, dplyr,
         flexclust, foreach, ggplot2, ggrepel, Matrix, nloptr, RSpectra,
@@ -30,7 +30,7 @@ LazyData: TRUE
 NeedsCompilation: yes
 SystemRequirements: C++11, GNU make
 RoxygenNote: 6.0.1
-Collate: 'CENTROIDS-dba.R' 'CENTROIDS-sdtw-cent.R'
+Collate: 'CENTROIDS-dba.R' 'CENTROIDS-pam.R' 'CENTROIDS-sdtw-cent.R'
         'CENTROIDS-shape-extraction.R' 'CLUSTERING-all-cent2.R'
         'CLUSTERING-compare-clusterings.R'
         'CLUSTERING-cvi-evaluators.R' 'CLUSTERING-ddist2.R'
@@ -49,6 +49,6 @@ Collate: 'CENTROIDS-dba.R' 'CENTROIDS-sdtw-cent.R'
         'UTILS-nccc.R' 'UTILS-reinterpolate.R' 'UTILS-rng.R'
         'UTILS-tslist.R' 'UTILS-utils.R' 'UTILS-zscore.R' 'pkg.R'
 VignetteBuilder: knitr
-Packaged: 2018-06-10 15:19:42 UTC; oso
+Packaged: 2018-07-21 12:36:48 UTC; oso
 Repository: CRAN
-Date/Publication: 2018-06-10 16:43:02 UTC
+Date/Publication: 2018-07-21 14:50:06 UTC
