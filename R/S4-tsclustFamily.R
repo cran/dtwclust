@@ -30,10 +30,10 @@
 #'   - The second argument is called `centroids` (inconsistent with [proxy::dist()]).
 #'   - If `control$distmat` is *not* `NULL`, the function will try to subset it.
 #'   - If `control$symmetric` is `TRUE`, `centroids` is `NULL`, *and* there is no argument
-#'     `pairwise` that is `TRUE`, only half the distance matrix will be computed.
+#'   `pairwise` that is `TRUE`, only half the distance matrix will be computed.
 #'     + If the distance was registered in [proxy::pr_DB] with `loop = TRUE` and more than one
-#'       parallel worker is detected, the computation will be in parallel (using multi-processing
-#'       with [foreach::foreach()]), otherwise it will be sequential with [proxy::dist()].
+#'     parallel worker is detected, the computation will be in parallel (using multi-processing with
+#'     [foreach::foreach()]), otherwise it will be sequential with [proxy::dist()].
 #'   - The function always returns a `crossdist` matrix.
 #'
 #'   Note that all distances implemented as part of \pkg{dtwclust} have custom proxy loops that use
@@ -69,16 +69,16 @@
 #' fam <- new("tsclustFamily", dist = "gak")
 #'
 #' # This is done with symmetric optimizations, regardless of control$symmetric
-#' crossdist <- fam@dist(CharTraj, window.size = 18L)
+#' crossdist <- fam@@dist(CharTraj, window.size = 18L)
 #'
 #' # This is done without symmetric optimizations, regardless of control$symmetric
-#' crossdist <- fam@dist(CharTraj, CharTraj, window.size = 18L)
+#' crossdist <- fam@@dist(CharTraj, CharTraj, window.size = 18L)
 #'
 #' # For non-dtwclust distances, symmetric optimizations only apply
 #' # with an appropriate control AND a single data argument:
 #' fam <- new("tsclustFamily", dist = "dtw",
 #'            control = partitional_control(symmetric = TRUE))
-#' fam@dist(CharTraj[1L:5L])
+#' fam@@dist(CharTraj[1L:5L])
 #'
 #' # If you want the fuzzy family, use fuzzy = TRUE
 #' ffam <- new("tsclustFamily", control = fuzzy_control(), fuzzy = TRUE)

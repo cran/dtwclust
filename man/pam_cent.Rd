@@ -4,8 +4,8 @@
 \alias{pam_cent}
 \title{Centroid for partition around medoids}
 \usage{
-pam_cent(series, distance, ids = seq_along(series), distmat = NULL, ...,
-  error.check = TRUE)
+pam_cent(series, distance, ids = seq_along(series), distmat = NULL,
+  ..., error.check = TRUE)
 }
 \arguments{
 \item{series}{The time series in one of the formats accepted by \code{\link[=tslist]{tslist()}}.}
@@ -17,7 +17,7 @@ The distance must be registered in \code{\link[proxy:pr_DB]{proxy::pr_DB()}}.}
 
 \item{distmat}{Optionally, a pre-computed cross-distance matrix of \emph{all} \code{series}.}
 
-\item{...}{Any extra parameters for the `distance`` function that may be used.}
+\item{...}{Any extra parameters for the \code{distance} function that may be used.}
 
 \item{error.check}{Logical indicating whether the function should try to detect inconsistencies
 and give more informative errors messages. Also used internally to avoid repeating checks.}
@@ -34,6 +34,10 @@ The medoid's index is determined by taking the \eqn{arg min} of the \code{distma
 }
 \examples{
 
-pam_cent(CharTraj, "dtw_basic", ids = 6L:10L, window.size = 15L)
+# Computes the distance matrix for all series
+pam_cent(CharTraj, "dtw_basic", ids = 6L:10L, window.size = 15L) # series_id = 7L
+
+# Computes the distance matrix for the chosen subset only
+pam_cent(CharTraj[6L:10L], "dtw_basic", window.size = 15L) # series_id = 2L
 
 }

@@ -5,11 +5,11 @@
 \alias{tadpole}
 \title{TADPole clustering}
 \usage{
-TADPole(data, k = 2L, dc, window.size, error.check = TRUE, lb = "lbk",
-  trace = FALSE)
+TADPole(data, k = 2L, dc, window.size, error.check = TRUE,
+  lb = "lbk", trace = FALSE)
 
-tadpole(data, k = 2L, dc, window.size, error.check = TRUE, lb = "lbk",
-  trace = FALSE)
+tadpole(data, k = 2L, dc, window.size, error.check = TRUE,
+  lb = "lbk", trace = FALSE)
 }
 \arguments{
 \item{data}{A matrix or data frame where each row is a time series, or a list where each element
@@ -64,8 +64,7 @@ equal length.
 Parallelization is supported in the following way:
 \itemize{
 \item For multiple \code{dc} values, multi-processing with \code{\link[foreach:foreach]{foreach::foreach()}}.
-\item Otherwise, the internal distance calculations use multi-threading with
-\link[RcppParallel:RcppParallel]{RcppParallel::RcppParallel}.
+\item The internal distance calculations use multi-threading with \link[RcppParallel:RcppParallel]{RcppParallel::RcppParallel}.
 }
 
 The windowing constraint uses a centered window. The calculations expect a value in
@@ -77,20 +76,20 @@ in \code{10(2) + 1 = 21} observations falling within the window.
 \section{Parallel Computing}{
 
 
-  Please note that running tasks in parallel does \strong{not} guarantee faster computations. The
-  overhead introduced is sometimes too large, and it's better to run tasks sequentially.
+Please note that running tasks in parallel does \strong{not} guarantee faster computations. The
+overhead introduced is sometimes too large, and it's better to run tasks sequentially.
 
-  This function uses the \code{\link[RcppParallel:RcppParallel-package]{RcppParallel}} package
-  for parallelization. It uses all available threads by default (see
-  \code{\link[RcppParallel:defaultNumThreads]{RcppParallel::defaultNumThreads()}}), but this can
-  be changed by the user with
-  \code{\link[RcppParallel:setThreadOptions]{RcppParallel::setThreadOptions()}}.
+This function uses the \code{\link[RcppParallel:RcppParallel-package]{RcppParallel}} package
+for parallelization. It uses all available threads by default (see
+\code{\link[RcppParallel:defaultNumThreads]{RcppParallel::defaultNumThreads()}}), but this can
+be changed by the user with
+\code{\link[RcppParallel:setThreadOptions]{RcppParallel::setThreadOptions()}}.
 
-  An exception to the above is when this function is called within a
-  \code{\link[foreach:foreach]{foreach}} parallel loop \strong{made by dtwclust}. If the parallel
-  workers do not have the number of threads explicitly specified, this function will default to 1
-  thread per worker. See the parallelization vignette for more information
-  (\code{browseVignettes("dtwclust")}).
+An exception to the above is when this function is called within a
+\code{\link[foreach:foreach]{foreach}} parallel loop \strong{made by dtwclust}. If the parallel
+workers do not have the number of threads explicitly specified, this function will default to 1
+thread per worker. See the parallelization vignette for more information
+(\code{browseVignettes("dtwclust")}).
 }
 
 \references{

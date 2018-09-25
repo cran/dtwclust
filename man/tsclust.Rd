@@ -6,8 +6,9 @@
 \usage{
 tsclust(series = NULL, type = "partitional", k = 2L, ...,
   preproc = NULL, distance = "dtw_basic", centroid = ifelse(type ==
-  "fuzzy", "fcm", "pam"), control = do.call(paste0(type, "_control"), list()),
-  args = tsclust_args(), seed = NULL, trace = FALSE, error.check = TRUE)
+  "fuzzy", "fcm", "pam"), control = do.call(paste0(type, "_control"),
+  list()), args = tsclust_args(), seed = NULL, trace = FALSE,
+  error.check = TRUE)
 }
 \arguments{
 \item{series}{A list of series, a numeric matrix or a data frame. Matrices and data frames are
@@ -45,7 +46,7 @@ and give more informative errors messages. Also used internally to avoid repeati
 \value{
 An object with an appropriate class from \linkS4class{TSClusters}.
 
-If \code{control@nrep > 1} and a partitional procedure is used, \code{length(method)} \code{> 1} and
+If \code{control$nrep > 1} and a partitional procedure is used, \code{length(method)} \code{> 1} and
 hierarchical procedures are used, or \code{length(k)} \code{>} \code{1}, a list of objects is returned.
 }
 \description{
@@ -116,8 +117,8 @@ always one of the time series in the data. In this case, the distance matrix can
 pre-computed once using all time series in the data and then re-used at each iteration. It
 usually saves overhead overall for small datasets (see \link{tsclust-controls}).
 \item "fcm": Fuzzy c-means. Only supported for fuzzy clustering and used by default in that case.
-\item "fcmdd": Fuzzy c-medoids. Only supported for fuzzy clustering. It \strong{always} precomputes the
-whole cross-distance matrix.
+\item "fcmdd": Fuzzy c-medoids. Only supported for fuzzy clustering. It \strong{always} precomputes/uses
+the whole cross-distance matrix.
 }
 
 The \code{dba}, \code{shape} and \code{sdtw_cent} implementations check for parallelization. Note that only
@@ -219,12 +220,12 @@ precomputed, since said matrix is reused for every repetition.
 \section{Parallel Computing}{
 
 
-  Please note that running tasks in parallel does \strong{not} guarantee faster computations. The
-  overhead introduced is sometimes too large, and it's better to run tasks sequentially.
+Please note that running tasks in parallel does \strong{not} guarantee faster computations. The
+overhead introduced is sometimes too large, and it's better to run tasks sequentially.
 
-  The user can register a parallel backend, e.g. with the \pkg{doParallel} package, in order to
-  attempt to speed up the calculations (see the examples). This relies on
-  \code{\link[foreach:foreach]{foreach}}, i.e. it uses multi-processing.
+The user can register a parallel backend, e.g. with the \pkg{doParallel} package, in order to
+attempt to speed up the calculations (see the examples). This relies on
+\code{\link[foreach:foreach]{foreach}}, i.e. it uses multi-processing.
 
 
 

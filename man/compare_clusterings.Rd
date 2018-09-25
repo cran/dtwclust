@@ -7,9 +7,9 @@
 compare_clusterings(series = NULL, types = c("p", "h", "f", "t"),
   configs = compare_clusterings_configs(types), seed = NULL,
   trace = FALSE, ..., score.clus = function(...) stop("No scoring"),
-  pick.clus = function(...) stop("No picking"), shuffle.configs = FALSE,
-  return.objects = FALSE, packages = character(0L),
-  .errorhandling = "stop")
+  pick.clus = function(...) stop("No picking"),
+  shuffle.configs = FALSE, return.objects = FALSE,
+  packages = character(0L), .errorhandling = "stop")
 }
 \arguments{
 \item{series}{A list of series, a numeric matrix or a data frame. Matrices and data frames are
@@ -123,8 +123,8 @@ If \code{score.clus} is a function, it will be applied to the available partitio
 fuzzy and/or tadpole results via:\preformatted{scores <- lapply(list_of_lists, score.clus, ...)
 }
 
-Otherwise, \code{score.clus} should be a list of functions with the same names as the list above,
-so that \code{score.clus$partitional} is used to score \code{list_of_lists$partitional} and so on (via
+Otherwise, \code{score.clus} should be a list of functions with the same names as the list above, so
+that \code{score.clus$partitional} is used to score \code{list_of_lists$partitional} and so on (via
 \code{\link[base:Map]{base::Map()}}).
 
 Therefore, the scores returned shall always be a list of lists with first-level names as above.

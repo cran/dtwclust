@@ -69,20 +69,20 @@ The indices of the DTW alignment are obtained by calling \code{\link[=dtw_basic]
 \section{Parallel Computing}{
 
 
-  Please note that running tasks in parallel does \strong{not} guarantee faster computations. The
-  overhead introduced is sometimes too large, and it's better to run tasks sequentially.
+Please note that running tasks in parallel does \strong{not} guarantee faster computations. The
+overhead introduced is sometimes too large, and it's better to run tasks sequentially.
 
-  This function uses the \code{\link[RcppParallel:RcppParallel-package]{RcppParallel}} package
-  for parallelization. It uses all available threads by default (see
-  \code{\link[RcppParallel:defaultNumThreads]{RcppParallel::defaultNumThreads()}}), but this can
-  be changed by the user with
-  \code{\link[RcppParallel:setThreadOptions]{RcppParallel::setThreadOptions()}}.
+This function uses the \code{\link[RcppParallel:RcppParallel-package]{RcppParallel}} package
+for parallelization. It uses all available threads by default (see
+\code{\link[RcppParallel:defaultNumThreads]{RcppParallel::defaultNumThreads()}}), but this can
+be changed by the user with
+\code{\link[RcppParallel:setThreadOptions]{RcppParallel::setThreadOptions()}}.
 
-  An exception to the above is when this function is called within a
-  \code{\link[foreach:foreach]{foreach}} parallel loop \strong{made by dtwclust}. If the parallel
-  workers do not have the number of threads explicitly specified, this function will default to 1
-  thread per worker. See the parallelization vignette for more information
-  (\code{browseVignettes("dtwclust")}).
+An exception to the above is when this function is called within a
+\code{\link[foreach:foreach]{foreach}} parallel loop \strong{made by dtwclust}. If the parallel
+workers do not have the number of threads explicitly specified, this function will default to 1
+thread per worker. See the parallelization vignette for more information
+(\code{browseVignettes("dtwclust")}).
 
 
 
@@ -93,12 +93,11 @@ in a \strong{32 bit} installation. In such systems, consider limiting calculatio
 \section{Multivariate series}{
 
 
-There are currently 2 versions of DBA implemented for multivariate series:
+There are currently 2 versions of DBA implemented for multivariate series (see examples):
 \itemize{
 \item If \code{mv.ver = "by-variable"}, then each variable of each series in \code{X} and \code{centroid} are
 extracted, and the univariate version of the algorithm is applied to each set of variables,
-binding the results by column. Therefore, the DTW backtracking is different for each
-variable.
+binding the results by column. Therefore, the DTW backtracking is different for each variable.
 \item If \code{mv.ver = "by-series"}, then all variables are considered at the same time, so the DTW
 backtracking is computed based on each multivariate series as a whole. This version was
 implemented in version 4.0.0 of \pkg{dtwclust}, and it is faster, but not necessarily more

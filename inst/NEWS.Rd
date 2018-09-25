@@ -7,11 +7,9 @@
     Full changelog available at \url{https://github.com/asardaes/dtwclust/blob/master/CHANGELOG.md}
 }
 
-\section{Changes in version 5.5.0}{
+\section{Changes in version 5.5.1}{
 \itemize{
-    \item Added a standalone function to extract centroids for partition around medoids: \code{pam_cent}.
-    \item Fixed the calculation of GAK for non-\code{NULL} windows.
-    \item "Fixed" the calculation of internal CVIs for clusterings done with TADPole.
-    \item Vignette updates.
+    \item Documentation fixes.
+    \item The registration of \code{hclust} and \code{proc_time} with \code{setOldClass} now leaves them as virtual classes.
 }
 }

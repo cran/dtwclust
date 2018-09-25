@@ -4,18 +4,14 @@
 \alias{tsclust-controls}
 \alias{partitional_control}
 \alias{hierarchical_control}
-\alias{tsclust-controls}
 \alias{fuzzy_control}
-\alias{tsclust-controls}
 \alias{tadpole_control}
-\alias{tsclust-controls}
 \alias{tsclust_args}
-\alias{tsclust-controls}
 \title{Control parameters for clusterings with \code{\link[=tsclust]{tsclust()}}}
 \usage{
-partitional_control(pam.precompute = TRUE, iter.max = 100L, nrep = 1L,
-  symmetric = FALSE, packages = character(0L), distmat = NULL,
-  pam.sparse = FALSE, version = 2L)
+partitional_control(pam.precompute = TRUE, iter.max = 100L,
+  nrep = 1L, symmetric = FALSE, packages = character(0L),
+  distmat = NULL, pam.sparse = FALSE, version = 2L)
 
 hierarchical_control(method = "average", symmetric = FALSE,
   packages = character(0L), distmat = NULL)
@@ -101,8 +97,8 @@ parallel, regardless of \code{pam.sparse}.
 so that the distance calculations can be done in parallel and the sparse matrix updated
 iteratively.
 \item If both \code{pam.precompute} and \code{pam.sparse} are \code{FALSE}, repetitions are done in parallel, and
-each repetition performs distance calculations sequentially, but the distance matrix cannot
-be updated iteratively.
+each repetition performs distance calculations sequentially, but the distance matrix cannot be
+updated iteratively.
 }
 }
 
