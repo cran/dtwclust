@@ -1,12 +1,12 @@
 #include "fillers.h"
 
-#include <cstddef> // std::size_t
 #include <memory> // make_shared
 #include <string>
 
 #include <RcppArmadillo.h>
 #include <RcppParallel.h>
 
+#include "../utils/ParallelWorker.h"
 #include "../utils/utils.h" // get_grain, s2d, id_t
 
 namespace dtwclust {
@@ -52,25 +52,30 @@ PairwiseFiller::PairwiseFiller(std::shared_ptr<Distmat>& distmat,
 // -------------------------------------------------------------------------------------------------
 /* parallel worker */
 // -------------------------------------------------------------------------------------------------
-class PairwiseFillWorker : public RcppParallel::Worker {
+class PairwiseFillWorker : public ParallelWorker {
 public:
     // constructor
     PairwiseFillWorker(const std::shared_ptr<DistanceCalculator>& dist_calculator,
-                       const std::shared_ptr<Distmat>& distmat)
-        : dist_calculator_(dist_calculator)
+                       const std::shared_ptr<Distmat>& distmat,
+                       const int grain)
+        : ParallelWorker(grain, 10, 1000)
+        , dist_calculator_(dist_calculator)
         , distmat_(distmat)
     { }
 
     // parallel loop across specified range
-    void operator()(std::size_t begin, std::size_t end) {
+    void work_it(id_t begin, id_t end) override {
         // local copy of dist_calculator so it is setup separately for each thread
         mutex_.lock();
         DistanceCalculator* dist_calculator = dist_calculator_->clone();
         mutex_.unlock();
+
         // fill distances
-        for (std::size_t i = begin; i < end; i++) {
+        for (id_t i = begin; i < end; i++) {
+            if (is_interrupted(i)) break; // nocov
             (*distmat_)(i,0) = dist_calculator->calculate(i,i);
         }
+
         // delete local calculator
         mutex_.lock();
         delete dist_calculator;
@@ -80,18 +85,16 @@ public:
 private:
     const std::shared_ptr<DistanceCalculator> dist_calculator_;
     std::shared_ptr<Distmat> distmat_;
-    // for synchronization during memory allocation (from TinyThread++, comes with RcppParallel)
-    tthread::mutex mutex_;
 };
 
 // -------------------------------------------------------------------------------------------------
 /* public fill method */
 // -------------------------------------------------------------------------------------------------
 void PairwiseFiller::fill() const {
-    PairwiseFillWorker fill_worker(dist_calculator_, distmat_);
     int size = distmat_->nrow();
     int grain = get_grain(size, num_threads_);
-    RcppParallel::parallelFor(0, size, fill_worker, grain);
+    PairwiseFillWorker fill_worker(dist_calculator_, distmat_, grain);
+    parallel_for(0, size, fill_worker, grain);
 }
 
 // =================================================================================================
@@ -113,28 +116,35 @@ PrimaryFiller::PrimaryFiller(std::shared_ptr<Distmat>& distmat,
 // -------------------------------------------------------------------------------------------------
 /* parallel worker */
 // -------------------------------------------------------------------------------------------------
-class PrimaryFillWorker : public RcppParallel::Worker {
+class PrimaryFillWorker : public ParallelWorker {
 public:
     // constructor
     PrimaryFillWorker(const std::shared_ptr<DistanceCalculator>& dist_calculator,
-                      const std::shared_ptr<Distmat>& distmat)
-        : dist_calculator_(dist_calculator)
+                      const std::shared_ptr<Distmat>& distmat,
+                      const int grain)
+        : ParallelWorker(grain, 10, 1000)
+        , dist_calculator_(dist_calculator)
         , distmat_(distmat)
         , ncols_(distmat->ncol())
     { }
 
     // parallel loop across specified range
-    void operator()(std::size_t begin, std::size_t end) {
+    void work_it(id_t begin, id_t end) override {
         // local copy of dist_calculator so it is setup separately for each thread
         mutex_.lock();
         DistanceCalculator* dist_calculator = dist_calculator_->clone();
         mutex_.unlock();
+
         // fill distances
-        for (std::size_t i = begin; i < end; i++) {
-            for (int j = 0; j < ncols_; j++) {
+        for (id_t i = begin; i < end; i++) {
+            if (is_interrupted()) break; // nocov
+
+            for (id_t j = 0; j < ncols_; j++) {
+                if (is_interrupted(j)) break; // nocov
                 (*distmat_)(i,j) = dist_calculator->calculate(i,j);
             }
         }
+
         // delete local calculator
         mutex_.lock();
         delete dist_calculator;
@@ -144,19 +154,17 @@ public:
 private:
     const std::shared_ptr<DistanceCalculator> dist_calculator_;
     std::shared_ptr<Distmat> distmat_;
-    int ncols_;
-    // for synchronization during memory allocation (from TinyThread++, comes with RcppParallel)
-    tthread::mutex mutex_;
+    const id_t ncols_;
 };
 
 // -------------------------------------------------------------------------------------------------
 /* public fill method */
 // -------------------------------------------------------------------------------------------------
 void PrimaryFiller::fill() const {
-    PrimaryFillWorker fill_worker(dist_calculator_, distmat_);
     int size = distmat_->nrow();
     int grain = get_grain(size, num_threads_);
-    RcppParallel::parallelFor(0, size, fill_worker, grain);
+    PrimaryFillWorker fill_worker(dist_calculator_, distmat_, grain);
+    parallel_for(0, size, fill_worker, grain);
 }
 
 // =================================================================================================
@@ -177,30 +185,41 @@ SymmetricFiller::SymmetricFiller(std::shared_ptr<Distmat>& distmat,
 // -------------------------------------------------------------------------------------------------
 /* parallel worker */
 // -------------------------------------------------------------------------------------------------
-class SymmetricFillWorker : public RcppParallel::Worker {
+class SymmetricFillWorker : public ParallelWorker {
 public:
     // constructor
     SymmetricFillWorker(const std::shared_ptr<DistanceCalculator>& dist_calculator,
-                        const std::shared_ptr<Distmat>& distmat)
-        : dist_calculator_(dist_calculator)
+                        const std::shared_ptr<Distmat>& distmat,
+                        const int grain)
+        : ParallelWorker(grain, 10, 1000)
+        , dist_calculator_(dist_calculator)
         , distmat_(distmat)
         , nrows_(distmat->nrow())
     { }
 
     // parallel loop across specified range
-    void operator()(std::size_t begin, std::size_t end) {
+    void work_it(id_t begin, id_t end) override {
         // local copy of dist_calculator so it is setup separately for each thread
         mutex_.lock();
         DistanceCalculator* dist_calculator = dist_calculator_->clone();
         mutex_.unlock();
+
         // fill distances
-        id_t i, j;
-        for (std::size_t id = begin; id < end; id++) {
-            s2d(id, nrows_, i, j);
+        id_t i = nrows_;
+        id_t j;
+        for (id_t id = begin; id < end; id++) {
+            if (is_interrupted(id)) break; // nocov
+
+            if (i >= nrows_ - 1)
+                s2d(id, nrows_, i, j); // move to next column
+            else
+                i++; // same column still valid, only increase row
+
             double dist = dist_calculator->calculate(i,j);
             (*distmat_)(i,j) = dist;
             (*distmat_)(j,i) = dist;
         }
+
         // delete local calculator
         mutex_.lock();
         delete dist_calculator;
@@ -210,21 +229,19 @@ public:
 private:
     const std::shared_ptr<DistanceCalculator> dist_calculator_;
     std::shared_ptr<Distmat> distmat_;
-    int nrows_;
-    // for synchronization during memory allocation (from TinyThread++, comes with RcppParallel)
-    tthread::mutex mutex_;
+    const id_t nrows_;
 };
 
 // -------------------------------------------------------------------------------------------------
 /* public fill method */
 // -------------------------------------------------------------------------------------------------
 void SymmetricFiller::fill() const {
-    SymmetricFillWorker fill_worker(dist_calculator_, distmat_);
     // number of elements in square matrix without including diagonal
     int nrows = distmat_->nrow();
-    int size = nrows * (nrows + 1) / 2 - nrows;
+    int size = nrows * (nrows - 1) / 2;
     int grain = get_grain(size, num_threads_);
-    RcppParallel::parallelFor(0, size, fill_worker, grain);
+    SymmetricFillWorker fill_worker(dist_calculator_, distmat_, grain);
+    parallel_for(0, size, fill_worker, grain);
 }
 
 } // namespace dtwclust

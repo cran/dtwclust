@@ -346,6 +346,7 @@ compare_clusterings_configs <- function(types = c("p", "h", "f"), k = 2L, contro
 #'
 #' @export
 #' @importFrom dplyr bind_rows
+#' @importFrom dplyr inner_join
 #' @importFrom proxy pr_DB
 #'
 #' @param series A list of series, a numeric matrix or a data frame. Matrices and data frames are
@@ -560,21 +561,28 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
             print(preproc_df)
         }
 
+        config$.preproc_id_ <- seq_len(nrow(config))
         lapply(seq_len(nrow(preproc_df)), function(i) {
-            if (preproc_df$preproc[i] != "none") {
-                preproc_fun <- get_from_callers(preproc_df$preproc[i], "function")
-                this_config <- preproc_df[i, , drop = FALSE]
-                names(this_config) <- sub("_preproc$", "", names(this_config))
+            preproc_char <- preproc_df$preproc[i]
+            if (preproc_char != "none") {
+                # find all configs that have this preproc to assign them as attribute at the end
+                df <- dplyr::inner_join(config,
+                                        preproc_df[i, , drop = FALSE],
+                                        by = names(config)[preproc_cols])
+
+                preproc_fun <- get_from_callers(preproc_char, "function")
 
                 if (any(preproc_args)) {
-                    preproc_args <- as.list(this_config)[preproc_args]
+                    this_config <- preproc_df[i, preproc_args, drop = FALSE]
+                    names(this_config) <- sub("_preproc$", "", names(this_config))
+                    preproc_args <- as.list(this_config)
                     preproc_args <- preproc_args[!sapply(preproc_args, is.na)]
                 }
                 else
                     preproc_args <- list()
 
                 ret <- quoted_call(preproc_fun, series, dots = preproc_args)
-                attr(ret, "config") <- as.list(this_config) # leave version with possible NAs here!
+                attr(ret, "config_ids") <- df$.preproc_id_
             }
             else {
                 ret <- series
@@ -582,6 +590,7 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
             ret
         })
     })
+
     # UTILS-utils.R
     setnames_inplace(processed_series, names(configs))
 
@@ -634,12 +643,11 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
         i <- nrow(config)
         objs <- foreach::foreach(
             i = seq_len(i),
-            .combine = list,
+            .combine = c,
             .multicombine = TRUE,
             .packages = packages,
             .export = export,
-            .errorhandling = .errorhandling,
-            .maxcombine = if (isTRUE(i > 100L)) i else 100L
+            .errorhandling = .errorhandling
         ) %op% {
             cfg <- config[i, , drop = FALSE]
             seed <- seeds[[i]]
@@ -652,19 +660,19 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
             # obtain args from configuration
             # ----------------------------------------------------------------------------------
 
-            args <- lapply(c("preproc", "distance", "centroid"),
-                           function(func) {
-                               col_ids <- grepl(paste0("_", func, "$"), names(cfg))
-                               if (cfg[[func]] != "none" && any(col_ids)) {
-                                   this_args <- as.list(cfg[, col_ids, drop = FALSE])
-                                   names(this_args) <- sub(paste0("_", func, "$"),
-                                                           "",
-                                                           names(this_args))
-                                   # return
-                                   this_args[!sapply(this_args, is.na)]
-                               }
-                               else list()
-                           })
+            args <- lapply(c("preproc", "distance", "centroid"), function(func) {
+                col_ids <- grepl(paste0("_", func, "$"), names(cfg))
+                if (cfg[[func]] != "none" && any(col_ids)) {
+                    this_args <- as.list(cfg[, col_ids, drop = FALSE])
+                    names(this_args) <- sub(paste0("_", func, "$"),
+                                            "",
+                                            names(this_args))
+                    # return
+                    this_args[!sapply(this_args, is.na)]
+                }
+                else list()
+            })
+
             setnames_inplace(args, c("preproc", "dist", "cent"))
             args <- do.call(tsclust_args, args, TRUE)
 
@@ -682,14 +690,18 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
             # ----------------------------------------------------------------------------------
 
             preproc_char <- cfg$preproc
-            this_preproc_config <- c(list(preproc = preproc_char), args$preproc)
-            for (this_series in series) {
-                this_series_config <- attr(this_series, "config")
-                if (preproc_char == "none" && is.null(this_series_config))
-                    break
-                if (identical(this_series_config[names(this_preproc_config)], this_preproc_config))
-                    break
-            }
+
+            config_ids <- lapply(series, attr, which = "config_ids")
+            if (preproc_char == "none")
+                this_series <- which(sapply(config_ids, is.null))
+            else
+                this_series <- which(sapply(config_ids, function(cfg_id) { i %in% cfg_id }))
+
+            if (length(this_series) > 1L) # nocov start
+                stop("Could not find unique processed series for ", type,
+                     " clustering and config row=", i)
+            else # nocov end
+                this_series <- series[[this_series]]
 
             # ----------------------------------------------------------------------------------
             # distance entry to re-register in parallel worker
@@ -723,6 +735,7 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
                                 control = control,
                                 error.check = FALSE,
                                 dots = dots)
+
             if (type == "tadpole")
                 this_args$distance <- NULL
 
@@ -743,6 +756,7 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
 
             if (inherits(tsc, "TSClusters"))
                 tsc <- list(tsc)
+
             ret <- lapply(tsc, function(tsc) {
                 tsc@preproc <- preproc_char
                 if (preproc_char != "none")
@@ -763,18 +777,26 @@ compare_clusterings <- function(series = NULL, types = c("p", "h", "f", "t"),
             # return config result from foreach()
             ret
         }
-        # foreach() with one 'iteration' does NOT call .combine function
-        if (i == 1L) objs <- list(objs)
+
+        class(objs) <- NULL
         if (.errorhandling == "pass") {
-            failed_cfgs <- sapply(objs, function(obj) { inherits(obj, "error") })
+            failed_cfgs <- sapply(objs, function(obj) { !inherits(obj, "TSClusters") })
             if (any(failed_cfgs)) {
                 warning("At least one of the ", type, " configurations resulted in an error.")
-                # make one more list level so unlist() below leaves errors as one object
-                objs[failed_cfgs] <- lapply(objs[failed_cfgs], list)
+
+                # a simple error is a list with 2 elements: message and call, so I need to re-pack
+                # each pair of elements in a single element of the objs list
+                which_failed <- which(failed_cfgs)[seq(from = 1L, by = 2L, length.out = sum(failed_cfgs) / 2)]
+                for (failed_cfg_id in which_failed) {
+                    objs[[failed_cfg_id]] <- structure(objs[failed_cfg_id:(failed_cfg_id + 1L)],
+                                                       class = c("simpleError", "error", "condition"))
+                }
+                names(objs)[which_failed] <- paste0("failure_", seq_along(which_failed))
+                objs[which_failed + 1L] <- NULL
             }
         }
-        # return scores/TSClusters from Map()
-        unlist(objs, recursive = FALSE)
+
+        objs
     })
 
     # ==============================================================================================
