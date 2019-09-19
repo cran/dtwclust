@@ -15,6 +15,8 @@ opts_chunk$set(fig.width = 8, fig.asp = 0.5625,
 
 # prevent additional .sty files from being created
 opts_knit$set(self.contained = TRUE)
+
+suppressWarnings(RNGversion("3.5.0"))
 @
 
 \documentclass[article,shortnames,nojss,noheadings]{jss}
@@ -52,8 +54,8 @@ opts_knit$set(self.contained = TRUE)
 \crefformat{equation}{Equation~#1}
 \Crefformat{equation}{Equation~#1}
 
-% Used for knitr images from Rnw files
-\newcommand{\subfloat}[2][default for first parameter: need a sub-caption]{\subcaptionbox{#1}{#2}}
+% Used for knitr images from Rnw files, defined by subcaption if new enough
+\providecommand{\subfloat}[2][default for first parameter: need a sub-caption]{\subcaptionbox{#1}{#2}}
 
 % Allowed percentages of page a float can use
 \renewcommand{\textfraction}{0.05}
@@ -123,7 +125,8 @@ showcasing how it can be used to evaluate many different time-series clustering 
 \section{Introduction}
 \label{sec:introduction}
 
-\blankfootnote{This manuscript was last updated in version 5.5.0 of \dtwclust{}.}
+\blankfootnote{This manuscript was last updated in version 5.5.0 of \dtwclust{}.
+A summarized version was published in \citet{sarda2019}.}
 Cluster analysis is a task which concerns itself with the creation of groups of objects,
 where each group is called a cluster.
 Ideally, all members of the same cluster are similar to each other,
