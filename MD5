@@ -1,4 +1,4 @@
-6ecc62ef96c628a70b64bfaf83dbd94c *DESCRIPTION
+c4df5c9abc019b31bc9598302652b5f8 *DESCRIPTION
 c44e5ea93f7688937b6064a8d9ca69bc *NAMESPACE
 c81374c22f129bfcc1d11668a78555ac *R/CENTROIDS-dba.R
 9f52de2521f1ecd3e0f2c6540d149ad9 *R/CENTROIDS-pam.R
@@ -31,7 +31,7 @@ c697ae78b81a5ef35da929a792c81769 *R/S4-tsclustFamily.R
 21aea3246e775d00d8a6a429920a42a5 *R/SHINY-interactive-clustering.R
 cd93d25f3a09d707cb4f8e12f52fd42d *R/SHINY-ssdtwclust.R
 16d54fb2ae8c1bae16232f99087a7cfe *R/SHINY-utils.R
-6d38577737648f2755e489b2bf6400ea *R/UTILS-as-methods.R
+16c8d307fdb4e4b450e866325313e27c *R/UTILS-as-methods.R
 0f2e6aef0374db287b48f945fc6b069b *R/UTILS-compute-envelope.R
 995c1e3d5edb2e8e74aaee61bfc4deba *R/UTILS-data.R
 b030d0293062c290fc5900a5a5db552d *R/UTILS-expressions.R
@@ -48,13 +48,13 @@ fc77aaaeb7a1f838b13f0976c423c8fc *build/vignette.rds
 fa24f5d05c03cd5b7397ca575a94e693 *data/uciCT.rda
 0a56baff251c23c7cfe2139b33a3d94f *inst/CITATION
 b5d9f10c8c2f151177ab212d0b5a6680 *inst/COPYRIGHTS
-5eadcccd2972b6e84569adca679a3ac3 *inst/NEWS.Rd
+dc147a9874a5d4a03a00fd9d55e68c8d *inst/NEWS.Rd
 f6a3bd210712fe8ef28ac52b5648f46c *inst/doc/dtwclust.Rnw
-31422bab5067f06a1eaff675604a9bf0 *inst/doc/dtwclust.pdf
+b3d6402dd3c83252f42f8fadbcfebc67 *inst/doc/dtwclust.pdf
 733c241fe5589518f189c7f58d69766c *inst/doc/parallelization-considerations.Rmd
-3c14511ce04d8add923a3d0e78b923a3 *inst/doc/parallelization-considerations.html
+2a7d775168b8fe74d508a65c6f967bac *inst/doc/parallelization-considerations.html
 f86e5f656c96a3014dee8733ce9b4d69 *inst/doc/timing-experiments.Rmd
-5fd7039fe76ca7d3725b5516c7aef542 *inst/doc/timing-experiments.html
+fc2e80f0dc868d84976917c9df9cc3dd *inst/doc/timing-experiments.html
 59e8a4dd64d29438342ba6a0a1b2e948 *inst/include/dtwclust.h
 e670e968a289e67f3282bf97d29d80c8 *inst/interactive-clustering/app.R
 1bc444ccc10fc15b9bbaf54a7eb588c5 *inst/interactive-clustering/main.R
@@ -157,8 +157,8 @@ c2a5390086642870ad8278cf849a0ffd *tests/testthat/acceptance/lbs.R
 8099771f5b1067dcd3a7a801867232ce *tests/testthat/acceptance/symmetric-proxy.R
 467d19479ee260b05587c0b612f7c7fc *tests/testthat/helper-all.R
 3b7d487bc21070042844bb3081b6ba93 *tests/testthat/integration/custom-dist.R
-cb2510c91e32554ad4770286db28a714 *tests/testthat/integration/families.R
-9baacda66040006eeeae6b0b1bf69de6 *tests/testthat/integration/proxy.R
+2194e84147ec0d75630b78477cd33dbd *tests/testthat/integration/families.R
+d4913b65af176566231a95c7f9cd3240 *tests/testthat/integration/proxy.R
 738f2e667d7d1edf2ed650c959a29958 *tests/testthat/regression/clusterings.R
 9a5cb8518d70087303cfa6b7d165d58b *tests/testthat/regression/comparisons.R
 9ed53f95d2c4ec2a73dea4411fcf2bc3 *tests/testthat/regression/custom-dist.R
@@ -185,7 +185,7 @@ f85d56bb9d497e9e32d102674d0844cb *tests/testthat/test-06-parallel.R
 242c3b8cc02e3f3a881b56cc6568837f *tests/testthat/unit/configs.R
 7e7c61317849643db52917eac844c936 *tests/testthat/unit/cvis.R
 73eb4ca269bde8ef722f0a857194150a *tests/testthat/unit/distances.R
-5b6b737e02d0b6cbf27e6722a8ce3325 *tests/testthat/unit/methods.R
+c5b292ec5e65a16e046a2c266c0904ac *tests/testthat/unit/methods.R
 2eaf3b10d3149f09c0b03253969cc392 *tests/testthat/unit/misc.R
 66c3f61cc88fd11704b481fd0003e914 *vignettes/REFERENCES.bib
 f6a3bd210712fe8ef28ac52b5648f46c *vignettes/dtwclust.Rnw
