@@ -4,8 +4,16 @@
 \alias{lb_improved}
 \title{Lemire's improved DTW lower bound}
 \usage{
-lb_improved(x, y, window.size = NULL, norm = "L1", lower.env = NULL,
-  upper.env = NULL, force.symmetry = FALSE, error.check = TRUE)
+lb_improved(
+  x,
+  y,
+  window.size = NULL,
+  norm = "L1",
+  lower.env = NULL,
+  upper.env = NULL,
+  force.symmetry = FALSE,
+  error.check = TRUE
+)
 }
 \arguments{
 \item{x}{A time series (reference).}
@@ -108,6 +116,6 @@ D.lbi <= D.dtw
 \references{
 Lemire D (2009). ``Faster retrieval with a two-pass dynamic-time-warping lower bound .'' \emph{Pattern
 Recognition}, \strong{42}(9), pp. 2169 - 2180. ISSN 0031-3203,
-\url{http://dx.doi.org/10.1016/j.patcog.2008.11.030},
-\url{http://www.sciencedirect.com/science/article/pii/S0031320308004925}.
+\doi{10.1016/j.patcog.2008.11.030},
+\url{https://www.sciencedirect.com/science/article/pii/S0031320308004925}.
 }

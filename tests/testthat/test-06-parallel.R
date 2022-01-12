@@ -1,5 +1,3 @@
-context("Parallel tests")
-
 # =================================================================================================
 # run all tests with a parallel backend
 # =================================================================================================
@@ -7,7 +5,7 @@ context("Parallel tests")
 chk <- Sys.getenv("_R_CHECK_LIMIT_CORES_", "")
 
 if (nzchar(chk) && chk == "TRUE") {
-    # use 2 cores in CHECK/Travis/AppVeyor
+    # use 2 cores in CI
     num_workers <- 2L
 } else {
     # use all cores in devtools::test()
@@ -32,6 +30,8 @@ test_that("Parallel computation gives the same results as sequential", {
         if (!nzchar(Sys.getenv("R_COVR"))) RcppParallel::setThreadOptions(num_workers)
         # to test that other RNGkinds won't affect
         RNGkind("default")
+        # for regression tests' comparisons
+        options(dtwclust_sdtw_cent_return_attrs = FALSE)
     }))
     registerDoParallel(cl)
 
@@ -46,29 +46,4 @@ test_that("Parallel computation gives the same results as sequential", {
     stopImplicitCluster()
     registerDoSEQ()
     rm(cl)
-})
-
-test_that("Parallel FORK computation gives the same results as sequential", {
-    skip_on_cran()
-    skip_on_travis()
-    skip_on_os("windows")
-    skip_if(nzchar(Sys.getenv("R_COVR")), "calculating coverage")
-
-    if (getOption("dtwclust_skip_par_tests", FALSE))
-        skip("Parallel tests disabled explicitly.")
-
-    # Also test FORK in Linux
-    cat(" - Test FORKs:\n")
-
-    cl <- makeCluster(num_workers - 1L, "FORK")
-    invisible(clusterEvalQ(cl, RcppParallel::setThreadOptions(2L)))
-    registerDoParallel(cl)
-
-    # Filter excludes files that have "parallel" in them, otherwise it would be recursive
-    res <- test_dir("./", filter = "parallel", invert = TRUE)
-    expect_s3_class(res, "testthat_results")
-
-    stopCluster(cl)
-    stopImplicitCluster()
-    registerDoSEQ()
 })

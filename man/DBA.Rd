@@ -5,13 +5,31 @@
 \alias{dba}
 \title{DTW Barycenter Averaging}
 \usage{
-DBA(X, centroid = NULL, ..., window.size = NULL, norm = "L1",
-  max.iter = 20L, delta = 0.001, error.check = TRUE, trace = FALSE,
-  mv.ver = "by-variable")
+DBA(
+  X,
+  centroid = NULL,
+  ...,
+  window.size = NULL,
+  norm = "L1",
+  max.iter = 20L,
+  delta = 0.001,
+  error.check = TRUE,
+  trace = FALSE,
+  mv.ver = "by-variable"
+)
 
-dba(X, centroid = NULL, ..., window.size = NULL, norm = "L1",
-  max.iter = 20L, delta = 0.001, error.check = TRUE, trace = FALSE,
-  mv.ver = "by-variable")
+dba(
+  X,
+  centroid = NULL,
+  ...,
+  window.size = NULL,
+  norm = "L1",
+  max.iter = 20L,
+  delta = 0.001,
+  error.check = TRUE,
+  trace = FALSE,
+  mv.ver = "by-variable"
+)
 }
 \arguments{
 \item{X}{A matrix or data frame where each row is a time series, or a list where each element is
@@ -33,7 +51,7 @@ Euclidean distance.}
 
 \item{max.iter}{Maximum number of iterations allowed.}
 
-\item{delta}{At iteration \code{i}, if \code{all(abs(centroid_{i}} \code{-} \code{centroid_{i-1})} \code{< delta)},
+\item{delta}{At iteration \code{i}, if \verb{all(abs(centroid_\{i\}} \code{-} \verb{centroid_\{i-1\})} \verb{< delta)},
 convergence is assumed.}
 
 \item{error.check}{Logical indicating whether the function should try to detect inconsistencies
@@ -163,6 +181,6 @@ all.equal(newer_cent, new_cent, check.attributes = FALSE) # ignore names
 \references{
 Petitjean F, Ketterlin A and Gancarski P (2011). ``A global averaging method for dynamic time
 warping, with applications to clustering.'' \emph{Pattern Recognition}, \strong{44}(3), pp. 678 - 693. ISSN
-0031-3203, \url{http://dx.doi.org/10.1016/j.patcog.2010.09.013},
-\url{http://www.sciencedirect.com/science/article/pii/S003132031000453X}.
+0031-3203, \doi{10.1016/j.patcog.2010.09.013},
+\url{https://www.sciencedirect.com/science/article/pii/S003132031000453X}.
 }

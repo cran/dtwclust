@@ -47,9 +47,10 @@ the following considerations.
 \item If \code{control$symmetric} is \code{TRUE}, \code{centroids} is \code{NULL}, \emph{and} there is no argument
 \code{pairwise} that is \code{TRUE}, only half the distance matrix will be computed.
 \itemize{
-\item If the distance was registered in \link[proxy:pr_DB]{proxy::pr_DB} with \code{loop = TRUE} and more than one
-parallel worker is detected, the computation will be in parallel (using multi-processing with
-\code{\link[foreach:foreach]{foreach::foreach()}}), otherwise it will be sequential with \code{\link[proxy:dist]{proxy::dist()}}.
+\item If the distance was registered in \link[proxy:registry]{proxy::pr_DB} with \code{loop = TRUE}, the \pkg{bigmemory}
+package is available, and more than one parallel worker is detected, the computation will
+be in parallel (using multi-processing with \code{\link[foreach:foreach]{foreach::foreach()}}), otherwise it will be
+sequential with \code{\link[proxy:dist]{proxy::dist()}}.
 }
 \item The function always returns a \code{crossdist} matrix.
 }
@@ -60,7 +61,8 @@ what optimizations apply to each one.
 
 For distances \emph{not} included in \pkg{dtwclust}, the symmetric, parallel case mentioned above
 makes chunks for parallel workers, but they are not perfectly balanced, so some workers might
-finish before the others.
+finish before the others. You \strong{must} load or attach the \pkg{bigmemory} package for this to
+take place; see \code{\link[base:library]{base::library()}} or \code{\link[base:ns-load]{base::loadNamespace()}}.
 }
 
 \section{Centroid function}{
