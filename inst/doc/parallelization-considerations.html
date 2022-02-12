@@ -330,14 +330,22 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 
 
-<h1 class="title toc-ignore">Parallelization considerations for dtwclust</h1>
+<h1 class="title toc-ignore">Parallelization considerations for
+dtwclust</h1>
 <h4 class="author">Alexis Sarda-Espinosa</h4>
 
 
 
 <div id="introduction" class="section level1" number="1">
 <h1><span class="header-section-number">1</span> Introduction</h1>
-<p>Up until <code>dtwclust</code> version 5.1.0, parallelization solely relied on the <code>foreach</code> package, which mostly leverages multi-processing parallelization. Thanks to the <code>RcppParallel</code> package, several included functions can now also take advantage of multi-threading. However, this means that there are some considerations to keep in mind when using the package in order to make the most of either parallelization strategy. The TL;DR version is:</p>
+<p>Up until <code>dtwclust</code> version 5.1.0, parallelization solely
+relied on the <code>foreach</code> package, which mostly leverages
+multi-processing parallelization. Thanks to the
+<code>RcppParallel</code> package, several included functions can now
+also take advantage of multi-threading. However, this means that there
+are some considerations to keep in mind when using the package in order
+to make the most of either parallelization strategy. The TL;DR version
+is:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># load dtwclust</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dtwclust)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># load parallel</span></span>
@@ -356,7 +364,13 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 </div>
 <div id="overview" class="section level1" number="2">
 <h1><span class="header-section-number">2</span> Overview</h1>
-<p>Parallelization with <code>RcppParallel</code> uses multi-threading. All available threads are used by default, but this can be changed with <code>RcppParallel::setThreadOptions</code>. The maximum number of threads can be checked with <code>RcppParallel::defaultNumThreads</code> or <code>parallel::detectCores</code>. Parallelization with <code>foreach</code> requires a backend to be registered. Some packages that provide backends are:</p>
+<p>Parallelization with <code>RcppParallel</code> uses multi-threading.
+All available threads are used by default, but this can be changed with
+<code>RcppParallel::setThreadOptions</code>. The maximum number of
+threads can be checked with <code>RcppParallel::defaultNumThreads</code>
+or <code>parallel::detectCores</code>. Parallelization with
+<code>foreach</code> requires a backend to be registered. Some packages
+that provide backends are:</p>
 <ul>
 <li><code>doParallel</code></li>
 <li><code>doMC</code></li>
@@ -364,30 +378,49 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <li><code>doFuture</code></li>
 <li><code>doMPI</code></li>
 </ul>
-<p>See also <a href="https://CRAN.R-project.org/view=HighPerformanceComputing">this CRAN view</a>.</p>
-<p>The <code>dtwclust</code> functions that use <code>RcppParallel</code> are:</p>
+<p>See also <a href="https://CRAN.R-project.org/view=HighPerformanceComputing">this
+CRAN view</a>.</p>
+<p>The <code>dtwclust</code> functions that use
+<code>RcppParallel</code> are:</p>
 <ul>
 <li><code>dtw_lb</code> for <code>dtw.func = &quot;dtw_basic&quot;</code>.</li>
 <li><code>DBA</code>.</li>
 <li><code>sdtw_cent</code></li>
 <li>The distance calculations in <code>TADPole</code>.</li>
-<li>All distances registered with <code>proxy</code> by <code>dtwclust</code>.</li>
+<li>All distances registered with <code>proxy</code> by
+<code>dtwclust</code>.</li>
 </ul>
-<p>The <code>dtwclust</code> functions that use <code>foreach</code> are:</p>
+<p>The <code>dtwclust</code> functions that use <code>foreach</code>
+are:</p>
 <ul>
-<li><code>tsclust</code> for partitional and fuzzy clustering when either more than one <code>k</code> is specified in the call, or <code>nrep &gt; 1</code> in <code>partitional_control</code>.</li>
-<li>The distance calculations in <code>tsclust</code> for distances <em>not</em> included with <code>dtwclust</code> (more details below).</li>
-<li><code>TADPole</code> (also when called through <code>tsclust</code>) for multiple <code>dc</code> values.</li>
+<li><code>tsclust</code> for partitional and fuzzy clustering when
+either more than one <code>k</code> is specified in the call, or
+<code>nrep &gt; 1</code> in <code>partitional_control</code>.</li>
+<li>The distance calculations in <code>tsclust</code> for distances
+<em>not</em> included with <code>dtwclust</code> (more details
+below).</li>
+<li><code>TADPole</code> (also when called through <code>tsclust</code>)
+for multiple <code>dc</code> values.</li>
 <li><code>compare_clusterings</code> for each configuration.</li>
-<li>The “shape”, “dba” and “sdtw_cent” centroids in partitional clustering with <code>tsclust</code> if only one <code>k</code> is specified <em>and</em> <code>nrep = 1</code>.</li>
+<li>The “shape”, “dba” and “sdtw_cent” centroids in partitional
+clustering with <code>tsclust</code> if only one <code>k</code> is
+specified <em>and</em> <code>nrep = 1</code>.</li>
 <li><code>dtw_lb</code> for <code>dtw.func = &quot;dtw&quot;</code>.</li>
 </ul>
 </div>
 <div id="calculation-of-cross-distance-matrices" class="section level1" number="3">
-<h1><span class="header-section-number">3</span> Calculation of cross-distance matrices</h1>
+<h1><span class="header-section-number">3</span> Calculation of
+cross-distance matrices</h1>
 <div id="distances-included-in-dtwclust" class="section level2" number="3.1">
-<h2><span class="header-section-number">3.1</span> Distances included in <code>dtwclust</code></h2>
-<p>As mentioned above, all included distance functions that are registered with <code>proxy</code> rely on <code>RcppParallel</code>, so it is not necessary to explicitly create <code>parallel</code> workers for the calculation of cross-distance matrices. Nevertheless, creating workers will not prevent the distances to use multi-threading when it is appropriate (more on this later). Using <code>doParallel</code> as an example:</p>
+<h2><span class="header-section-number">3.1</span> Distances included in
+<code>dtwclust</code></h2>
+<p>As mentioned above, all included distance functions that are
+registered with <code>proxy</code> rely on <code>RcppParallel</code>, so
+it is not necessary to explicitly create <code>parallel</code> workers
+for the calculation of cross-distance matrices. Nevertheless, creating
+workers will not prevent the distances to use multi-threading when it is
+appropriate (more on this later). Using <code>doParallel</code> as an
+example:</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;uciCT&quot;</span>)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># doing either of the following will calculate the distance matrix with parallelization</span></span>
@@ -395,13 +428,21 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">registerDoSEQ</span>()</span>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span></code></pre></div>
-<p>If you want to <em>prevent</em> the use of multi-threading, you can do the following, but it will <strong>not</strong> fall back on <code>foreach</code>, so it will be always sequential:</p>
+<p>If you want to <em>prevent</em> the use of multi-threading, you can
+do the following, but it will <strong>not</strong> fall back on
+<code>foreach</code>, so it will be always sequential:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span></code></pre></div>
 </div>
 <div id="distances-not-included-with-dtwclust" class="section level2" number="3.2">
-<h2><span class="header-section-number">3.2</span> Distances not included with <code>dtwclust</code></h2>
-<p>As mentioned in its documentation, the <code>tsclustFamily</code> class (used by <code>tsclust</code>) has a distance function that wraps <code>proxy::dist</code> and, with some restrictions, can use parallelization even with distances not included with <code>dtwclust</code>. This depends on <code>foreach</code> for non-<code>dtwclust</code> distances. For example:</p>
+<h2><span class="header-section-number">3.2</span> Distances not
+included with <code>dtwclust</code></h2>
+<p>As mentioned in its documentation, the <code>tsclustFamily</code>
+class (used by <code>tsclust</code>) has a distance function that wraps
+<code>proxy::dist</code> and, with some restrictions, can use
+parallelization even with distances not included with
+<code>dtwclust</code>. This depends on <code>foreach</code> for
+non-<code>dtwclust</code> distances. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># instantiate the family and use the dtw::dtw function</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>fam <span class="ot">&lt;-</span> <span class="fu">new</span>(<span class="st">&quot;tsclustFamily&quot;</span>, <span class="at">dist =</span> <span class="st">&quot;dtw&quot;</span>)</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># register the parallel workers</span></span>
@@ -413,21 +454,34 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 </div>
 </div>
 <div id="parallelization-with-foreach" class="section level1" number="4">
-<h1><span class="header-section-number">4</span> Parallelization with <code>foreach</code></h1>
+<h1><span class="header-section-number">4</span> Parallelization with
+<code>foreach</code></h1>
 <div id="within-dtwclust" class="section level2" number="4.1">
-<h2><span class="header-section-number">4.1</span> Within <code>dtwclust</code></h2>
-<p>Internally, any call to <code>foreach</code> first performs the following checks:</p>
+<h2><span class="header-section-number">4.1</span> Within
+<code>dtwclust</code></h2>
+<p>Internally, any call to <code>foreach</code> first performs the
+following checks:</p>
 <ul>
 <li>Is there more than one parallel worker registered?
 <ul>
-<li>If yes, see if the number of threads has been specified with <code>RcppParallel::setThreadOptions</code>.
+<li>If yes, see if the number of threads has been specified with
+<code>RcppParallel::setThreadOptions</code>.
 <ul>
 <li>If it has been specified, change nothing and evaluate the call.</li>
-<li>If it has <em>not</em> been specified, configure each worker to use 1 thread, evaluate the call, and reset the number of threads in each worker afterwards.</li>
+<li>If it has <em>not</em> been specified, configure each worker to use
+1 thread, evaluate the call, and reset the number of threads in each
+worker afterwards.</li>
 </ul></li>
 </ul></li>
 </ul>
-<p>This assumes that, when there are parallel workers, there are enough of them to use the CPU fully, so it would not make sense for each worker to try to spawn multiple threads. When the user has not changed any <code>RcppParallel</code> configuration, the <code>dtwclust</code> functions will configure each worker to use 1 thread, but it is best to be explicit (as shown in the introduction) because <code>RcppParallel</code> saves its configuration in an environment variable, and the following could happen:</p>
+<p>This assumes that, when there are parallel workers, there are enough
+of them to use the CPU fully, so it would not make sense for each worker
+to try to spawn multiple threads. When the user has not changed any
+<code>RcppParallel</code> configuration, the <code>dtwclust</code>
+functions will configure each worker to use 1 thread, but it is best to
+be explicit (as shown in the introduction) because
+<code>RcppParallel</code> saves its configuration in an environment
+variable, and the following could happen:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># when this is *unset* (default), all threads are used</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>)</span></code></pre></div>
 <pre><code>#&gt; [1] &quot;&quot;</code></pre>
@@ -452,11 +506,22 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 #&gt; 
 #&gt; [[2]]
 #&gt; [1] &quot;2&quot;</code></pre>
-<p>In the last case above <code>dtwclust</code> would not change anything, so each worker would use 2 threads, resulting in 4 threads total. If the physical CPU only has 2 cores with 1 thread each, the previous would be suboptimal.</p>
-<p>There are cases where a setup like above might make sense. For example if the CPU has 4 cores with 2 threads per core, the following would not be suboptimal:</p>
+<p>In the last case above <code>dtwclust</code> would not change
+anything, so each worker would use 2 threads, resulting in 4 threads
+total. If the physical CPU only has 2 cores with 1 thread each, the
+previous would be suboptimal.</p>
+<p>There are cases where a setup like above might make sense. For
+example if the CPU has 4 cores with 2 threads per core, the following
+would not be suboptimal:</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(4L)</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">clusterEvalQ</span>(workers, RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(2L))</span></code></pre></div>
-<p>But, at least with <code>dtwclust</code>, it is unclear if this is advantageous when compared with <code>makeCluster(8L)</code>. Using <code>compare_clusterings</code> with many different configurations, where some configurations might take much longer, <em>might</em> benefit if each worker is not limited to sequential calculations. As a very informal example, consider the last piece of code from the documentation of <code>compare_clusterings</code>:</p>
+<p>But, at least with <code>dtwclust</code>, it is unclear if this is
+advantageous when compared with <code>makeCluster(8L)</code>. Using
+<code>compare_clusterings</code> with many different configurations,
+where some configurations might take much longer, <em>might</em> benefit
+if each worker is not limited to sequential calculations. As a very
+informal example, consider the last piece of code from the documentation
+of <code>compare_clusterings</code>:</p>
 <div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>comparison_partitional <span class="ot">&lt;-</span> <span class="fu">compare_clusterings</span>(CharTraj, <span class="at">types =</span> <span class="st">&quot;p&quot;</span>,</span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">configs =</span> p_cfgs,</span>
 <span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">seed =</span> 32903L, <span class="at">trace =</span> <span class="cn">TRUE</span>,</span>
@@ -464,18 +529,29 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">pick.clus =</span> pick_fun,</span>
 <span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">shuffle.configs =</span> <span class="cn">TRUE</span>,</span>
 <span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">return.objects =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
-<p>A purely sequential calculation (main process with 1 thread) took more than 20 minutes, and the following parallelization scenarios were tested on a machine with 4 cores and 1 thread per core (each scenario tested only once with R v3.5.0):</p>
+<p>A purely sequential calculation (main process with 1 thread) took
+more than 20 minutes, and the following parallelization scenarios were
+tested on a machine with 4 cores and 1 thread per core (each scenario
+tested only once with R v3.5.0):</p>
 <ul>
 <li>4 workers required 7.36 minutes to finish.</li>
-<li>2 workers and 2 threads per worker required 7.97 minutes to finish.</li>
-<li>2 workers and 4 threads per worker required 7.46 minutes to finish.</li>
+<li>2 workers and 2 threads per worker required 7.97 minutes to
+finish.</li>
+<li>2 workers and 4 threads per worker required 7.46 minutes to
+finish.</li>
 <li>No workers and 4 threads required 10.35 minutes to finish.</li>
 </ul>
-<p>The last scenario has the possible advantage that tracing is still possible.</p>
+<p>The last scenario has the possible advantage that tracing is still
+possible.</p>
 </div>
 <div id="outside-dtwclust" class="section level2" number="4.2">
-<h2><span class="header-section-number">4.2</span> Outside <code>dtwclust</code></h2>
-<p>If you are using <code>foreach</code> for parallelization, there’s a good chance you’re already using all available threads/cores from your CPU. If you are calling <code>dtwclust</code> functions inside a <code>foreach</code> evaluation, you should specify the number of threads:</p>
+<h2><span class="header-section-number">4.2</span> Outside
+<code>dtwclust</code></h2>
+<p>If you are using <code>foreach</code> for parallelization, there’s a
+good chance you’re already using all available threads/cores from your
+CPU. If you are calling <code>dtwclust</code> functions inside a
+<code>foreach</code> evaluation, you should specify the number of
+threads:</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">foreach</span>(...) <span class="sc">%dopar%</span> {</span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
 <span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># any code that uses dtwclust...</span></span>
