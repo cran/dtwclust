@@ -12,14 +12,14 @@ Description: Time series clustering along with optimized techniques related
     All included distance functions have custom loops optimized for the 
     calculation of cross-distance matrices, including parallelization support.
     Several cluster validity indices are included.
-Version: 5.5.8
+Version: 5.5.9
 Depends: R (>= 3.3.0), methods, proxy (>= 0.4-16), dtw
 Imports: parallel, stats, utils, clue, cluster, dplyr, flexclust,
         foreach, ggplot2, ggrepel, Matrix, RSpectra, Rcpp, RcppParallel
         (>= 4.4.0), reshape2, shiny, shinyjs
 LinkingTo: Rcpp, RcppArmadillo, RcppParallel, RcppThread
 Suggests: doParallel, knitr, rmarkdown, testthat
-Date: 2022-02-12
+Date: 2022-03-16
 Author: Alexis Sarda-Espinosa
 Maintainer: Alexis Sarda <alexis.sarda@gmail.com>
 BugReports: https://github.com/asardaes/dtwclust/issues
@@ -49,6 +49,6 @@ Collate: 'CENTROIDS-dba.R' 'CENTROIDS-pam.R' 'CENTROIDS-sdtw-cent.R'
         'UTILS-data.R' 'UTILS-expressions.R' 'UTILS-globals-internal.R'
         'UTILS-nccc.R' 'UTILS-reinterpolate.R' 'UTILS-rng.R'
         'UTILS-tslist.R' 'UTILS-utils.R' 'UTILS-zscore.R' 'pkg.R'
-Packaged: 2022-02-12 13:55:28 UTC; oso
+Packaged: 2022-03-16 21:09:06 UTC; oso
 Repository: CRAN
-Date/Publication: 2022-02-12 14:40:02 UTC
+Date/Publication: 2022-03-16 21:40:02 UTC
