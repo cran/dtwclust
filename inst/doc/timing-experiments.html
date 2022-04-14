@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', function(e) {
 
 
 
+
 <style type="text/css">
 /* for pandoc --citeproc since 2.11 */
 div.csl-bib-body { }
@@ -263,61 +264,53 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <div id="TOC">
 <ul>
-<li><a href="#introduction"><span class="toc-section-number">1</span>
-Introduction</a></li>
-<li><a href="#distance-experiments"><span class="toc-section-number">2</span> Distance experiments</a>
+<li><a href="#introduction" id="toc-introduction"><span class="toc-section-number">1</span> Introduction</a></li>
+<li><a href="#distance-experiments" id="toc-distance-experiments"><span class="toc-section-number">2</span> Distance experiments</a>
 <ul>
-<li><a href="#calculations-for-single-time-series"><span class="toc-section-number">2.1</span> Calculations for single
+<li><a href="#calculations-for-single-time-series" id="toc-calculations-for-single-time-series"><span class="toc-section-number">2.1</span> Calculations for single
 time-series</a>
 <ul>
-<li><a href="#dtw-lower-bounds"><span class="toc-section-number">2.1.1</span> DTW lower bounds</a></li>
-<li><a href="#shape-based-distance"><span class="toc-section-number">2.1.2</span> Shape-based distance</a></li>
-<li><a href="#dtw"><span class="toc-section-number">2.1.3</span>
-DTW</a></li>
-<li><a href="#soft-dtw"><span class="toc-section-number">2.1.4</span>
-Soft-DTW</a></li>
-<li><a href="#triangular-global-alignment-kernel"><span class="toc-section-number">2.1.5</span> Triangular global alignment
+<li><a href="#dtw-lower-bounds" id="toc-dtw-lower-bounds"><span class="toc-section-number">2.1.1</span> DTW lower bounds</a></li>
+<li><a href="#shape-based-distance" id="toc-shape-based-distance"><span class="toc-section-number">2.1.2</span> Shape-based distance</a></li>
+<li><a href="#dtw" id="toc-dtw"><span class="toc-section-number">2.1.3</span> DTW</a></li>
+<li><a href="#soft-dtw" id="toc-soft-dtw"><span class="toc-section-number">2.1.4</span> Soft-DTW</a></li>
+<li><a href="#triangular-global-alignment-kernel" id="toc-triangular-global-alignment-kernel"><span class="toc-section-number">2.1.5</span> Triangular global alignment
 kernel</a></li>
 </ul></li>
-<li><a href="#calculations-for-several-time-series"><span class="toc-section-number">2.2</span> Calculations for several
+<li><a href="#calculations-for-several-time-series" id="toc-calculations-for-several-time-series"><span class="toc-section-number">2.2</span> Calculations for several
 time-series</a>
 <ul>
-<li><a href="#dtw-lower-bounds-1"><span class="toc-section-number">2.2.1</span> DTW lower bounds</a></li>
-<li><a href="#shape-based-distance-1"><span class="toc-section-number">2.2.2</span> Shape-based distance</a></li>
-<li><a href="#dtw-1"><span class="toc-section-number">2.2.3</span>
-DTW</a></li>
-<li><a href="#soft-dtw-1"><span class="toc-section-number">2.2.4</span>
-Soft-DTW</a></li>
-<li><a href="#triangular-global-alignment-kernel-1"><span class="toc-section-number">2.2.5</span> Triangular global alignment
+<li><a href="#dtw-lower-bounds-1" id="toc-dtw-lower-bounds-1"><span class="toc-section-number">2.2.1</span> DTW lower bounds</a></li>
+<li><a href="#shape-based-distance-1" id="toc-shape-based-distance-1"><span class="toc-section-number">2.2.2</span> Shape-based distance</a></li>
+<li><a href="#dtw-1" id="toc-dtw-1"><span class="toc-section-number">2.2.3</span> DTW</a></li>
+<li><a href="#soft-dtw-1" id="toc-soft-dtw-1"><span class="toc-section-number">2.2.4</span> Soft-DTW</a></li>
+<li><a href="#triangular-global-alignment-kernel-1" id="toc-triangular-global-alignment-kernel-1"><span class="toc-section-number">2.2.5</span> Triangular global alignment
 kernel</a></li>
 </ul></li>
 </ul></li>
-<li><a href="#prototyping-experiments"><span class="toc-section-number">3</span> Prototyping experiments</a>
+<li><a href="#prototyping-experiments" id="toc-prototyping-experiments"><span class="toc-section-number">3</span> Prototyping experiments</a>
 <ul>
-<li><a href="#shape-extraction"><span class="toc-section-number">3.1</span> Shape extraction</a></li>
-<li><a href="#dtw-barycenter-averaging"><span class="toc-section-number">3.2</span> DTW barycenter averaging</a></li>
-<li><a href="#soft-dtw-centroid"><span class="toc-section-number">3.3</span> Soft-DTW centroid</a></li>
+<li><a href="#shape-extraction" id="toc-shape-extraction"><span class="toc-section-number">3.1</span> Shape extraction</a></li>
+<li><a href="#dtw-barycenter-averaging" id="toc-dtw-barycenter-averaging"><span class="toc-section-number">3.2</span> DTW barycenter averaging</a></li>
+<li><a href="#soft-dtw-centroid" id="toc-soft-dtw-centroid"><span class="toc-section-number">3.3</span> Soft-DTW centroid</a></li>
 </ul></li>
-<li><a href="#clustering-experiments"><span class="toc-section-number">4</span> Clustering experiments</a>
+<li><a href="#clustering-experiments" id="toc-clustering-experiments"><span class="toc-section-number">4</span> Clustering experiments</a>
 <ul>
-<li><a href="#tadpole"><span class="toc-section-number">4.1</span>
-TADPole</a></li>
-<li><a href="#dtw-special-cases"><span class="toc-section-number">4.2</span> DTW special cases</a>
+<li><a href="#tadpole" id="toc-tadpole"><span class="toc-section-number">4.1</span> TADPole</a></li>
+<li><a href="#dtw-special-cases" id="toc-dtw-special-cases"><span class="toc-section-number">4.2</span> DTW special cases</a>
 <ul>
-<li><a href="#pam-centroids"><span class="toc-section-number">4.2.1</span> PAM centroids</a></li>
-<li><a href="#dba-centroids"><span class="toc-section-number">4.2.2</span> DBA centroids</a></li>
+<li><a href="#pam-centroids" id="toc-pam-centroids"><span class="toc-section-number">4.2.1</span> PAM centroids</a></li>
+<li><a href="#dba-centroids" id="toc-dba-centroids"><span class="toc-section-number">4.2.2</span> DBA centroids</a></li>
 </ul></li>
-<li><a href="#effect-of-k-on-pam-centroids-with-sparse-cross-distance-matrices"><span class="toc-section-number">4.3</span> Effect of <code>k</code> on PAM
+<li><a href="#effect-of-k-on-pam-centroids-with-sparse-cross-distance-matrices" id="toc-effect-of-k-on-pam-centroids-with-sparse-cross-distance-matrices"><span class="toc-section-number">4.3</span> Effect of <code>k</code> on PAM
 centroids with sparse cross-distance matrices</a>
 <ul>
-<li><a href="#non-symmetric"><span class="toc-section-number">4.3.1</span> Non-symmetric</a></li>
-<li><a href="#symmetric"><span class="toc-section-number">4.3.2</span>
-Symmetric</a></li>
-<li><a href="#remarks"><span class="toc-section-number">4.3.3</span>
-Remarks</a></li>
+<li><a href="#non-symmetric" id="toc-non-symmetric"><span class="toc-section-number">4.3.1</span> Non-symmetric</a></li>
+<li><a href="#symmetric" id="toc-symmetric"><span class="toc-section-number">4.3.2</span> Symmetric</a></li>
+<li><a href="#remarks" id="toc-remarks"><span class="toc-section-number">4.3.3</span> Remarks</a></li>
 </ul></li>
 </ul></li>
-<li><a href="#references">References</a></li>
+<li><a href="#references" id="toc-references">References</a></li>
 </ul>
 </div>
 
