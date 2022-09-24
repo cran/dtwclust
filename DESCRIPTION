@@ -12,14 +12,14 @@ Description: Time series clustering along with optimized techniques related
     All included distance functions have custom loops optimized for the 
     calculation of cross-distance matrices, including parallelization support.
     Several cluster validity indices are included.
-Version: 5.5.10
+Version: 5.5.11
 Depends: R (>= 3.3.0), methods, proxy (>= 0.4-16), dtw
 Imports: parallel, stats, utils, clue, cluster, dplyr, flexclust,
-        foreach, ggplot2, ggrepel, Matrix, RSpectra, Rcpp, RcppParallel
-        (>= 4.4.0), reshape2, shiny, shinyjs
+        foreach, ggplot2, ggrepel, Matrix (>= 1.5-0), RSpectra, Rcpp,
+        RcppParallel (>= 4.4.0), reshape2, shiny, shinyjs
 LinkingTo: Rcpp, RcppArmadillo, RcppParallel, RcppThread
 Suggests: doParallel, knitr, rmarkdown, testthat
-Date: 2022-04-15
+Date: 2022-09-24
 Author: Alexis Sarda-Espinosa
 Maintainer: Alexis Sarda <alexis.sarda@gmail.com>
 BugReports: https://github.com/asardaes/dtwclust/issues
@@ -29,7 +29,7 @@ NeedsCompilation: yes
 SystemRequirements: C++11, GNU make
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.1
 VignetteBuilder: knitr
 Collate: 'CENTROIDS-dba.R' 'CENTROIDS-pam.R' 'CENTROIDS-sdtw-cent.R'
         'CENTROIDS-shape-extraction.R' 'CLUSTERING-all-cent2.R'
@@ -49,6 +49,6 @@ Collate: 'CENTROIDS-dba.R' 'CENTROIDS-pam.R' 'CENTROIDS-sdtw-cent.R'
         'UTILS-data.R' 'UTILS-expressions.R' 'UTILS-globals-internal.R'
         'UTILS-nccc.R' 'UTILS-reinterpolate.R' 'UTILS-rng.R'
         'UTILS-tslist.R' 'UTILS-utils.R' 'UTILS-zscore.R' 'pkg.R'
-Packaged: 2022-04-14 23:43:19 UTC; oso
+Packaged: 2022-09-24 16:28:59 UTC; oso
 Repository: CRAN
-Date/Publication: 2022-04-15 00:02:28 UTC
+Date/Publication: 2022-09-24 17:00:02 UTC
