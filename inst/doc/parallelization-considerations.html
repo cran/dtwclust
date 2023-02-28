@@ -353,20 +353,20 @@ also take advantage of multi-threading. However, this means that there
 are some considerations to keep in mind when using the package in order
 to make the most of either parallelization strategy. The TL;DR version
 is:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># load dtwclust</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dtwclust)</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># load parallel</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(parallel)</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># create multi-process workers</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(<span class="fu">detectCores</span>())</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># load dtwclust in each one, and make them use 1 thread per worker</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">invisible</span>(<span class="fu">clusterEvalQ</span>(workers, {</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">library</span>(dtwclust)</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>}))</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># register your workers, e.g. with doParallel</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">require</span>(doParallel)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="fu">registerDoParallel</span>(workers)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># load dtwclust</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(dtwclust)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co"># load parallel</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">library</span>(parallel)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="co"># create multi-process workers</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(<span class="fu">detectCores</span>())</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="co"># load dtwclust in each one, and make them use 1 thread per worker</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="fu">invisible</span>(<span class="fu">clusterEvalQ</span>(workers, {</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>    <span class="fu">library</span>(dtwclust)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>    RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>}))</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="co"># register your workers, e.g. with doParallel</span></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="fu">require</span>(doParallel)</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="fu">registerDoParallel</span>(workers)</span></code></pre></div>
 <p>For more details, continue reading.</p>
 </div>
 <div id="overview" class="section level1" number="2">
@@ -428,18 +428,18 @@ for the calculation of cross-distance matrices. Nevertheless, creating
 workers will not prevent the distances to use multi-threading when it is
 appropriate (more on this later). Using <code>doParallel</code> as an
 example:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;uciCT&quot;</span>)</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># doing either of the following will calculate the distance matrix with parallelization</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">registerDoParallel</span>(workers)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">registerDoSEQ</span>()</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;uciCT&quot;</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co"># doing either of the following will calculate the distance matrix with parallelization</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="fu">registerDoParallel</span>(workers)</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="fu">registerDoSEQ</span>()</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span></code></pre></div>
 <p>If you want to <em>prevent</em> the use of multi-threading, you can
 do the following, but it will <strong>not</strong> fall back on
 <code>foreach</code>, so it will be always sequential:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> proxy<span class="sc">::</span><span class="fu">dist</span>(CharTraj, <span class="at">method =</span> <span class="st">&quot;dtw_basic&quot;</span>)</span></code></pre></div>
 </div>
 <div id="distances-not-included-with-dtwclust" class="section level2" number="3.2">
 <h2><span class="header-section-number">3.2</span> Distances not
@@ -450,14 +450,14 @@ class (used by <code>tsclust</code>) has a distance function that wraps
 parallelization even with distances not included with
 <code>dtwclust</code>. This depends on <code>foreach</code> for
 non-<code>dtwclust</code> distances. For example:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># instantiate the family and use the dtw::dtw function</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>fam <span class="ot">&lt;-</span> <span class="fu">new</span>(<span class="st">&quot;tsclustFamily&quot;</span>, <span class="at">dist =</span> <span class="st">&quot;dtw&quot;</span>)</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># register the parallel workers</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">registerDoParallel</span>(workers)</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co"># calculate distance matrix</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> fam<span class="sc">@</span><span class="fu">dist</span>(CharTraj)</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co"># go back to sequential calculations</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="fu">registerDoSEQ</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># instantiate the family and use the dtw::dtw function</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>fam <span class="ot">&lt;-</span> <span class="fu">new</span>(<span class="st">&quot;tsclustFamily&quot;</span>, <span class="at">dist =</span> <span class="st">&quot;dtw&quot;</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co"># register the parallel workers</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">registerDoParallel</span>(workers)</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co"># calculate distance matrix</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>distmat <span class="ot">&lt;-</span> fam<span class="sc">@</span><span class="fu">dist</span>(CharTraj)</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co"># go back to sequential calculations</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="fu">registerDoSEQ</span>()</span></code></pre></div>
 </div>
 </div>
 <div id="parallelization-with-foreach" class="section level1" number="4">
@@ -489,25 +489,25 @@ functions will configure each worker to use 1 thread, but it is best to
 be explicit (as shown in the introduction) because
 <code>RcppParallel</code> saves its configuration in an environment
 variable, and the following could happen:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># when this is *unset* (default), all threads are used</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># when this is *unset* (default), all threads are used</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>)</span></code></pre></div>
 <pre><code>#&gt; [1] &quot;&quot;</code></pre>
-<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># parallel workers would seem the same,</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="co"># so dtwclust would try to configure 1 thread per worker</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(2L)</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">clusterEvalQ</span>(workers, <span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>))</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># parallel workers would seem the same,</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co"># so dtwclust would try to configure 1 thread per worker</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(2L)</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="fu">clusterEvalQ</span>(workers, <span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>))</span></code></pre></div>
 <pre><code>#&gt; [[1]]
 #&gt; [1] &quot;&quot;
 #&gt; 
 #&gt; [[2]]
 #&gt; [1] &quot;&quot;</code></pre>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># however, the environment variables get inherited by the workers upon creation</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">stopCluster</span>(workers)</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(2L)</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>) <span class="co"># for main process</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># however, the environment variables get inherited by the workers upon creation</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">stopCluster</span>(workers)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(2L)</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>) <span class="co"># for main process</span></span></code></pre></div>
 <pre><code>#&gt; [1] &quot;2&quot;</code></pre>
-<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(2L)</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">clusterEvalQ</span>(workers, <span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>)) <span class="co"># for each worker</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(2L)</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="fu">clusterEvalQ</span>(workers, <span class="fu">Sys.getenv</span>(<span class="st">&quot;RCPP_PARALLEL_NUM_THREADS&quot;</span>)) <span class="co"># for each worker</span></span></code></pre></div>
 <pre><code>#&gt; [[1]]
 #&gt; [1] &quot;2&quot;
 #&gt; 
@@ -520,8 +520,8 @@ previous would be suboptimal.</p>
 <p>There are cases where a setup like above might make sense. For
 example if the CPU has 4 cores with 2 threads per core, the following
 would not be suboptimal:</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(4L)</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">clusterEvalQ</span>(workers, RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(2L))</span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>workers <span class="ot">&lt;-</span> <span class="fu">makeCluster</span>(4L)</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="fu">clusterEvalQ</span>(workers, RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(2L))</span></code></pre></div>
 <p>But, at least with <code>dtwclust</code>, it is unclear if this is
 advantageous when compared with <code>makeCluster(8L)</code>. Using
 <code>compare_clusterings</code> with many different configurations,
@@ -529,13 +529,13 @@ where some configurations might take much longer, <em>might</em> benefit
 if each worker is not limited to sequential calculations. As a very
 informal example, consider the last piece of code from the documentation
 of <code>compare_clusterings</code>:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>comparison_partitional <span class="ot">&lt;-</span> <span class="fu">compare_clusterings</span>(CharTraj, <span class="at">types =</span> <span class="st">&quot;p&quot;</span>,</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">configs =</span> p_cfgs,</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">seed =</span> 32903L, <span class="at">trace =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">score.clus =</span> score_fun,</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">pick.clus =</span> pick_fun,</span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">shuffle.configs =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>                                              <span class="at">return.objects =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>comparison_partitional <span class="ot">&lt;-</span> <span class="fu">compare_clusterings</span>(CharTraj, <span class="at">types =</span> <span class="st">&quot;p&quot;</span>,</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>                                              <span class="at">configs =</span> p_cfgs,</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>                                              <span class="at">seed =</span> 32903L, <span class="at">trace =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>                                              <span class="at">score.clus =</span> score_fun,</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>                                              <span class="at">pick.clus =</span> pick_fun,</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>                                              <span class="at">shuffle.configs =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>                                              <span class="at">return.objects =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 <p>A purely sequential calculation (main process with 1 thread) took
 more than 20 minutes, and the following parallelization scenarios were
 tested on a machine with 4 cores and 1 thread per core (each scenario
@@ -559,10 +559,10 @@ good chance you’re already using all available threads/cores from your
 CPU. If you are calling <code>dtwclust</code> functions inside a
 <code>foreach</code> evaluation, you should specify the number of
 threads:</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">foreach</span>(...) <span class="sc">%dopar%</span> {</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># any code that uses dtwclust...</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">foreach</span>(...) <span class="sc">%dopar%</span> {</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>    RcppParallel<span class="sc">::</span><span class="fu">setThreadOptions</span>(1L)</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>    <span class="co"># any code that uses dtwclust...</span></span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>}</span></code></pre></div>
 </div>
 </div>
 
