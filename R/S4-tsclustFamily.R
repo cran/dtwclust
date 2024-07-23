@@ -31,7 +31,6 @@
 #'   - If `control$distmat` is *not* `NULL`, the function will try to subset it.
 #'   - If `control$symmetric` is `TRUE`, `centroids` is `NULL`, *and* there is no argument
 #'     `pairwise` that is `TRUE`, only half the distance matrix will be computed.
-#'   - The function always returns a `crossdist` matrix.
 #'
 #'   Note that all distances implemented as part of \pkg{dtwclust} have custom proxy loops that use
 #'   multi-threading independently of \pkg{foreach}, so see their respective documentation to see
@@ -120,39 +119,40 @@ f_cluster <- function(distmat, m) {
 # Custom initialize
 # ==================================================================================================
 
+#' @importFrom methods as
 #' @importFrom methods callNextMethod
 #' @importFrom methods initialize
 #' @importFrom methods setMethod
+#' @importFrom rlang enexprs
+#' @importFrom rlang env_bind
 #'
 setMethod("initialize", "tsclustFamily",
           function(.Object, dist, allcent, ..., control = list(), fuzzy = FALSE) {
-              dots <- list(...)
-              dots$.Object <- .Object
+              rlang::env_bind(environment(), ...)
+              dots <- rlang::enexprs(...)
+              dots$.Object <- quote(.Object)
               if (!missing(dist)) {
-                  if (is.character(dist))
-                      dots$dist <- ddist2(dist, control)
-                  else
-                      dots$dist <- dist
+                  if (is.character(dist)) dist <- ddist2(dist, control)
+                  dots$dist <- quote(dist)
               }
               if (fuzzy) {
-                  dots$cluster <- f_cluster
+                  dots$cluster <- quote(f_cluster)
                   if (!missing(allcent) && is.character(allcent))
                       allcent <- match.arg(allcent, c("fcm", "fcmdd"))
               }
               if (!missing(allcent)) {
                   if (is.character(allcent)) {
                       if (allcent %in% c("pam", "fcmdd")) {
-                          if (!is.null(control$distmat) && !inherits(control$distmat, "Distmat"))
-                              control$distmat <- Distmat$new( # see S4-Distmat.R
-                                  distmat = base::as.matrix(control$distmat)
-                              )
+                          if (!is.null(control$distmat) && !inherits(control$distmat, "Distmat")) {
+                              control$distmat <- methods::as(control$distmat, "Distmat")
+                          }
                       }
-                      dots$allcent <- all_cent2(allcent, control)
+                      allcent <- all_cent2(allcent, control)
                   }
-                  else if (is.function(allcent))
-                      dots$allcent <- allcent
-                  else
+                  else if (!is.function(allcent)) {
                       stop("Centroid definition must be either a function or a character")
+                  }
+                  dots$allcent <- quote(allcent)
               }
-              do.call(methods::callNextMethod, dots, TRUE)
+              do.call(methods::callNextMethod, dots)
           })

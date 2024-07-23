@@ -92,7 +92,8 @@ setMethod(`[`, "Distmat", function(x, i, j, ..., drop = TRUE) {
         if (identical(dim(dm), dim(x$distmat))) attributes(dm) <- attributes(x$distmat)
     }
     # return
-    dm
+    as.matrix(dm)
 })
 
+#' @exportS3Method base::dim
 dim.Distmat <- function(x) { dim(x$distmat) } # nocov

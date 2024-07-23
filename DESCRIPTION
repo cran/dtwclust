@@ -12,14 +12,14 @@ Description: Time series clustering along with optimized techniques related
     All included distance functions have custom loops optimized for the 
     calculation of cross-distance matrices, including parallelization support.
     Several cluster validity indices are included.
-Version: 5.5.12
+Version: 6.0.0
 Depends: R (>= 3.3.0), methods, proxy (>= 0.4-16), dtw
 Imports: parallel, stats, utils, clue, cluster, dplyr, flexclust,
-        foreach, ggplot2, ggrepel, Matrix (>= 1.5-0), RSpectra, Rcpp,
-        RcppParallel (>= 4.4.0), reshape2, shiny, shinyjs
+        foreach, ggplot2, ggrepel, rlang, Matrix (>= 1.5-0), RSpectra,
+        Rcpp, RcppParallel (>= 4.4.0), reshape2, shiny, shinyjs
 LinkingTo: Rcpp, RcppArmadillo, RcppParallel, RcppThread
-Suggests: doParallel, knitr, rmarkdown, testthat
-Date: 2023-02-28
+Suggests: doParallel, iterators, knitr, rmarkdown, testthat
+Date: 2024-07-20
 Author: Alexis Sarda-Espinosa
 Maintainer: Alexis Sarda <alexis.sarda@gmail.com>
 BugReports: https://github.com/asardaes/dtwclust/issues
@@ -29,8 +29,9 @@ NeedsCompilation: yes
 SystemRequirements: GNU make
 Encoding: UTF-8
 LazyData: TRUE
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.1
 VignetteBuilder: knitr
+Config/testthat/edition: 3
 Collate: 'CENTROIDS-dba.R' 'CENTROIDS-pam.R' 'CENTROIDS-sdtw-cent.R'
         'CENTROIDS-shape-extraction.R' 'CLUSTERING-all-cent2.R'
         'CLUSTERING-compare-clusterings.R'
@@ -41,7 +42,8 @@ Collate: 'CENTROIDS-dba.R' 'CENTROIDS-pam.R' 'CENTROIDS-sdtw-cent.R'
         'DISTANCES-dtw-basic.R' 'DISTANCES-dtw-lb.R' 'DISTANCES-dtw2.R'
         'DISTANCES-gak.R' 'DISTANCES-lb-improved.R'
         'DISTANCES-lb-keogh.R' 'DISTANCES-sbd.R' 'DISTANCES-sdtw.R'
-        'GENERICS-cvi.R' 'S4-Distmat.R' 'S4-PairTracker.R'
+        'GENERICS-cvi.R' 'RD-helpers.R' 'S4-Distmat.R'
+        'S4-DistmatLowerTriangular.R' 'S4-PairTracker.R'
         'S4-SparseDistmat.R' 'S4-tsclustFamily.R'
         'S4-TSClusters-classes.R' 'S4-TSClusters-methods.R'
         'SHINY-interactive-clustering.R' 'SHINY-ssdtwclust.R'
@@ -49,6 +51,6 @@ Collate: 'CENTROIDS-dba.R' 'CENTROIDS-pam.R' 'CENTROIDS-sdtw-cent.R'
         'UTILS-data.R' 'UTILS-expressions.R' 'UTILS-globals-internal.R'
         'UTILS-nccc.R' 'UTILS-reinterpolate.R' 'UTILS-rng.R'
         'UTILS-tslist.R' 'UTILS-utils.R' 'UTILS-zscore.R' 'pkg.R'
-Packaged: 2023-02-28 20:03:53 UTC; oso
+Packaged: 2024-07-20 11:27:44 UTC; oso
 Repository: CRAN
-Date/Publication: 2023-02-28 20:52:29 UTC
+Date/Publication: 2024-07-23 08:50:02 UTC

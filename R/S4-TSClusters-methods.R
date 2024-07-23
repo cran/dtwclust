@@ -19,6 +19,7 @@ NULL
 #' @importFrom methods callNextMethod
 #' @importFrom methods initialize
 #' @importFrom methods new
+#' @importFrom rlang enexprs
 #'
 #' @param .Object A `TSClusters` prototype. You *shouldn't* use this, see Initialize section and the
 #'   examples.
@@ -73,29 +74,40 @@ NULL
 #'
 setMethod("initialize", "TSClusters", function(.Object, ..., override.family = TRUE) {
     tic <- proc.time()
-    dots <- list(...)
+    parent_dots <- list(...)
+    dots <- rlang::enexprs(...)
+    dots$.Object <- quote(.Object)
+
     # some minor checks
-    if (!is.null(dots$datalist)) dots$datalist <- tslist(dots$datalist)
-    if (!is.null(dots$centroids)) dots$centroids <- tslist(dots$centroids)
+    if (!is.null(parent_dots$datalist)) {
+        datalist <- tslist(parent_dots$datalist)
+        dots$datalist <- quote(datalist)
+    }
+    if (!is.null(parent_dots$centroids)) {
+        centroids <- tslist(parent_dots$centroids)
+        dots$centroids <- quote(centroids)
+    }
+
     # avoid infinite recursion (see https://bugs.r-project.org/bugzilla/show_bug.cgi?id=16629)
-    if (is.null(dots$call)) {
+    if (is.null(parent_dots$call)) {
         call <- match.call()
     }
     else {
-        call <- dots$call
+        call <- parent_dots$call
         dots$call <- NULL
     }
+
     # apparently a non-NULL value is needed if proc_time class is virtual?
-    if (is.null(dots$proctime)) {
-        dots$proctime <- tic
+    if (is.null(parent_dots$proctime)) {
+        dots$proctime <- quote(tic)
         fill_proctime <- TRUE
     }
     else {
         fill_proctime <- FALSE # nocov
     }
 
-    # no quoted_call here, apparently do.call evaluates as parent and callNextMethod needs that
-    .Object <- do.call(methods::callNextMethod, enlist(.Object = .Object, dots = dots), TRUE)
+    # no shenanigans here, apparently do.call evaluates as parent and callNextMethod needs that
+    .Object <- do.call(methods::callNextMethod, dots)
     .Object@call <- call
 
     # some "defaults"
@@ -455,7 +467,7 @@ setMethod("predict", methods::signature(object = "TSClusters"), predict.TSCluste
 #' @importFrom dplyr bind_rows
 #' @importFrom dplyr sample_n
 #' @importFrom methods S3Part
-#' @importFrom ggplot2 aes_string
+#' @importFrom ggplot2 aes
 #' @importFrom ggplot2 facet_wrap
 #' @importFrom ggplot2 geom_line
 #' @importFrom ggplot2 geom_vline
@@ -466,6 +478,7 @@ setMethod("predict", methods::signature(object = "TSClusters"), predict.TSCluste
 #' @importFrom ggrepel geom_label_repel
 #' @importFrom graphics plot
 #' @importFrom reshape2 melt
+#' @importFrom rlang .data
 #'
 #' @param y Ignored.
 #' @param clus A numeric vector indicating which clusters to plot.
@@ -489,8 +502,8 @@ setMethod("predict", methods::signature(object = "TSClusters"), predict.TSCluste
 #'   via the ellipsis (`...`).
 #'
 #'   Otherwise, the function plots the time series of each cluster along with the obtained centroid.
-#'   The default values for cluster centroids are: `linetype = "dashed"`, `size = 1.5`, `colour =
-#'   "black"`, `alpha = 0.5`. You can change this by means of the ellipsis (`...`).
+#'   The default values for cluster centroids are: `linetype = "dashed"`, `linewidth = 1.5`,
+#'   `colour = "black"`, `alpha = 0.5`. You can change this by means of the ellipsis (`...`).
 #'
 #'   You can choose what to plot with the `type` parameter. Possible options are:
 #'
@@ -504,7 +517,7 @@ setMethod("predict", methods::signature(object = "TSClusters"), predict.TSCluste
 #'   arguments for [ggrepel::geom_label_repel()] and will be passed along. The following are
 #'   set by the plot method if they are not provided:
 #'
-#'   - `"mapping"`: set to [aes_string][ggplot2::aes_string](x = "t", y = "value", label = "label")
+#'   - `"mapping"`: set to [aes][ggplot2::aes](x = t, y = value, label = label)
 #'   - `"data"`: a data frame with as many rows as series in the `datalist` and 4 columns:
 #'     + `t`: x coordinate of the label for each series.
 #'     + `value`: y coordinate of the label for each series.
@@ -638,8 +651,8 @@ plot.TSClusters <- function(x, y, ...,
                       })
 
     # bind
-    dfm <- data.frame(dfm, do.call(rbind, dfm_tcc, TRUE))
-    dfcm <- data.frame(dfcm, do.call(rbind, dfcm_tc, TRUE))
+    dfm <- data.frame(dfm, call_rbind(dfm_tcc))
+    dfcm <- data.frame(dfcm, call_rbind(dfcm_tc))
     # make factor
     dfm$cl <- factor(dfm$cl)
     dfcm$cl <- factor(dfcm$cl)
@@ -651,16 +664,16 @@ plot.TSClusters <- function(x, y, ...,
                                      value = numeric(),
                                      cl = factor(),
                                      color = factor()),
-                          ggplot2::aes_string(x = "t",
-                                              y = "value",
-                                              group = "L1"))
+                          ggplot2::aes(x = .data$t,
+                                       y = .data$value,
+                                       group = .data$L1))
 
     # add centroids first if appropriate, so that they are at the very back
     if (type %in% c("sc", "centroids")) {
         if (length(list(...)) == 0L)
             gg <- gg + ggplot2::geom_line(data = dfcm[dfcm$cl %in% clus, ],
                                           linetype = "dashed",
-                                          size = 1.5,
+                                          linewidth = 1.5,
                                           colour = "black",
                                           alpha = 0.5)
         else
@@ -669,7 +682,8 @@ plot.TSClusters <- function(x, y, ...,
 
     # add series next if appropriate
     if (type %in% c("sc", "series"))
-        gg <- gg + ggplot2::geom_line(data = dfm[dfm$cl %in% clus, ], aes_string(colour = "color"))
+        gg <- gg + ggplot2::geom_line(data = dfm[dfm$cl %in% clus, ],
+                                      ggplot2::aes(colour = .data$color))
 
     # add vertical lines to separate variables of multivariate series
     if (mv) {
@@ -677,13 +691,13 @@ plot.TSClusters <- function(x, y, ...,
                              vbreaks = as.numeric(1L:(nc - 1L) %o% sapply(centroids, NROW)))
         gg <- gg + ggplot2::geom_vline(data = ggdata[ggdata$cl %in% clus, , drop = FALSE],
                                        colour = "black", linetype = "longdash",
-                                       ggplot2::aes_string(xintercept = "vbreaks"))
+                                       ggplot2::aes(xintercept = .data$vbreaks))
     }
 
     # add labels
     if (type %in% c("sc", "series") && is.list(labels)) {
         if (is.null(labels$mapping))
-            labels$mapping <- ggplot2::aes_string(x = "t", y = "value", label = "label")
+            labels$mapping <- ggplot2::aes(x = .data$t, y = .data$value, label = .data$label)
         if (is.null(labels$data) && !is.null(names(x@datalist))) {
             label <- names(x@datalist)[x@cluster %in% clus]
             label <- split(label, x@cluster[x@cluster %in% clus])
@@ -713,7 +727,7 @@ plot.TSClusters <- function(x, y, ...,
         }
         labels$data <- labels$data[labels$data$cl %in% clus,]
         labels$inherit.aes <- FALSE
-        gg <- gg + do.call(ggrepel::geom_label_repel, labels, TRUE)
+        gg <- gg + do_call(ggrepel::geom_label_repel, labels)
     }
 
     # add facets, remove legend, apply kinda black-white theme
@@ -745,6 +759,7 @@ setMethod("plot", methods::signature(x = "TSClusters", y = "missing"), plot.TSCl
 # ==================================================================================================
 
 #' @importFrom cluster silhouette
+#' @importFrom methods as
 #'
 cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
     type <- match.arg(type, several.ok = TRUE,
@@ -793,7 +808,7 @@ cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
                     distmat <- quoted_call(
                         a@family@dist,
                         x = a@datalist,
-                        centroids = NULL,
+                        centroids = if (isTRUE(a@control$symmetric)) NULL else a@datalist,
                         dots = a@args$dist
                     )
                 }
@@ -819,14 +834,18 @@ cvi_TSClusters <- function(a, b = NULL, type = "valid", ...) {
             distcent <- quoted_call(
                 a@family@dist,
                 x = a@centroids,
-                centroids = NULL,
+                centroids = if (isTRUE(a@control$symmetric)) NULL else a@centroids,
                 dots = a@args$dist
             )
-            distcent <- base::as.matrix(distcent)
-            if (!base::isSymmetric(distcent))
-                warning("Internal CVIs: centroids' cross-distance matrix is NOT symmetric, ",
-                        "which can be problematic for:",
-                        "\n\tDB\tDB*")
+            if (base::is.matrix(distcent)) {
+                if (!base::isSymmetric(unclass(distcent)))
+                    warning("Internal CVIs: centroids' cross-distance matrix is NOT symmetric, ",
+                            "which can be problematic for:",
+                            "\n\tDB\tDB*")
+            }
+            else {
+                distcent <- methods::as(distcent, "Distmat")
+            }
         }
 
         # calculate global centroids if needed
@@ -935,6 +954,7 @@ setMethod("cvi", methods::signature(a = "HierarchicalTSClusters"), cvi_TSCluster
 #' @rdname cvi
 #' @aliases cvi,FuzzyTSClusters
 #' @exportMethod cvi
+#' @importFrom methods as
 #' @importFrom methods signature
 #'
 setMethod(
@@ -994,8 +1014,10 @@ setMethod(
             if (any(type %in% c("K", "T", "PBMF"))) {
                 distcent <- quoted_call(a@family@dist,
                                         x = a@centroids,
-                                        centroids = NULL,
+                                        centroids = if (a@control$symmetric) NULL else a@centroids,
                                         dots = a@args$dist)
+
+                if (inherits(distcent, "dist")) distcent <- methods::as(distcent, "Distmat")
             }
             # distance between series and centroids
             if (any(type %in% c("K", "T", "SC", "PBMF"))) {

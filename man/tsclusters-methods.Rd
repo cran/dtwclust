@@ -158,7 +158,8 @@ dendrogram is plotted by default; you can pass any extra parameters to \code{\li
 via the ellipsis (\code{...}).
 
 Otherwise, the function plots the time series of each cluster along with the obtained centroid.
-The default values for cluster centroids are: \code{linetype = "dashed"}, \code{size = 1.5}, \code{colour = "black"}, \code{alpha = 0.5}. You can change this by means of the ellipsis (\code{...}).
+The default values for cluster centroids are: \code{linetype = "dashed"}, \code{linewidth = 1.5},
+\code{colour = "black"}, \code{alpha = 0.5}. You can change this by means of the ellipsis (\code{...}).
 
 You can choose what to plot with the \code{type} parameter. Possible options are:
 \itemize{
@@ -173,7 +174,7 @@ the series and at least provide an empty list in the \code{labels} argument. Thi
 arguments for \code{\link[ggrepel:geom_text_repel]{ggrepel::geom_label_repel()}} and will be passed along. The following are
 set by the plot method if they are not provided:
 \itemize{
-\item \code{"mapping"}: set to \link[ggplot2:aes_]{aes_string}(x = "t", y = "value", label = "label")
+\item \code{"mapping"}: set to \link[ggplot2:aes]{aes}(x = t, y = value, label = label)
 \item \code{"data"}: a data frame with as many rows as series in the \code{datalist} and 4 columns:
 \itemize{
 \item \code{t}: x coordinate of the label for each series.

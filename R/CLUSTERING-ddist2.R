@@ -150,7 +150,7 @@ ddist2 <- function(distance, control) {
     warned <- FALSE
 
     # variables/functions from the parent environments that should be exported
-    export <- c("check_consistency", "quoted_call", "parallel_symmetric", "distance", "dist_entry")
+    export <- c("check_consistency", "do_call", "quoted_call", "parallel_symmetric", "distance", "dist_entry")
 
     ret <- function(result, ...) {
         ret <- structure(result, method = toupper(distance), ...)
@@ -179,16 +179,19 @@ ddist2 <- function(distance, control) {
 
         if (!dist_entry$loop) {
             # CUSTOM LOOP, LET THEM HANDLE OPTIMIZATIONS
-            dm <- base::as.matrix(quoted_call(
+            dm <- quoted_call(
                 proxy::dist, x = x, y = centroids, method = distance, dots = dots
-            ))
+            )
 
             if (isTRUE(dots$pairwise)) {
                 dim(dm) <- NULL
                 return(ret(dm, class = "pairdist"))
             }
+            else if (inherits(dm, "dist")) {
+                return(ret(dm))
+            }
             else {
-                return(ret(dm, class = "crossdist"))
+                return(ret(base::as.matrix(dm), class = "crossdist"))
             }
         }
 
@@ -219,7 +222,7 @@ ddist2 <- function(distance, control) {
                     .export = export
                 ) %op% {
                     if (!check_consistency(dist_entry$names[1L], "dist")) {
-                        do.call(proxy::pr_DB$set_entry, dist_entry, TRUE) # nocov
+                        do_call(proxy::pr_DB$set_entry, dist_entry) # nocov
                     }
 
                     parallel_symmetric(d_desc, ids, x, distance, dots)
@@ -236,12 +239,17 @@ ddist2 <- function(distance, control) {
                         "'. Use options(dtwclust_suggest_bigmemory = FALSE) to avoid this warning.")
             }
             else if (!multiple_workers) {
-                # WHOLE SYMMETRIC DISTMAT WITH CUSTOM LOOP OR SEQUENTIAL proxy LOOP
-                dm <- base::as.matrix(quoted_call(
+                # WHOLE SYMMETRIC DISTMAT WITHOUT CUSTOM LOOP OR USING SEQUENTIAL proxy LOOP
+                dm <- quoted_call(
                     proxy::dist, x = x, y = NULL, method = distance, dots = dots
-                ))
+                )
 
-                return(ret(dm, class = "crossdist"))
+                if (inherits(dm, "dist")) {
+                    return(ret(dm))
+                }
+                else {
+                    return(ret(base::as.matrix(dm), class = "crossdist"))
+                }
             }
         }
 
@@ -269,7 +277,7 @@ ddist2 <- function(distance, control) {
             .export = export
         ) %op% {
             if (!check_consistency(dist_entry$names[1L], "dist")) {
-                do.call(proxy::pr_DB$set_entry, dist_entry, TRUE)
+                do_call(proxy::pr_DB$set_entry, dist_entry)
             }
 
             quoted_call(proxy::dist, x = x, y = centroids, method = distance, dots = dots)
